@@ -94,6 +94,10 @@ const STYLE = [
   ".bubble.short { height: 62px; }",
   ".composer { position: absolute; left: 76px; right: 20px; bottom: 18px; height: 46px; border-radius: 12px;",
   "  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.07); }",
+  "/* Freeze the plugin's own motion so the screenshot is byte-stable across runs;",
+  "   a static image cannot show the idle bob anyway. */",
+  ".dsh-mascot-btn, .dsh-mascot-panel { animation: none !important; }",
+  ".dsh-mascot-bar > i { transition: none !important; }",
 ].join("\n  ");
 
 const SCRIPT = [
