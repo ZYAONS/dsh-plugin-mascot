@@ -1,0 +1,60 @@
+{
+  "name": "dsh-plugin-mascot",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness mascot plugin — a clickable character sprite (Arknights' Closure / BanG Dream!'s Sengoku Yuno) that opens a panel with token cache hits, context pressure and account balance.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
+    "mascot",
+    "closure",
+    "arknights",
+    "sengoku-yuno",
+    "bang-dream"
+  ],
+  "license": "MIT",
+  "author": "ZYAONS",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZYAONS/dsh-plugin-mascot.git"
+  },
+  "homepage": "https://github.com/ZYAONS/dsh-plugin-mascot#readme",
+  "bugs": {
+    "url": "https://github.com/ZYAONS/dsh-plugin-mascot/issues"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "assets",
+    "README.md",
+    "README.zh.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "sync-art": "node scripts/sync-art.mjs",
+    "check": "node --check lib/index.js && node --check lib/client.js && node scripts/check.mjs",
+    "test": "node scripts/check.mjs",
+    "preview": "node scripts/preview.mjs",
+    "verify": "node scripts/verify-profile.mjs"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "devDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

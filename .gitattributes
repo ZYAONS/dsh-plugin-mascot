@@ -1,0 +1,9 @@
+# Keep the repository's line endings stable regardless of the checkout platform:
+# every text file is stored and checked out with LF, so the SVG assets and the
+# inlined copies inside lib/client.js stay byte-identical.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.webp binary
+*.woff2 binary
