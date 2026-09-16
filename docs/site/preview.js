@@ -178,24 +178,27 @@ export function createPreview(host, onStatus) {
   /**
    * Work out where this page is running, and whether the plugin answered here.
    *
-   * Served by the plugin (`/dsh-mascot/console/`) the answer is simply "here":
-   * same origin, session cookie included, artwork readable. Served from GitHub
-   * Pages no relative URL exists and the local DSH cannot be read at all, which is
-   * why the caller gets a different UI for each case.
+   * The test is the URL, not a probe. The plugin serves the console at
+   * `<prefix>/console/` and nothing else does, so the path alone decides — whereas
+   * probing `/api/looks` from the published copy would 404 on every visit and put
+   * an error in the console of a page that is working perfectly.
+   *
+   * Only once the path says "served by the plugin" is the index actually fetched,
+   * and then it is on an origin where it exists.
    *
    * @returns "local" when the plugin is on this origin, otherwise "public".
    */
   async function detect() {
     if (window.location.protocol === "file:") return "public";
-    // The page lives at <prefix>/console/, and the API at <prefix>/api/; strip the
-    // console segment rather than guessing the prefix.
-    const base = window.location.href.replace(/\/console\/.*$/u, "").replace(/\/console$/u, "");
+    const match = /^(.*)\/console\/?(?:index\.html)?$/u.exec(window.location.pathname);
+    if (match === null) return "public";
+    const base = `${window.location.origin}${match[1]}`;
     try {
-      const response = await fetch(new URL("api/looks", `${base}/`), { headers: { accept: "application/json" } });
+      const response = await fetch(`${base}/api/looks`, { headers: { accept: "application/json" } });
       if (!response.ok) return "public";
       const payload = await response.json();
       if (payload?.ok !== true || !Array.isArray(payload.looks)) return "public";
-      origin = new URL(base).origin;
+      origin = window.location.origin;
       index = payload;
       return "local";
     } catch {
