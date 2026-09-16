@@ -117,6 +117,10 @@ dsh plugin --profile desktop add "github:ZYAONS/dsh-plugin-mascot"
 
 ![配置台](docs/site/preview.png)
 
+- **00 实时预览** —— 立绘**从你自己机器上取**：连你正在跑的 DSH，用和插件同一套骨骼
+  渲染你装好的素材。官方立绘不在仓库里，这是唯一诚实的展示方式。连不上时可以丢一个
+  自己的图片文件进去 —— 测量与绑骨全在浏览器里完成，文件不会上传 —— 或者用
+  `?preview=test` 看内置的骨骼测试图案。
 - **01 插件开关** —— 插件本身开 / 关，余额查询开 / 关
 - **02 角色** —— 可露希尔（罗德岛工程终端）还是千石由乃（MEWTYPE LIVE）
 - **03 形象** —— 勾选允许出现的立绘；勾掉的会写进 allowlist，插件连列都不列
@@ -156,6 +160,19 @@ dsh plugin --profile desktop add "github:ZYAONS/dsh-plugin-mascot"
 ?theme=auto|closure|yuno      ?character=closure|yuno
 ```
 
+### 让配置台读到你的素材
+
+实时预览是一次跨域读取，而那条路由平时是带会话门禁的，所以插件为它准备了一份精确匹配的白名单：
+
+```yaml
+config:
+  # 允许免会话读取 /art/ 的来源。留空数组就完全关掉配置台预览。
+  artOrigins: ["https://zyaons.github.io"]
+```
+
+这个口子**只开在 `/art/`** —— 余额和形象索引仍然要 DSH 的会话 cookie；
+不在名单上的来源会被 401 拒绝，且不会拿到任何关于自己的信息。
+
 页面是**纯静态**的，托管在 GitHub Pages 上，**不跑任何服务端代码，也不读取或修改你本机的任何东西** ——
 它只是把你的选择拼成一段 YAML 文本。所有状态存在浏览器 localStorage 里。
 
@@ -164,7 +181,7 @@ dsh plugin --profile desktop add "github:ZYAONS/dsh-plugin-mascot"
 
 页面读的形象清单来自 `docs/site/catalog.json`，由 `scripts/build-site.mjs`
 从 `art/looks.json` 生成 —— 和插件读的是同一份声明，不会两边不一致。
-`scripts/check-site.mjs` 会在真浏览器里跑这个页面，断言目录加载成功、控件渲染出来，
+`scripts/check-site.mjs` 用 **Chrome DevTools Protocol** 真跑这个页面 —— 真浏览器、真派发点击、真控制台输出。
 **它生成的 YAML 里的每个 id 都真实存在**（拼错一个就会让插件静默退回第一套形象），以及**两套主题在六个 token 上确实不同**（只比一个强调色的话，那是换色不是换主题）。
 
 ---

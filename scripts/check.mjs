@@ -298,19 +298,21 @@ function hostHarness({ apiKey = "sk-test-secret", authenticated = true, config }
 }
 
 /** Drive one request through the claimed route and capture the response. */
-async function request(harness, path, { method = "GET" } = {}) {
+async function request(harness, path, { method = "GET", headers = {} } = {}) {
   const captured = { status: undefined, headers: undefined, body: "" };
   const res = {
-    writeHead(status, headers) {
+    writeHead(status, responseHeaders) {
       captured.status = status;
-      captured.headers = headers;
+      captured.headers = responseHeaders ?? {};
     },
     end(body) {
       captured.body = body ?? "";
     },
   };
-  await harness.route.current.handler({ method, url: path, headers: { host: "127.0.0.1:43120" } }, res);
-  return { ...captured, json: captured.body.length > 0 ? JSON.parse(captured.body) : undefined };
+  await harness.route.current.handler({ method, url: path, headers: { host: "127.0.0.1:43120", ...headers } }, res);
+  // The art route answers with a PNG buffer, so only JSON-looking bodies parse.
+  const json = typeof captured.body === "string" && captured.body.startsWith("{") ? JSON.parse(captured.body) : undefined;
+  return { ...captured, json };
 }
 
 await it("the host half claims one prefix route at the configured path", () => {
@@ -437,6 +439,45 @@ await it("the artwork route serves from art/ and refuses to leave it", async () 
     "traversal is refused by containment, before the extension is even considered",
   );
   assert.equal((await request(harness, "/dsh-mascot/art/%2e%2e%2fclosure.png")).status, 403, "an encoded traversal with an image extension is refused too");
+});
+
+await it("only the artwork route opens to an allowlisted origin, and only to that one", async () => {
+  const artwork = "/dsh-mascot/art/closure-chibi.png";
+  const page = "https://zyaons.github.io";
+  const stranger = "https://evil.example";
+
+  // Same-origin keeps working exactly as before, with a session.
+  const own = hostHarness();
+  const ownRead = await request(own, artwork);
+  assert.equal(ownRead.status, 200, "a session-bearing read of the art still works");
+  assert.equal(ownRead.headers["access-control-allow-origin"], undefined, "a same-origin read needs no CORS header");
+
+  // The console cannot carry the DSH cookie, so the origin itself is the credential
+  // — but only when the operator put it on the list. Everything below is
+  // session-less, which is what a cross-origin reader actually is.
+  const strangerHarness = hostHarness({ authenticated: false });
+  const friend = await request(strangerHarness, artwork, { headers: { origin: page } });
+  assert.equal(friend.status, 200, "the allowlisted console origin may read the art without a session");
+  assert.equal(friend.headers["access-control-allow-origin"], page, "an allowed origin is echoed back, never starred");
+  assert.equal(friend.headers.vary, "origin", "the answer varies by origin, so caches must key on it");
+
+  const hostile = await request(strangerHarness, artwork, { headers: { origin: stranger } });
+  assert.equal(hostile.status, 401, "an origin the operator did not allow is refused");
+  assert.equal(hostile.headers["access-control-allow-origin"], undefined, "and is told nothing about itself");
+
+  const anonymous = await request(strangerHarness, artwork);
+  assert.equal(anonymous.status, 401, "a session-less read with no origin at all is refused too");
+
+  // The carve-out must not leak past the artwork: the balance and the index are
+  // still session-only, allowlisted origin or not.
+  assert.equal((await request(strangerHarness, "/dsh-mascot/api/balance", { headers: { origin: page } })).status, 401, "an allowlisted origin still cannot read the balance");
+  assert.equal((await request(strangerHarness, "/dsh-mascot/api/looks", { headers: { origin: page } })).status, 401, "nor the look index");
+
+  // Switching the allowlist off closes the preview entirely.
+  const closed = hostHarness({ authenticated: false, config: { artOrigins: [] } });
+  assert.equal((await request(closed, artwork, { headers: { origin: page } })).status, 401, "an empty allowlist refuses everyone");
+  const closedOwn = hostHarness({ config: { artOrigins: [] } });
+  assert.equal((await request(closedOwn, artwork)).status, 200, "and a session still works");
 });
 
 await it("the look index is the single source of truth for what is installed", () => {
