@@ -5,6 +5,10 @@
 给 **DeepSeek Harness**（DSH）Web GUI 加一个可以点的看板娘：平时缩在右下角，
 点一下弹出一块面板，把这一局到底花了多少钱、命中率怎么样，一次说清楚。
 
+**看板娘用的是官方立绘**（可露希尔的《明日方舟》干员立绘、千石由乃的官方动画立绘）——
+不是手绘图。因为官方立绘是版权素材，仓库里**不含图片**，只带一个下载脚本；
+跑一次 `npm run fetch-art` 就位（见[立绘](#立绘)）。
+
 - **Token 缓存命中率** —— 命中读取 ÷ 全部计费输入（命中率越高，单价越低）
 - **Token 明细** —— 输入（未命中）/ 缓存读取 / 缓存写入 / 输出 / 本会话累计
 - **上下文占用** —— 当前占用 ÷ 上下文窗口，带进度条
@@ -13,15 +17,17 @@
 
 ![预览](docs/preview.png)
 
-> 预览图由 `node scripts/preview.mjs` 从真实的浏览器端代码渲染生成 —— 点开面板、
-> 切换角色都是真的 DOM 事件，只有「会话投影」和「余额接口」两个浏览器拿不到的
-> 输入被替换成了固定值。
+> 上面这张预览图是 `lib/client.js` 在真实 Chromium 里跑出来的（点开面板、切换角色
+> 都是真 DOM 点击），用的是**内置矢量兜底图** —— 也就是刚 clone 下来、还没跑
+> `npm run fetch-art` 时的样子。装了官方立绘之后的样子见 `docs/preview-official.png`
+> （本地生成，不进仓库）。
 
 ---
 
 ## 目录
 
 - [安装](#安装)
+- [立绘](#立绘)
 - [使用](#使用)
 - [配置](#配置)
 - [它是怎么工作的](#它是怎么工作的)
@@ -100,6 +106,33 @@ dsh plugin --profile desktop add "github:ZYAONS/dsh-plugin-mascot"
 
 ---
 
+## 立绘
+
+看板娘用的是**官方立绘**，不是手绘图。但官方立绘的版权属于鹰角和 Bushiroad，
+把图片塞进公开仓库等于替别人分发受版权保护的素材 —— 所以本仓库**只带下载清单，
+不带图片**：
+
+```bash
+npm run fetch-art          # 按 art/sources.json 下载到 art/
+npm run fetch-art -- --force   # 强制重下
+```
+
+| 角色 | 素材 |
+|---|---|
+| 可露希尔 | 《明日方舟》官方干员立绘（1024×1024，透明背景，含悬浮无人机） |
+| 千石由乃 | 《BanG Dream!》梦限大 MewType 官方动画立绘（1550×2085，透明背景） |
+
+`art/sources.json` 里每一项都写了来源 URL 和 **sha256**；脚本会逐个校验，
+上游文件变了会明确报出来（但仍然写入，免得你手上什么都没有）。
+
+**没跑 `fetch-art` 也能用**：插件内置了一套矢量兜底图，官方图 404 时自动顶上，
+不会出现空白立绘。
+
+换图只要把 `art/` 里的文件替换掉即可，文件名保持 `closure.png` / `yuno.png`；
+想换别的角色，改 `lib/client.js` 里 `MASCOTS` 的 `art` 与 `sprite` / `face` 取景参数。
+
+---
+
 ## 使用
 
 | 操作 | 结果 |
@@ -125,6 +158,7 @@ dsh plugin --profile desktop add "github:ZYAONS/dsh-plugin-mascot"
 | `apiKeyRef` | `DEEPSEEK_API_KEY` | 凭据服务里的引用名（`~/.dsh/.credentials.yaml`） |
 | `cacheTtlMs` | `60000` | 一次余额查询的保鲜期；失败不缓存 |
 | `timeoutMs` | `10000` | 上游请求超时 |
+| `artDir` | 插件自己的 `art/` | 立绘所在目录，默认按插件位置推导 |
 
 > 用的是中转站或自建网关时，把 `baseUrl` 指过去即可；只要它实现了
 > `GET /user/balance`。
@@ -138,15 +172,21 @@ dsh plugin --profile desktop add "github:ZYAONS/dsh-plugin-mascot"
 ```
 dsh-plugin-mascot/
 ├── lib/
-│   ├── index.js     主机半边：注册 /dsh-mascot 路由，查余额
-│   └── client.js    浏览器半边：看板娘 + 面板（window.__ModuleLoader__ 格式）
+│   ├── index.js        主机半边：/dsh-mascot 路由（余额 + 立绘），查余额
+│   └── client.js       浏览器半边：看板娘 + 面板（window.__ModuleLoader__ 格式）
+├── art/
+│   ├── sources.json    官方立绘的下载清单（进仓库）
+│   ├── closure.png     ← npm run fetch-art 下载，不进仓库
+│   └── yuno.png        ← 同上
 ├── assets/
-│   ├── closure.svg  可露希尔立绘（矢量源文件）
-│   └── yuno.svg     千石由乃立绘（矢量源文件）
+│   ├── closure.svg     矢量兜底图（可露希尔）
+│   └── yuno.svg        矢量兜底图（千石由乃）
 └── scripts/
-    ├── sync-art.mjs 把 assets/*.svg 内联进 lib/client.js
-    ├── check.mjs    自检：清单契约、bundle 装载、统计函数、素材完整性
-    └── preview.mjs  在真实浏览器里渲染 docs/preview.png
+    ├── fetch-art.mjs   按清单下载官方立绘到 art/
+    ├── sync-art.mjs    把 assets/*.svg 内联进 lib/client.js
+    ├── check.mjs       自检：清单契约、bundle 装载、统计函数、素材与路由
+    ├── preview.mjs     在真实浏览器里渲染 docs/preview*.png
+    └── verify-profile.mjs  上线前体检：解析 patch 层、导入模块、检查浏览器半边
 ```
 
 ### 浏览器半边挂在哪个坑位
@@ -167,18 +207,22 @@ DSH 的 GUI 是一套 **slot 注册表**。本插件只注册了一个条目：
 ### 主机半边
 
 余额是浏览器够不着的那一个数字：问答需要 API Key，而 Key 不能离开主机进程。
-所以主机半边只干一件事 —— 提供一个小巧的同源 JSON 路由：
+立绘也是浏览器自己拿不到的 —— 官方图不在仓库里，得由主机从磁盘上读。
+所以主机半边干两件事 —— 提供同源路由：
 
 ```
 GET /dsh-mascot/api/balance   账户余额（带缓存）
 GET /dsh-mascot/api/health    路由存活检查
+GET /dsh-mascot/art/<文件>    从插件自己的 art/ 目录读立绘
 ```
 
 - Key 每次请求都用 `ctx.credentials.resolve()` 现取，**轮换后下一次调用即生效**，
   不需要重启；
 - Key 只作为 `Authorization: Bearer` 头发出去，**绝不**进入响应体、日志或错误信息；
 - 路由先过 `ctx.connection.isAuthenticated(req)`，也就是和 GUI 其余部分同一张
-  浏览器 cookie；万一组合里没有 Connection 服务，退回到只接受回环 `Host`。
+  浏览器 cookie；万一组合里没有 Connection 服务，退回到只接受回环 `Host`；
+- 立绘路由先做路径越界检查（`..`、编码分隔符一律 403），再限制扩展名，
+  最后才落盘读文件；文件不在就 404，浏览器那边自动切到矢量兜底图。
 
 ---
 
@@ -193,6 +237,7 @@ GET /dsh-mascot/api/health    路由存活检查
 | Token 缓存命中 | 由上一行推导 | `cacheReadTokens ÷ (uncachedInputTokens + cacheReadTokens + cacheWriteTokens)` |
 | 上下文占用 | `useProjection("contextPressure")` | `{ contextWindow?, pressureTokens?, projectedTokens? }`，优先用 `projectedTokens` |
 | 账户余额 | 本插件的 `/dsh-mascot/api/balance` | `GET {baseUrl}/user/balance` |
+| 立绘 | 本插件的 `/dsh-mascot/art/<文件>` | 磁盘上的 `art/`，缺失时用内置矢量图 |
 
 拿不到的数就显示 `—`，**不会**当成 0 —— 没有会话时命中率是没有意义的，
 面板也不会编一个 0% 出来。
@@ -202,25 +247,33 @@ GET /dsh-mascot/api/health    路由存活检查
 ## 开发
 
 ```bash
-npm install          # 只为 preview 装的 react / react-dom（devDependencies）
-npm test             # 自检
-npm run check        # node --check 两个半边 + 自检
-npm run sync-art     # 改完 assets/*.svg 之后同步进 lib/client.js
-node scripts/preview.mjs   # 重新渲染 docs/preview.png
+npm install                # 只为 preview 装的 react / react-dom（devDependencies）
+npm run fetch-art          # 下载官方立绘到 art/
+npm test                   # 自检（21 项）
+npm run check              # node --check 两个半边 + 自检
+npm run sync-art           # 改完 assets/*.svg 之后同步进 lib/client.js
+npm run preview            # 渲染 docs/preview.png（矢量兜底图，会进仓库）
+npm run preview:official   # 渲染 docs/preview-official.png（官方立绘，不进仓库）
+npm run verify             # 体检当前 profile 能不能挂上
 ```
 
-改看板娘画面的流程：编辑 `assets/*.svg` → `npm run sync-art` →
-`node scripts/preview.mjs` 看图 → 重启（或等 HMR）之后在 GUI 里看。
+改立绘取景的流程：调 `lib/client.js` 里 `MASCOTS` 的 `sprite` / `face` 参数
+（`width` 是图片渲染宽度，`left` / `top` 是负偏移，用来把人物或头部拉进框里）
+→ `npm run preview:official` 看图 → 满意后重启 DSH。
+
+换兜底矢量图：编辑 `assets/*.svg` → `npm run sync-art`。
 
 ---
 
 ## 素材与授权
 
 - **代码**：[MIT](LICENSE)
-- **立绘**：`assets/closure.svg` 与 `assets/yuno.svg` 是**本仓库原创绘制的矢量同人图**，
-  依照角色公开的设计特征（发色、瞳色、服装配色与标志性道具）重新绘制，
-  **没有**使用、描摹或内嵌任何官方素材或第三方图片。
-  与代码同为 MIT，可自由使用；商用前请自行确认角色形象的相关权利。
+- **官方立绘（`art/`，不进仓库）**：可露希尔的《明日方舟》官方干员立绘、
+  千石由乃的《BanG Dream!》官方动画立绘。**版权归各自权利人所有**，
+  本仓库不分发这些文件，只提供 `art/sources.json` 清单和 `npm run fetch-art`
+  下载脚本，由使用者自行下载到本机。个人自己用没问题；**再分发或商用请先取得授权**。
+- **矢量兜底图（`assets/*.svg`，进仓库）**：本仓库原创绘制的矢量同人图，
+  仅在官方立绘缺失时顶替显示，与代码同为 MIT。
 - **角色权利**：可露希尔 © 上海鹰角网络（《明日方舟》）；千石由乃 © Bushiroad
   （《BanG Dream!》/ 梦限大 MewType）。二者均为各自权利人的商标／版权角色，
   本插件是非官方同人作品，与权利人无隶属或背书关系。

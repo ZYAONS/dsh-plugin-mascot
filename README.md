@@ -6,24 +6,31 @@ A clickable mascot for the **DeepSeek Harness** (DSH) Web GUI. It sits quietly i
 the bottom-right corner; click it and a panel opens with what the session has
 actually cost you and how well the prompt cache is doing.
 
+The mascots use **official game art** — Closure's *Arknights* operator 立绘 and
+Sengoku Yuno's official anime 立绘 — not drawings. Because that artwork is
+copyrighted, the repository ships **no images**, only a fetch script: run
+`npm run fetch-art` once (see [Artwork](#artwork)).
+
 - **Token cache-hit rate** — cache reads over every billed input bucket
 - **Token breakdown** — uncached input / cache read / cache write / output / session total
 - **Context occupancy** — current usage against the context window, with a bar
 - **Account balance** — fetched host-side from DeepSeek; the API key never reaches the browser
-- **Two characters, switchable** — **Closure** from *Arknights* and **Sengoku Yuno** from *BanG Dream!*'s Mugenai MewType
+- **Two characters, switchable** — **Closure** from *Arknights* and **Sengoku Yuno** from *BanG Dream!*'s Mugendai MewType
 
 ![preview](docs/preview.png)
 
-> The preview is rendered by `node scripts/preview.mjs` from the real browser
-> half — opening the panels and switching characters are genuine DOM clicks.
-> Only the two inputs a plain page cannot supply (the session projections and
-> the balance route) are stubbed.
+> That preview is `lib/client.js` running in a real Chromium — opening the panels
+> and switching characters are genuine DOM clicks. It shows the **built-in vector
+> fallback**, i.e. exactly what a fresh clone looks like before `npm run fetch-art`.
+> The version with the official artwork is `docs/preview-official.png`, generated
+> locally and kept out of the repository.
 
 ---
 
 ## Contents
 
 - [Install](#install)
+- [Artwork](#artwork)
 - [Usage](#usage)
 - [Configuration](#configuration)
 - [How it works](#how-it-works)
@@ -106,6 +113,36 @@ another restart.
 
 ---
 
+## Artwork
+
+The mascots use **official game art**, not drawings. That artwork is owned by
+Hypergryph and Bushiroad, and committing it here would redistribute someone
+else's copyrighted asset — so this repository ships **the download manifest
+instead of the images**:
+
+```bash
+npm run fetch-art              # download into art/ per art/sources.json
+npm run fetch-art -- --force   # re-download regardless of hash
+```
+
+| Character | Asset |
+|---|---|
+| Closure | *Arknights* official operator 立绘 (1024×1024, transparent, with her drone) |
+| Sengoku Yuno | *BanG Dream!* Mugendai MewType official anime 立绘 (1550×2085, transparent) |
+
+Every entry in `art/sources.json` carries its source URLs and a **sha256**. The
+script verifies each download and reports loudly if an upstream file changed
+(it still writes the file, so a moved asset never leaves you with nothing).
+
+**It works without the artwork.** The plugin ships a built-in vector fallback
+that takes over whenever the official file 404s — the sprite is never blank.
+
+To swap in different art, drop replacement files at `art/closure.png` and
+`art/yuno.png`. To change characters, edit `art`, `sprite` and `face` in the
+`MASCOTS` table in `lib/client.js`.
+
+---
+
 ## Usage
 
 | Interaction | Result |
@@ -131,6 +168,7 @@ Every field has a default, so the `config` block is optional.
 | `apiKeyRef` | `DEEPSEEK_API_KEY` | Credentials reference name (`~/.dsh/.credentials.yaml`) |
 | `cacheTtlMs` | `60000` | Freshness of one balance answer; failures are never cached |
 | `timeoutMs` | `10000` | Upstream request budget |
+| `artDir` | the plugin's own `art/` | Directory holding the artwork; derived from the plugin location |
 
 > Behind a proxy or self-hosted gateway, point `baseUrl` at it — the only
 > requirement is that it implements `GET /user/balance`.
@@ -144,15 +182,21 @@ One package, two halves:
 ```
 dsh-plugin-mascot/
 ├── lib/
-│   ├── index.js     host half: the /dsh-mascot route and the balance lookup
-│   └── client.js    browser half: sprite + panel (window.__ModuleLoader__ format)
+│   ├── index.js        host half: the /dsh-mascot routes (balance + artwork)
+│   └── client.js       browser half: sprite + panel (window.__ModuleLoader__ format)
+├── art/
+│   ├── sources.json    the official-artwork manifest (committed)
+│   ├── closure.png     ← npm run fetch-art, gitignored
+│   └── yuno.png        ← ditto
 ├── assets/
-│   ├── closure.svg  Closure artwork (vector source)
-│   └── yuno.svg     Sengoku Yuno artwork (vector source)
+│   ├── closure.svg     vector fallback artwork
+│   └── yuno.svg        vector fallback artwork
 └── scripts/
-    ├── sync-art.mjs inlines assets/*.svg into lib/client.js
-    ├── check.mjs    self-test: manifest, bundle load, statistics, artwork
-    └── preview.mjs  renders docs/preview.png from the real code in a browser
+    ├── fetch-art.mjs   downloads the official artwork into art/
+    ├── sync-art.mjs    inlines assets/*.svg into lib/client.js
+    ├── check.mjs       self-test: manifest, bundle load, statistics, routes
+    ├── preview.mjs     renders docs/preview*.png from the real code in a browser
+    └── verify-profile.mjs  pre-flight for a live DSH profile
 ```
 
 ### Which seat the browser half takes
@@ -175,21 +219,26 @@ rather than `session` so the panel still opens before any session is selected.
 ### The host half
 
 The balance is the one figure the browser cannot reach: answering it needs the
-API key, and the key must never leave the host process. So the host half does
-exactly one job — a small same-origin JSON route:
+API key, and the key must never leave the host process. The artwork is the other
+one — the official files are not in the repository, so something has to read them
+off disk. So the host half owns one same-origin route prefix:
 
 ```
 GET /dsh-mascot/api/balance   account balance, cached
 GET /dsh-mascot/api/health    route liveness, for debugging
+GET /dsh-mascot/art/<file>    artwork out of the plugin's own art/ directory
 ```
 
 - The key is resolved per request through `ctx.credentials.resolve()`, so a
   **rotated key takes effect on the next call** with no restart;
 - it is used only as an `Authorization: Bearer` header and **never** appears in
   a response body, a log line, or an error message;
-- the route is gated on `ctx.connection.isAuthenticated(req)` — the same browser
-  cookie the rest of the GUI uses. If Connection is absent from the composition
-  it falls back to accepting only a loopback `Host` header.
+- the routes are gated on `ctx.connection.isAuthenticated(req)` — the same
+  browser cookie the rest of the GUI uses. If Connection is absent from the
+  composition they fall back to accepting only a loopback `Host` header;
+- the artwork route checks path containment first (`..`, encoded separators →
+  403), then the extension, and only then touches the disk. A missing file is a
+  404, which the browser half turns into the vector fallback.
 
 ---
 
@@ -204,6 +253,7 @@ plugin does not count tokens itself.
 | Cache-hit rate | derived from the row above | `cacheReadTokens ÷ (uncachedInputTokens + cacheReadTokens + cacheWriteTokens)` |
 | Context occupancy | `useProjection("contextPressure")` | `{ contextWindow?, pressureTokens?, projectedTokens? }`, preferring `projectedTokens` |
 | Account balance | this plugin's `/dsh-mascot/api/balance` | `GET {baseUrl}/user/balance` |
+| Artwork | this plugin's `/dsh-mascot/art/<file>` | `art/` on disk, with the built-in vector art as fallback |
 
 Anything unmeasurable renders as `—` rather than `0`: with no session there is
 no hit rate to report, and the panel does not invent one.
@@ -213,27 +263,37 @@ no hit rate to report, and the panel does not invent one.
 ## Development
 
 ```bash
-npm install          # react / react-dom, devDependencies for the preview only
-npm test             # self-test
-npm run check        # node --check on both halves plus the self-test
-npm run sync-art     # re-inline assets/*.svg into lib/client.js
-node scripts/preview.mjs   # re-render docs/preview.png
+npm install                # react / react-dom, devDependencies for the preview only
+npm run fetch-art          # download the official artwork into art/
+npm test                   # self-test (21 checks)
+npm run check              # node --check on both halves plus the self-test
+npm run sync-art           # re-inline assets/*.svg into lib/client.js
+npm run preview            # docs/preview.png — vector fallback, committed
+npm run preview:official   # docs/preview-official.png — official art, gitignored
+npm run verify             # pre-flight the current DSH profile
 ```
 
-The artwork loop: edit `assets/*.svg` → `npm run sync-art` →
-`node scripts/preview.mjs` → restart DSH (or wait for HMR) to see it in the GUI.
+To re-frame the artwork, tune `sprite` and `face` on the `MASCOTS` entries in
+`lib/client.js` (`width` is the rendered image width; `left` / `top` are the
+negative offsets that pull the figure, or just the head, into its seat), then
+`npm run preview:official` to look at it and restart DSH to see it in place.
+
+To change the fallback artwork: edit `assets/*.svg` → `npm run sync-art`.
 
 ---
 
 ## Artwork and licensing
 
 - **Code**: [MIT](LICENSE)
-- **Artwork**: `assets/closure.svg` and `assets/yuno.svg` are **original vector
-  fan art drawn for this repository**, redrawn from each character's publicly
-  documented design cues (hair and eye colours, outfit palette, signature props).
-  No official asset or third-party image was used, traced, or embedded. They are
-  MIT-licensed alongside the code; check the relevant character rights yourself
-  before any commercial use.
+- **Official artwork (`art/`, not committed)**: Closure's *Arknights* official
+  operator 立绘 and Sengoku Yuno's official *BanG Dream!* anime 立绘. **The rights
+  belong to their respective owners.** This repository does not distribute those
+  files; it ships the `art/sources.json` manifest and the `npm run fetch-art`
+  script so each user downloads them onto their own machine. Fine for personal
+  use — **get permission before redistributing or using commercially.**
+- **Vector fallback artwork (`assets/*.svg`, committed)**: original fan art drawn
+  for this repository, shown only when the official file is absent, MIT alongside
+  the code.
 - **Characters**: Closure © Hypergryph (*Arknights*); Sengoku Yuno © Bushiroad
   (*BanG Dream!* / Mugendai MewType). Both are the property of their respective
   owners. This is an unofficial fan work with no affiliation or endorsement.

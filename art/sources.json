@@ -1,0 +1,36 @@
+{
+  "$comment": [
+    "Where scripts/fetch-art.mjs gets the mascot artwork.",
+    "",
+    "The artwork is NOT in this repository on purpose: it is official game art owned",
+    "by Hypergryph and Bushiroad. Shipping it in a public repo would redistribute",
+    "someone else's copyrighted asset, so the repo carries only this manifest and",
+    "the fetch script. Run `npm run fetch-art` to place the files in art/ locally",
+    "(art/ is gitignored).",
+    "",
+    "Urls are tried in order; the first one that yields a non-empty body wins.",
+    "sha256 pins the exact file each entry was verified against."
+  ],
+  "images": [
+    {
+      "file": "closure.png",
+      "character": "可露希尔 · Closure",
+      "rights": "《明日方舟》© 上海鹰角网络 — 官方干员立绘 (char_007_closre)",
+      "sha256": "9e412a0ea1845a329d2e9f8e08ef8e0d0e5800aba4d4bed4ce1d297aa191ac25",
+      "urls": [
+        "https://mzh.moegirl.org.cn/Special:FilePath/Ak%20char%20007%20closre%201.png",
+        "https://raw.githubusercontent.com/yuanyan3060/ArknightsGameResource/main/skin/char_007_closre_1b.png"
+      ]
+    },
+    {
+      "file": "yuno.png",
+      "character": "千石由乃 · Sengoku Yuno",
+      "rights": "《BanG Dream!》/ 梦限大 MewType © Bushiroad — 官方动画立绘",
+      "sha256": "6b47146986fcdd14eea5bfae677fa079a6023c87acf95fa6e99bbe12c49b7af5",
+      "urls": [
+        "https://mzh.moegirl.org.cn/Special:FilePath/%E5%8D%83%E7%9F%B3%E7%94%B1%E4%B9%83%20%E5%8A%A8%E7%94%BB.png",
+        "https://mzh.moegirl.org.cn/Special:FilePath/%E5%8D%83%E7%9F%B3%E7%94%B1%E4%B9%83%20%E5%88%9D%E5%A7%8B%E5%BD%A2%E8%B1%A1.jpg"
+      ]
+    }
+  ]
+}

@@ -12,7 +12,11 @@
  * clipping or scrolling it detected), so a regression shows up in the picture
  * instead of hiding behind a plausible-looking screenshot.
  *
- *   node scripts/preview.mjs
+ *   node scripts/preview.mjs              → docs/preview.png
+ *        Built-in vector art: what a fresh clone shows, and what gets committed.
+ *   node scripts/preview.mjs --official   → docs/preview-official.png
+ *        The real thing, reading art/ over `file:`. Gitignored, because that
+ *        picture contains official artwork this repository does not own.
  *
  * Requires the devDependencies (`react`, `react-dom`) and a Chromium binary.
  */
@@ -25,6 +29,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const docs = join(root, "docs");
 mkdirSync(docs, { recursive: true });
+
+/** `--official` renders against the artwork in `art/` instead of the fallback. */
+const official = process.argv.includes("--official");
+const artBase = official ? pathToFileURL(join(root, "art")).href : "";
 
 const CHROME_CANDIDATES = [
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
@@ -113,6 +121,9 @@ const plugin = registrations[0].factory((spec) => {
   if (spec === "react") return React;
   throw new Error("unexpected require(" + spec + ")");
 });
+
+// The default base is the host half's route; over file: this points at art/.
+plugin.setArtBase(${JSON.stringify(artBase)});
 
 // 2. Drive the same ctx.slots surface the runner exposes, and prove the
 //    registration is the one the plugin intends.
@@ -218,8 +229,8 @@ ${SCRIPT2}
 </script>
 </body></html>`;
 
-const previewHtml = join(docs, "preview.html");
-const previewPng = join(docs, "preview.png");
+const previewHtml = join(docs, official ? "preview-official.html" : "preview.html");
+const previewPng = join(docs, official ? "preview-official.png" : "preview.png");
 writeFileSync(previewHtml, page);
 
 execFileSync(

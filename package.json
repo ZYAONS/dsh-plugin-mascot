@@ -39,9 +39,11 @@
   ],
   "scripts": {
     "sync-art": "node scripts/sync-art.mjs",
+    "fetch-art": "node scripts/fetch-art.mjs",
     "check": "node --check lib/index.js && node --check lib/client.js && node scripts/check.mjs",
     "test": "node scripts/check.mjs",
     "preview": "node scripts/preview.mjs",
+    "preview:official": "node scripts/preview.mjs --official",
     "verify": "node scripts/verify-profile.mjs"
   },
   "dsh": {

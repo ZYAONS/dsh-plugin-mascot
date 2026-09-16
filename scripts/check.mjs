@@ -195,9 +195,10 @@ await it("the host half is a dependency-free cordis plugin", () => {
   assert.match(hostSource, /const inject = \["webServer"\]/u);
   assert.match(hostSource, /^function apply\(ctx, rawConfig\) \{/mu);
   assert.match(hostSource, /export \{ apply, inject, name \};/u);
+  const imports = [...hostSource.matchAll(/^\s*import\s[^;]*?["']([^"']+)["']/gmu)].map((match) => match[1]);
   assert.ok(
-    !/^\s*import\s/mu.test(hostSource),
-    "the host half must import nothing: that is what lets an absolute-path mount work without installing into the profile",
+    imports.every((specifier) => specifier.startsWith("node:")),
+    `the host half may import Node builtins only (nothing to install), found: ${imports.join(", ")}`,
   );
   assert.ok(
     !/export (const|let) Config|const Config =/u.test(hostSource),
@@ -216,6 +217,7 @@ await it("the host half normalizes every documented knob instead of trusting the
     assert.match(body, new RegExp(`"${key}"`, "u"), `${key} must be read through the normalizer`);
   }
   assert.match(body, /routePrefix: text\("routePrefix"\)\.replace\(\/\\\/\+\$\/u, ""\)/u, "a trailing slash on the prefix would double up in the route table");
+  assert.match(body, /join\(PLUGIN_ROOT, "art"\)/u, "the art directory defaults to the plugin's own folder");
 });
 
 // The half imports nothing, so it can actually be mounted and driven here. This
@@ -374,6 +376,61 @@ await it("routing and authorization guard the route", async () => {
   const denied = await request(stranger, "/dsh-mascot/api/balance");
   assert.equal(denied.status, 401);
   assert.equal(stranger.calls.length, 0, "an unauthenticated read must not reach the provider");
+});
+
+await it("the artwork route serves from art/ and refuses to leave it", async () => {
+  const artSource = read("art/sources.json");
+  const manifest = JSON.parse(artSource);
+  const harness = hostHarness();
+
+  // The repo deliberately ships no artwork, so a missing file must answer 404
+  // with an actionable message rather than throwing — the browser half turns
+  // that into the vector fallback.
+  const missing = await request(harness, "/dsh-mascot/art/does-not-exist.png");
+  assert.equal(missing.status, 404);
+  assert.equal(missing.json.error, "no_art");
+  assert.match(missing.json.message, /fetch-art/u);
+
+  assert.equal((await request(harness, "/dsh-mascot/art/closure.txt")).status, 404, "only image extensions are served");
+  assert.equal(
+    (await request(harness, "/dsh-mascot/art/..%2F..%2Fpackage.json")).status,
+    403,
+    "traversal is refused by containment, before the extension is even considered",
+  );
+  assert.equal((await request(harness, "/dsh-mascot/art/%2e%2e%2fclosure.png")).status, 403, "an encoded traversal with an image extension is refused too");
+
+  // Every manifest entry must name the mascot the catalogue renders, and every
+  // mascot must have a manifest entry — otherwise `npm run fetch-art` silently
+  // produces a plugin that falls back for one character.
+  const files = manifest.images.map((image) => image.file).sort();
+  assert.deepEqual(files, ["closure.png", "yuno.png"], "the manifest must cover both mascots");
+  for (const image of manifest.images) {
+    assert.match(image.sha256, /^[0-9a-f]{64}$/u, `${image.file}: sha256 must pin the exact bytes`);
+    assert.ok(Array.isArray(image.urls) && image.urls.length > 0, `${image.file}: needs at least one source url`);
+    assert.ok(image.rights.length > 0, `${image.file}: every source must carry its rights line`);
+  }
+  for (const mascot of MASCOTS) {
+    assert.ok(
+      manifest.images.some((image) => image.file === mascot.art),
+      `${mascot.id}: ${String(mascot.art)} is not in art/sources.json`,
+    );
+  }
+});
+
+await it("the browser half falls back to its vector art when the official file is absent", () => {
+  // The fallback is what a fresh clone shows, so it must be reachable without a
+  // network: the component renders the inlined SVG whenever `art` is unset.
+  for (const mascot of MASCOTS) {
+    assert.equal(typeof mascot.svg, "string");
+    assert.ok(mascot.svg.startsWith("<svg"), `${mascot.id}: fallback art must be real SVG`);
+    assert.equal(typeof mascot.art, "string", `${mascot.id}: must name its official artwork`);
+    assert.match(mascot.art, /^[a-z0-9_-]+\.(png|webp|jpg)$/u, `${mascot.id}: artwork name must be a bare file name`);
+    assert.ok(mascot.face !== undefined, `${mascot.id}: the panel portrait needs framing numbers`);
+    assert.equal(typeof mascot.face.width, "number");
+  }
+  assert.equal(exports_.setArtBase !== undefined, true, "the art base must be overridable for tests and preview");
+  exports_.setArtBase("file:///art");
+  exports_.setArtBase("/dsh-mascot/art");
 });
 //#endregion
 
