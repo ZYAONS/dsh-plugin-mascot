@@ -304,6 +304,7 @@ function paintPreviewStatus({ kind, message }) {
 /** Create the preview and wire its controls. */
 async function setupPreview() {
   const preview = createPreview($("preview-host"), paintPreviewStatus);
+  preview.setCatalogue(state.catalog);
   previewRef.current = preview;
 
   $("preview-test").addEventListener("click", async () => {
@@ -331,9 +332,10 @@ async function setupPreview() {
   }
 
   $("preview-note").innerHTML =
-    "This copy is the published one, so it cannot reach your DSH: a cross-origin read of a local " +
-    "install is refused before any plugin code runs. Open the console from your own DSH at " +
-    "<code>/dsh-mascot/console/</code> for the live view.";
+    "This copy is the published one, so it shows the artwork from the sources declared in " +
+    "<code>art/looks.json</code>. A host that sends no CORS header cannot be read into WebGL, so only " +
+    "artwork it does send headers for is deformed by the rig. Run <code>npm run art:publish</code> and " +
+    "commit <code>docs/art/</code> to animate everything.";
 
   // A deep link can ask for the built-in test pattern, which exercises the whole
   // chain with no host and no asset — the path a headless run takes.
@@ -449,6 +451,10 @@ async function main() {
   } catch {
     /* the page still works, just with an empty catalogue */
   }
+  // The preview was created before the catalogue arrived, so hand it over now that
+  // it has: on the published copy the catalogue is where the preview finds both the
+  // framing and the source URLs for every look.
+  previewRef.current?.setCatalogue(state.catalog);
   const characters = state.catalog.characters ?? [];
   if (characters.length > 0 && !characters.some((entry) => entry.id === state.character)) {
     state.character = characters[0].id;

@@ -24,3 +24,12 @@ docs/preview-official.png
 Thumbs.db
 Desktop.ini
 *.log
+
+# Artwork copied next to the console by 
+pm run art:publish. Ignored by default
+# for the same reason as art/ itself, so it cannot be committed by accident.
+# Committing it is a deliberate choice — see the note that script prints, and
+# git add -f docs/art — and 
+pm run build:site only advertises a local copy
+# once it is actually tracked.
+docs/art/

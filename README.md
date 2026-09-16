@@ -136,32 +136,48 @@ before anything is installed on the machine:
 - **05 Output** — a ready-to-paste `cordis.patch.yml`, with copy and download
 - **06 Install** — five steps, including fetching the artwork and restarting
 
-### Where the live preview works, and why
+### Where the artwork comes from
 
-The console is served from **two places**, and they are not equivalent:
+The console renders the mascot on **both** copies, from three places in order of
+preference:
 
-| | Published (GitHub Pages) | Served by the plugin |
-|---|---|---|
-| Address | `zyaons.github.io/dsh-plugin-mascot/` | `http://127.0.0.1:<port>/dsh-mascot/console/` |
-| Configure and download | yes | yes |
-| **Live preview of your art** | **no** | **yes** |
-| Preview a file of your own | yes | yes |
-| Rig test pattern | yes | yes |
+1. **A copy you published** into `docs/art/` with `npm run art:publish`. Same origin
+   as the page, so the rig always works and nothing depends on anyone else's server.
+   *Not committed by default* — see below.
+2. **The declared source**, loaded with CORS. The rig accepts it, so it animates.
+3. **The declared source, loaded plainly.** It displays, but a cross-origin image
+   without a CORS header taints the canvas and WebGL refuses it, so it cannot be
+   deformed. It can still cycle between drawn poses.
 
-The preview reads the artwork, and the artwork route is behind the DSH session. A
-page on a public origin cannot carry that cookie — and this was **measured, not
-assumed**: a cross-origin fetch from the published console to a local DSH comes back
-`BLOCKED: Failed to fetch`, refused before any plugin code runs. So no allowlist
-inside the plugin could have helped, and an earlier revision of this branch that
-added one was removed rather than shipped untested.
+Which of 2 and 3 applies is a fact about each host, measured once and recorded in
+`art/looks.json` as `cors`. Today: Closure's base sprite is served by
+raw.githubusercontent and jsDelivr, both of which send `Access-Control-Allow-Origin`,
+so it **rigs and animates on the published page**; the moegirl-hosted looks (Closure's
+portrait and all three of Yuno's) send no such header, so they **display but do not
+deform**. The page says which case it is in the status line rather than leaving you
+to guess why one of them is still.
 
-Serving the same page from the plugin puts it on the origin that already has the
-session. Same origin, no CORS, no allowlist: the look index, the artwork and the
-skeleton all simply work, and the mascot appears in the frame wearing whichever
-character you select. The public copy stays the front door — it is what you read
-before installing anything — and it says so in its own status line rather than
-showing a connection box that could never succeed.
+Served by the plugin at `/dsh-mascot/console/` there is a fourth source — the artwork
+on your own machine — and there everything rigs, because it is all same-origin.
 
+### Publishing the artwork (opt in)
+
+```bash
+npm run art:publish     # copies art/*.png into docs/art/
+npm run build:site      # records which frames are now local
+git add -f docs/art     # this is the deliberate step
+```
+
+`docs/art/` is gitignored, so it cannot be committed by accident. Committing it means
+**this repository redistributes official game artwork** — Closure © Hypergryph, from
+*Arknights*; Sengoku Yuno © Bushiroad, from *BanG Dream!* / Mugendai MewType — and
+GitHub Pages serves it publicly. That is a rights decision, which is why the project
+does not make it for you and why the script prints the warning before it copies
+anything.
+
+`build-site` only advertises a local copy once it is actually **tracked by git**, so a
+catalogue can never promise files a deployment does not have. Build with the artwork
+present but uncommitted and the page correctly falls back to the sources.
 ### Two page themes
 
 The console carries both characters' interface styles, switchable from the header,

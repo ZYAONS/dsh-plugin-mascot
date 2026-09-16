@@ -42,6 +42,7 @@
     "fetch-art": "node scripts/fetch-art.mjs",
     "art:sync": "node scripts/art-sync.mjs",
     "art:watch": "node scripts/art-sync.mjs --watch",
+    "art:publish": "node scripts/publish-art.mjs",
     "build:site": "node scripts/build-site.mjs",
     "check:site": "node scripts/check-site.mjs",
     "shot:site": "node scripts/check-site.mjs --shot",

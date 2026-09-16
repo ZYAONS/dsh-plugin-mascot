@@ -59,7 +59,8 @@
       "urls": [
         "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_4228_closur.png",
         "https://cdn.jsdelivr.net/gh/Light-milk-tea/ArknightsChibi@main/chibi/char_4228_closur.png"
-      ]
+      ],
+      "cors": true
     },
     {
       "id": "closure-portrait",
@@ -71,7 +72,8 @@
       "sha256": "9e412a0ea1845a329d2e9f8e08ef8e0d0e5800aba4d4bed4ce1d297aa191ac25",
       "urls": [
         "https://mzh.moegirl.org.cn/Special:FilePath/Ak%20char%20007%20closre%201.png"
-      ]
+      ],
+      "cors": false
     },
     {
       "id": "yuno-anime",
@@ -83,7 +85,8 @@
       "sha256": "6b47146986fcdd14eea5bfae677fa079a6023c87acf95fa6e99bbe12c49b7af5",
       "urls": [
         "https://mzh.moegirl.org.cn/Special:FilePath/%E5%8D%83%E7%9F%B3%E7%94%B1%E4%B9%83%20%E5%8A%A8%E7%94%BB.png"
-      ]
+      ],
+      "cors": false
     },
     {
       "id": "yuno-casual",
@@ -95,7 +98,8 @@
       "sha256": "c20ddcffca3187739cd5155108123099db6897bff812322060b3e7b2dc647ec1",
       "urls": [
         "https://mzh.moegirl.org.cn/Special:FilePath/%E5%8D%83%E7%9F%B3%E7%94%B1%E4%B9%83%20%E5%8A%A8%E7%94%BB%E5%B8%B8%E6%9C%8D.png"
-      ]
+      ],
+      "cors": false
     },
     {
       "id": "yuno-chibi",
@@ -111,7 +115,8 @@
       "sha256": "aa0336ac83385f99ba68d0dc2240482a8084c6b998b65121fb288319ea4d8c5b",
       "urls": [
         "https://mzh.moegirl.org.cn/Special:FilePath/%E5%8D%83%E7%9F%B3%E7%94%B1%E4%B9%83%20%E5%85%83%E7%A5%96.png"
-      ]
+      ],
+      "cors": false
     }
   ]
 }

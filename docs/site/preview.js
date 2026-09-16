@@ -79,13 +79,45 @@ export function measure(image) {
 }
 
 /** Load an image, resolving to undefined rather than rejecting on failure. */
-function loadImage(url) {
+function loadImage(url, crossOrigin) {
   return new Promise((resolve) => {
     const image = new Image();
+    // Asking for CORS on a host that does not send the header makes the load fail
+    // outright, so the caller tries this first and falls back to a plain load.
+    if (crossOrigin === true) image.crossOrigin = "anonymous";
     image.onload = () => resolve(image);
     image.onerror = () => resolve(undefined);
     image.src = url;
   });
+}
+
+/**
+ * Find the pixels for one frame, and say whether they can be rigged.
+ *
+ * Three sources, in descending order of usefulness:
+ *
+ *   1. a copy published next to the console (`docs/art/…`, opt in with
+ *      `npm run art:publish`). Same origin, so the rig always works;
+ *   2. the declared source loaded with CORS, which the rig also accepts;
+ *   3. the declared source loaded plainly — it displays, but a cross-origin image
+ *      without CORS taints the canvas and WebGL refuses it, so it cannot deform.
+ *
+ * @returns `{ image, riggable }`, or undefined when nothing loaded.
+ */
+async function acquire(frame, look) {
+  if (frame.local === true) {
+    const local = await loadImage(`art/${frame.file}`);
+    if (local !== undefined) return { image: local, riggable: true };
+  }
+  for (const url of look.sources ?? []) {
+    if (look.cors !== false) {
+      const cors = await loadImage(url, true);
+      if (cors !== undefined) return { image: cors, riggable: true };
+    }
+    const plain = await loadImage(url);
+    if (plain !== undefined) return { image: plain, riggable: false };
+  }
+  return undefined;
 }
 
 /**
@@ -98,26 +130,30 @@ function loadImage(url) {
 export function createPreview(host, onStatus) {
   let origin;
   let index;
+  let catalogue;
   let skinner;
   let raf;
-  /** A supplied image — a chosen file or the test pattern — beats whatever the host offers. */
+  let timers = [];
+  /** A supplied image — a chosen file or the test pattern — beats everything else. */
   let override;
 
   const say = (kind, message) => {
     if (onStatus !== undefined) onStatus({ kind, message });
   };
 
-  /** Tear down the running renderer. */
+  /** Tear down the running renderer, whatever kind it is. */
   function stop() {
     window.cancelAnimationFrame(raf);
     raf = undefined;
+    for (const timer of timers) window.clearTimeout(timer);
+    timers = [];
     if (skinner !== undefined) {
       skinner.canvas.remove();
       skinner = undefined;
     }
   }
 
-  /** Draw a still frame, used when the rig cannot run. */
+  /** Draw a still frame. */
   function still(image) {
     host.textContent = "";
     const node = document.createElement("img");
@@ -125,6 +161,35 @@ export function createPreview(host, onStatus) {
     node.alt = "";
     node.className = "preview-still";
     host.append(node);
+  }
+
+  /**
+   * Cross-fade between the frames of a look that cannot be rigged.
+   *
+   * A look with more than one drawn pose is animation in its own right — it is what
+   * the plugin itself does for the Q-version that turns around — and it needs no
+   * pixels read from the canvas, so it works for artwork the rig is not allowed to
+   * touch.
+   */
+  function cycle(images) {
+    host.textContent = "";
+    const stack = images.map((image, position) => {
+      const node = document.createElement("img");
+      node.src = image.src;
+      node.alt = "";
+      node.className = "preview-still preview-frame";
+      node.style.opacity = position === 0 ? "1" : "0";
+      host.append(node);
+      return node;
+    });
+    let shown = 0;
+    const advance = () => {
+      stack[shown].style.opacity = "0";
+      shown = (shown + 1) % stack.length;
+      stack[shown].style.opacity = "1";
+      timers.push(window.setTimeout(advance, 5200));
+    };
+    timers.push(window.setTimeout(advance, 5200));
   }
 
   /** An explanatory placeholder, so the frame is never merely blank. */
@@ -278,7 +343,11 @@ export function createPreview(host, onStatus) {
   }
 
   /**
-   * Show one look from the connected host.
+   * Show one look, from whichever source this page has.
+   *
+   * Two lives, one entry point: served by the plugin there is a host to ask, and on
+   * the published copy there is the bundled catalogue plus the artwork's own
+   * sources. The caller does not have to know which.
    *
    * @param characterId - the selected character.
    * @param lookId - the selected look, or undefined for the character's first.
@@ -288,10 +357,15 @@ export function createPreview(host, onStatus) {
       showOverride();
       return;
     }
-    if (index === undefined) {
-      notice("No artwork to preview yet. Open this console from your own DSH for the live view, or choose an image file below.");
+    if (index !== undefined) {
+      await showFromHost(characterId, lookId);
       return;
     }
+    await showFromSources(characterId, lookId);
+  }
+
+  /** Render a look served by the plugin on this origin. */
+  async function showFromHost(characterId, lookId) {
     const looks = index.looks.filter((look) => look.character === characterId);
     const look = looks.find((entry) => entry.id === lookId) ?? looks[0];
     stop();
@@ -303,7 +377,6 @@ export function createPreview(host, onStatus) {
     const frame = look.frames[0];
     const image = await loadImage(`${origin}${index.artBase}/${frame.file}`);
     if (image === undefined) {
-      say("error", `${frame.file} did not load. It may be missing from the DSH's art directory.`);
       notice(`${frame.file} did not load.`);
       return;
     }
@@ -316,12 +389,54 @@ export function createPreview(host, onStatus) {
     }
   }
 
+  /** Render a look on the published copy, where only the sources have the pixels. */
+  async function showFromSources(characterId, lookId) {
+    const looks = (catalogue?.looks ?? []).filter((look) => look.character === characterId);
+    const look = looks.find((entry) => entry.id === lookId) ?? looks[0];
+    stop();
+    host.textContent = "";
+    if (look === undefined) {
+      notice("No look to preview for this character.");
+      return;
+    }
+    const acquired = [];
+    for (const frame of look.frames) {
+      const got = await acquire(frame, look);
+      if (got === undefined) {
+        notice(`${look.nameEn ?? look.id} could not be loaded from its source. It may have moved, or the host may be blocking this page.`);
+        say("error", `${String(look.sources?.[0] ?? look.id)} did not load.`);
+        return;
+      }
+      acquired.push({ ...got, frame });
+    }
+    const first = acquired[0];
+    // Report only once the frame is actually on screen. Reporting first would light
+    // the badge before anything exists to look at, which reads as "not connected" on
+    // a page that is showing the character perfectly well.
+    if (acquired.length > 1 && (!first.riggable || first.frame.profile === null)) {
+      cycle(acquired.map((entry) => entry.image));
+      say("ok", `${look.nameEn ?? look.id} is cycling its ${String(acquired.length)} drawn poses. It cannot be deformed: its host sends no CORS header, so the artwork cannot be read into WebGL.`);
+      return;
+    }
+    if (first.riggable && Array.isArray(first.frame.profile) && Array.isArray(first.frame.box)) {
+      rig(first.image, first.frame.profile, first.frame.box);
+      say("ok", `Showing ${look.nameEn ?? look.id}, rigged and animated by the same skeleton the plugin runs.`);
+      return;
+    }
+    still(first.image);
+    say("warn", `${look.nameEn ?? look.id} is shown as-is: its host sends no CORS header, so the artwork cannot be read into WebGL and cannot be deformed. Publish a local copy to animate it.`);
+  }
+
   return {
     detect,
     show,
     useFile,
     useTestPattern,
     stop,
+    /** Hand the preview the published catalogue, so it can work without a host. */
+    setCatalogue: (value) => {
+      catalogue = value;
+    },
     /** Let the console report the outcome of a sequence it drove itself. */
     report: (message, kind = "ok") => say(kind, message),
     isLive: () => index !== undefined,

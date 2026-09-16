@@ -19,7 +19,8 @@
  * falls back to the plugin's own copy instead of rendering `undefined`.
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -27,7 +28,12 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const declaration = JSON.parse(readFileSync(join(root, "art", "looks.json"), "utf8"));
 const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 
-/** The generated art index, when it exists, says which looks actually animate. */
+/**
+ * The generated art index, when it exists, carries the framing and the measured
+ * silhouette for every look — everything the preview needs except the pixels.
+ * Those come either from a local copy under `docs/art/` (opt in with
+ * `npm run art:publish`) or from the sources declared in `looks.json`.
+ */
 let indexed = { looks: [] };
 try {
   indexed = JSON.parse(readFileSync(join(root, "art", "index.json"), "utf8"));
@@ -36,6 +42,43 @@ try {
 }
 
 const animated = new Set(indexed.looks.filter((look) => look.animated).map((look) => look.id));
+const published = join(root, "docs", "art");
+
+/**
+ * Whether a path is part of the repository.
+ *
+ * The catalogue is committed and baked, but `docs/art/` is ignored by default, so
+ * the two can disagree: a developer who published the artwork locally would build a
+ * catalogue promising files GitHub Pages does not have, and the deployed page would
+ * 404 on every look. Advertising a local copy only when it is actually tracked makes
+ * that impossible.
+ */
+function trackedInGit(relative) {
+  try {
+    return execFileSync("git", ["ls-files", "--", relative], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+const publishingArt = trackedInGit("docs/art");
+
+/** One frame as the browser needs it: where it is, and how to place and rig it. */
+function frameOf(look, frame) {
+  return {
+    file: frame.file,
+    seat: frame.seat,
+    box: frame.measured?.box ?? null,
+    profile: frame.profile ?? null,
+    // True only when the copy beside the console is committed, so the page never
+    // reaches for a file the deployment does not serve.
+    local: publishingArt && existsSync(join(published, frame.file)),
+  };
+}
 
 const catalog = {
   version: manifest.version,
@@ -54,13 +97,28 @@ const catalog = {
       .filter((look) => look.character === character.id)
       .map((look) => look.id),
   })),
-  looks: declaration.looks.map((look) => ({
-    id: look.id,
-    character: look.character,
-    name: look.name,
-    nameEn: look.nameEn ?? look.name,
-    animated: animated.has(look.id) || (look.frames ?? []).length > 1,
-  })),
+  looks: declaration.looks.map((look) => {
+    const generated = indexed.looks.find((entry) => entry.id === look.id);
+    const frames = (generated?.frames ?? look.frames?.map((file) => ({ file })) ?? [])
+      .map((frame) => frameOf(look, frame));
+    return {
+      id: look.id,
+      character: look.character,
+      name: look.name,
+      nameEn: look.nameEn ?? look.name,
+      animated: animated.has(look.id) || frames.length > 1,
+      accent: generated?.accent,
+      // Where the pixels live. The repository carries none of them, so the page
+      // reads them from here — and a local copy, when the operator has published
+      // one, is preferred because only a same-origin image can be rigged.
+      sources: look.urls ?? [],
+      // Whether those hosts send CORS. Declared in looks.json from a measurement,
+      // so the page does not ask for a header that is not there: that request fails
+      // and leaves an error in the console of a page working exactly as intended.
+      cors: look.cors !== false,
+      frames,
+    };
+  }),
 };
 
 const target = join(root, "docs", "site", "catalog.json");

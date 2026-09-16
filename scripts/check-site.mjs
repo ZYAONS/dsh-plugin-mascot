@@ -22,7 +22,7 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, extname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { findChromium } from "./chrome.mjs";
 
@@ -387,9 +387,13 @@ async function visit(url, viewport) {
   await cdp.send("Page.navigate", { url });
   // Poll for the terminal state rather than sleeping: the catalogue arrives over
   // fetch, and the preview finishes on an image decode after that.
+  // `#output` exists from the first paint and holds "Generating…" until the first
+  // render, so waiting for it to merely exist returns while the page is still
+  // starting. Waiting for real content is the difference between a terminal state
+  // and a hopeful sleep.
   const ready = await until(
-    () => cdp.evaluate("document.querySelectorAll('.card').length > 0 && document.getElementById('output') !== null").catch(() => false),
-    12000,
+    () => cdp.evaluate("document.querySelectorAll('.card').length > 0 && (document.getElementById('output')||{}).textContent.trim().length > 60").catch(() => false),
+    20000,
     120,
   );
   if (ready === undefined) throw new Error(`the console never rendered for ${url}`);
@@ -512,18 +516,45 @@ ok(
 );
 
 if (shot) {
+  // Served over HTTP rather than opened as a file. On `file:` an image taints the
+  // canvas, so the rig refuses it and the screenshots would show stills of a page
+  // that rigs perfectly when it is actually hosted — the README would be lying.
+  // A plain static server over docs/ is exactly what Pages does.
+  const statics = createServer((request, response) => {
+    const relative = decodeURIComponent(new URL(request.url ?? "/", "http://x").pathname).replace(/^\/+/u, "") || "index.html";
+    const file = join(root, "docs", relative);
+    if (!file.startsWith(join(root, "docs"))) {
+      response.writeHead(403);
+      response.end();
+      return;
+    }
+    try {
+      const body = readFileSync(file);
+      const type = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".png": "image/png" }[extname(file)] ?? "application/octet-stream";
+      response.writeHead(200, { "content-type": type });
+      response.end(body);
+    } catch {
+      response.writeHead(404);
+      response.end();
+    }
+  });
+  await new Promise((resolve) => statics.listen(0, "127.0.0.1", resolve));
+  const staticUrl = `http://127.0.0.1:${String(statics.address().port)}/index.html`;
+
   // Every parameter is pinned. The interaction run above writes to localStorage,
   // which survives navigation in this profile, so a screenshot taken without
   // pinning the character would silently record whatever was clicked last.
   for (const [name, query] of [
-    ["preview.png", "preview=test&theme=closure&character=closure"],
-    ["preview-yuno.png", "preview=test&theme=yuno&character=yuno"],
+    ["preview.png", "theme=closure&character=closure"],
+    ["preview-yuno.png", "theme=yuno&character=yuno"],
   ]) {
-    await visit(withQuery(query), { width: 1180, height: 2100 });
+    await visit(`${staticUrl}?${query}`, { width: 1180, height: 2100 });
+    await wait(900);
     const data = (await cdp.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true })).data;
     writeFileSync(join(root, "docs", "site", name), Buffer.from(data, "base64"));
     console.log(`  ok    wrote docs/site/${name}`);
   }
+  statics.close();
 }
 
 // ---- served by the real plugin, on its own origin --------------------------
@@ -602,18 +633,63 @@ if (localUrl !== undefined) {
   ok("switching character re-renders the preview in place", beforeSwitch && afterSwitch.canvas === true, `before=${String(beforeSwitch)} after=${JSON.stringify(afterSwitch)}`);
 }
 
-// ---- with no host, and nothing to preview -------------------------------
-// The first-visit state on a machine that has never installed the plugin. The
-// preview must explain itself rather than sit blank, and the rest of the console
-// must be entirely unaffected.
-await visit(targetUrl, { width: 1360, height: 900 });
-const noHost = await cdp.evaluate(
-  "({ host: document.getElementById('preview-host').textContent.trim(), canvas: document.querySelector('#preview-host canvas') !== null, cards: document.querySelectorAll('#looks .card').length, output: document.getElementById('output').textContent.length })",
+// ---- the published copy, with no host of any kind --------------------------
+// This is the front door: a visitor with nothing installed. It now shows the
+// characters anyway, loading each look from where the artwork already lives.
+// Pinned, because localStorage survives navigation in this profile: without it the
+// "before" state is whatever the previous section clicked last, and a switch test
+// that starts on the destination proves nothing.
+await visit(withQuery("character=closure&theme=closure"), { width: 1360, height: 900 });
+const published = await cdp.evaluate(
+  "({ canvas: document.querySelector('#preview-host canvas') !== null, stills: document.querySelectorAll('#preview-host img').length, notice: (document.querySelector('#preview-host .preview-empty')||{}).textContent || '', cards: document.querySelectorAll('#looks .card').length, output: document.getElementById('output').textContent.length, status: document.getElementById('preview-status').textContent })",
 );
-ok("with no local DSH the preview explains itself", noHost.host.length > 40 && /Open this console from your own DSH|no artwork/iu.test(noHost.host), noHost.host.slice(0, 140));
-ok("and shows no phantom canvas", noHost.canvas === false, "a canvas exists with nothing to draw");
-ok("the rest of the console is unaffected", noHost.cards > 0 && noHost.output > 200, `look cards=${String(noHost.cards)} output=${String(noHost.output)} chars`);
+ok(
+  "the published copy shows the mascot with nothing installed",
+  published.canvas || published.stills > 0,
+  `canvas=${String(published.canvas)} stills=${String(published.stills)} notice="${published.notice.slice(0, 110)}"`,
+);
+ok(
+  "and says where the pixels came from",
+  /source|CORS|as-is|rigged/iu.test(published.status),
+  `status="${published.status.slice(0, 140)}"`,
+);
+ok("the rest of the console is unaffected", published.cards > 0 && published.output > 200, `look cards=${String(published.cards)} output=${String(published.output)} chars`);
 
+// Switching character must swap the picture here too — that is the request this
+// whole section exists to satisfy. Compared at the compositor, not by reading an
+// element: a rigged look renders into a canvas, and two canvases look identical to
+// anything that only inspects the DOM.
+const stageBox = async () =>
+  cdp.evaluate("(() => { const n = document.querySelector('.preview-stage'); const r = n.getBoundingClientRect(); return { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }; })()");
+const shootStage = async () => (await cdp.send("Page.captureScreenshot", { format: "png", clip: { ...(await stageBox()), scale: 1 } })).data;
+
+const closureLook = await cdp.evaluate("document.querySelector('#looks .card .code').textContent.trim()");
+ok("the published copy starts on the pinned character", /^closure-/u.test(closureLook), `first look card = "${closureLook}"`);
+const closureShot = await shootStage();
+await cdp.click("#characters .card:nth-child(2)");
+await wait(1400);
+const yunoShot = await shootStage();
+const yunoLook = await cdp.evaluate("document.querySelector('#looks .card .code').textContent.trim()");
+ok(
+  `switching character moves the console to Yuno (${closureLook} → ${yunoLook})`,
+  /^yuno-/u.test(yunoLook),
+  `look cards now start at "${yunoLook}"`,
+);
+ok(
+  "and the published frame is redrawn, not left showing the previous character",
+  closureShot !== yunoShot,
+  "the two compositor captures are byte-identical",
+);
+
+// And Yuno must actually be on screen, not an empty frame.
+const drawn = await cdp.evaluate(
+  "({ canvas: document.querySelector('#preview-host canvas') !== null, stills: document.querySelectorAll('#preview-host img').length, notice: (document.querySelector('#preview-host .preview-empty')||{}).textContent || '' })",
+);
+ok(
+  "and Yuno is actually rendered on the published copy",
+  drawn.canvas || drawn.stills > 0,
+  `canvas=${String(drawn.canvas)} stills=${String(drawn.stills)} notice="${drawn.notice.slice(0, 110)}"`,
+);
 ok(
   "the page raised no uncaught exception and logged no error",
   pageProblems.length === 0,
