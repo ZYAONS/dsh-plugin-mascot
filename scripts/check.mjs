@@ -441,45 +441,43 @@ await it("the artwork route serves from art/ and refuses to leave it", async () 
   assert.equal((await request(harness, "/dsh-mascot/art/%2e%2e%2fclosure.png")).status, 403, "an encoded traversal with an image extension is refused too");
 });
 
-await it("only the artwork route opens to an allowlisted origin, and only to that one", async () => {
+await it("the art route stays behind the session, and the console is served from the same origin", async () => {
   const artwork = "/dsh-mascot/art/closure-chibi.png";
-  const page = "https://zyaons.github.io";
-  const stranger = "https://evil.example";
 
-  // Same-origin keeps working exactly as before, with a session.
+  // A cross-origin read cannot carry the DSH cookie, so it must not be served. An
+  // allowlist inside the plugin was tried and removed: measured against a real
+  // browser, a fetch from a public origin to a local DSH is refused before any
+  // plugin code runs, so the console is served from this origin instead.
+  const sessionless = hostHarness({ authenticated: false });
+  assert.equal((await request(sessionless, artwork, { headers: { origin: "https://zyaons.github.io" } })).status, 401, "an anonymous cross-origin read of the art is refused");
+  assert.equal((await request(sessionless, "/dsh-mascot/api/balance")).status, 401, "and so is the balance");
+  assert.equal((await request(sessionless, "/dsh-mascot/api/looks")).status, 401, "and the look index");
+
+  // Same-origin with a session: everything works, with no CORS header anywhere.
   const own = hostHarness();
-  const ownRead = await request(own, artwork);
-  assert.equal(ownRead.status, 200, "a session-bearing read of the art still works");
-  assert.equal(ownRead.headers["access-control-allow-origin"], undefined, "a same-origin read needs no CORS header");
+  const art = await request(own, artwork);
+  assert.equal(art.status, 200, "a session-bearing read of the art works");
+  assert.equal(art.headers["access-control-allow-origin"], undefined, "no CORS header is needed or sent on a same-origin read");
 
-  // The console cannot carry the DSH cookie, so the origin itself is the credential
-  // — but only when the operator put it on the list. Everything below is
-  // session-less, which is what a cross-origin reader actually is.
-  const strangerHarness = hostHarness({ authenticated: false });
-  const friend = await request(strangerHarness, artwork, { headers: { origin: page } });
-  assert.equal(friend.status, 200, "the allowlisted console origin may read the art without a session");
-  assert.equal(friend.headers["access-control-allow-origin"], page, "an allowed origin is echoed back, never starred");
-  assert.equal(friend.headers.vary, "origin", "the answer varies by origin, so caches must key on it");
+  // The console is served from this same origin, which is what makes its preview
+  // possible at all: same origin means the session cookie rides along.
+  const page = await request(own, "/dsh-mascot/console/");
+  assert.equal(page.status, 200, "the console index is served");
+  assert.match(String(page.headers["content-type"]), /text\/html/u, "as HTML");
+  assert.match(String(page.body), /<title>DSH Mascot/u, "and it is the console page");
 
-  const hostile = await request(strangerHarness, artwork, { headers: { origin: stranger } });
-  assert.equal(hostile.status, 401, "an origin the operator did not allow is refused");
-  assert.equal(hostile.headers["access-control-allow-origin"], undefined, "and is told nothing about itself");
+  const asset = await request(own, "/dsh-mascot/console/site/preview.js");
+  assert.equal(asset.status, 200, "the console's own scripts are served");
+  assert.match(String(asset.headers["content-type"]), /javascript/u, "with a script content type");
 
-  const anonymous = await request(strangerHarness, artwork);
-  assert.equal(anonymous.status, 401, "a session-less read with no origin at all is refused too");
+  // Containment, the same rule the art route follows.
+  assert.equal((await request(own, "/dsh-mascot/console/../../package.json")).status, 404, "a traversal out of the console root does not resolve");
+  assert.equal((await request(own, "/dsh-mascot/console/../art/looks.json")).status, 404, "nor does stepping back into the art directory");
+  assert.equal((await request(own, "/dsh-mascot/console/nope.txt")).status, 404, "an unsupported extension is refused");
 
-  // The carve-out must not leak past the artwork: the balance and the index are
-  // still session-only, allowlisted origin or not.
-  assert.equal((await request(strangerHarness, "/dsh-mascot/api/balance", { headers: { origin: page } })).status, 401, "an allowlisted origin still cannot read the balance");
-  assert.equal((await request(strangerHarness, "/dsh-mascot/api/looks", { headers: { origin: page } })).status, 401, "nor the look index");
-
-  // Switching the allowlist off closes the preview entirely.
-  const closed = hostHarness({ authenticated: false, config: { artOrigins: [] } });
-  assert.equal((await request(closed, artwork, { headers: { origin: page } })).status, 401, "an empty allowlist refuses everyone");
-  const closedOwn = hostHarness({ config: { artOrigins: [] } });
-  assert.equal((await request(closedOwn, artwork)).status, 200, "and a session still works");
+  // It is still behind the session, like everything but nothing at all.
+  assert.equal((await request(sessionless, "/dsh-mascot/console/")).status, 401, "the console is not public");
 });
-
 await it("the look index is the single source of truth for what is installed", () => {
   const declaration = JSON.parse(read("art/looks.json"));
   const index = JSON.parse(read("art/index.json"));

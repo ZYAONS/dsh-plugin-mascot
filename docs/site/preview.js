@@ -1,14 +1,18 @@
 /*
  * Live mascot preview for the configuration console.
  *
- * The artwork is never served from this site — it is official game art the
- * repository deliberately does not carry. Instead this connects to the DSH running
- * on the visitor's own machine and renders the art they installed, with the very
- * same skeleton the plugin runs. If there is no local DSH, or it is on another
- * port, the visitor can hand the preview a file directly; either way the image
- * stays in the browser.
+ * The artwork is never served from this site — it is official game art that the
+ * repository deliberately does not carry. So the preview reads it from the one
+ * place it exists: the DSH on the visitor's own machine, which also serves this
+ * very page when you open it at `/dsh-mascot/console/`.
  *
- * Everything here is a preview: it reads, and never writes, anything on the host.
+ * That is why there is no cross-origin connection box here. A fetch from a public
+ * origin to a local DSH is refused before any plugin code runs — measured against a
+ * real browser, not assumed — so an address field on the published copy would be a
+ * control that can never succeed. On the published copy the preview offers a file
+ * of the visitor's own instead, and both routes stay entirely inside the browser.
+ *
+ * Everything here reads. Nothing is written, and nothing is uploaded.
  */
 
 import { buildRig, createSkinner, poseRig, rigStatus } from "./rig.js";
@@ -20,14 +24,14 @@ const SEAT = { width: 104, height: 172 };
 const PROFILE_ROWS = 32;
 
 /**
- * Measure an image the way `art-sync` does: the alpha bounding box, an accent
- * colour, and the silhouette profile the rig's neck search needs.
+ * Measure an image the way `art-sync` does: the alpha bounding box and the
+ * silhouette profile the rig's neck search needs.
  *
  * This exists so the preview can rig an arbitrary file the visitor supplies, with
  * no server and no build step — the same numbers, computed in the browser.
  *
  * @param image - a loaded HTMLImageElement.
- * @returns `{ box, profile, accent }`, all in image pixels.
+ * @returns `{ box, profile }` in image pixels, or undefined for a blank image.
  */
 export function measure(image) {
   const width = image.naturalWidth;
@@ -75,10 +79,9 @@ export function measure(image) {
 }
 
 /** Load an image, resolving to undefined rather than rejecting on failure. */
-function loadImage(url, crossOrigin) {
+function loadImage(url) {
   return new Promise((resolve) => {
     const image = new Image();
-    if (crossOrigin === true) image.crossOrigin = "anonymous";
     image.onload = () => resolve(image);
     image.onerror = () => resolve(undefined);
     image.src = url;
@@ -88,24 +91,23 @@ function loadImage(url, crossOrigin) {
 /**
  * A preview bound to one host element.
  *
- * The public surface is deliberately small: `connect`, `useFile`, `show` and
- * `stop`. Selection lives in the console's own state, so switching character is a
- * `show` call rather than a re-connect.
+ * The surface is small on purpose: `detect`, `show`, `useFile`, `useTestPattern`,
+ * `stop`. The console owns the selection, so switching character is a `show` call
+ * rather than a reconnect.
  */
 export function createPreview(host, onStatus) {
   let origin;
   let index;
   let skinner;
   let raf;
-  let frameImage;
-  /** A visitor-supplied file overrides whatever the local host offers. */
+  /** A supplied image — a chosen file or the test pattern — beats whatever the host offers. */
   let override;
 
   const say = (kind, message) => {
     if (onStatus !== undefined) onStatus({ kind, message });
   };
 
-  /** Tear down any running renderer. */
+  /** Tear down the running renderer. */
   function stop() {
     window.cancelAnimationFrame(raf);
     raf = undefined;
@@ -113,10 +115,9 @@ export function createPreview(host, onStatus) {
       skinner.canvas.remove();
       skinner = undefined;
     }
-    frameImage = undefined;
   }
 
-  /** Draw one still frame with no animation, used when the rig cannot run. */
+  /** Draw a still frame, used when the rig cannot run. */
   function still(image) {
     host.textContent = "";
     const node = document.createElement("img");
@@ -126,30 +127,32 @@ export function createPreview(host, onStatus) {
     host.append(node);
   }
 
+  /** An explanatory placeholder, so the frame is never merely blank. */
+  function notice(text) {
+    host.textContent = "";
+    const node = document.createElement("p");
+    node.className = "preview-empty";
+    node.textContent = text;
+    host.append(node);
+  }
+
   /**
    * Render one image through the rig.
    *
-   * @param image - a loaded image whose pixels are readable (same-origin or CORS).
-   * @param profile - the silhouette profile, or null to let the rig use its default.
+   * @param image - a loaded image whose pixels are readable.
+   * @param profile - the silhouette profile, or null for the rig's own default.
    * @param box - the figure's bounding box in image pixels.
    */
   function rig(image, profile, box) {
     stop();
     const bones = buildRig(profile, { rows: 26, cols: 18 });
-    const built = createSkinner(
-      image,
-      bones,
-      { width: SEAT.width, left: 0, top: 0 },
-      box,
-      SEAT,
-    );
+    const built = createSkinner(image, bones, { width: SEAT.width, left: 0, top: 0 }, box, SEAT);
     if (built === undefined) {
       still(image);
       say("warn", `This browser could not start the renderer, so the preview shows a still image (${String(rigStatus() ?? "no reason reported")}).`);
       return false;
     }
     skinner = built;
-    frameImage = image;
     host.textContent = "";
     host.append(skinner.canvas);
     skinner.canvas.style.width = `${String(SEAT.width)}px`;
@@ -166,56 +169,42 @@ export function createPreview(host, onStatus) {
     return true;
   }
 
-  /**
-   * Connect to a local DSH and read its look index.
-   *
-   * A session-less cross-origin read only succeeds because the plugin's art route
-   * accepts allowlisted origins; the index itself is read here too, which the
-   * plugin gates on an explicit allowlist entry as well.
-   */
-  async function connect(base) {
-    stop();
+  /** Render whichever supplied image is active. */
+  function showOverride() {
     host.textContent = "";
-    const trimmed = String(base).trim().replace(/\/+$/u, "");
-    if (trimmed === "") {
-      say("idle", "Enter the address your DSH is listening on.");
-      return false;
-    }
-    let url;
+    return rig(override.image, override.measured.profile, override.measured.box);
+  }
+
+  /**
+   * Work out where this page is running, and whether the plugin answered here.
+   *
+   * Served by the plugin (`/dsh-mascot/console/`) the answer is simply "here":
+   * same origin, session cookie included, artwork readable. Served from GitHub
+   * Pages no relative URL exists and the local DSH cannot be read at all, which is
+   * why the caller gets a different UI for each case.
+   *
+   * @returns "local" when the plugin is on this origin, otherwise "public".
+   */
+  async function detect() {
+    if (window.location.protocol === "file:") return "public";
+    // The page lives at <prefix>/console/, and the API at <prefix>/api/; strip the
+    // console segment rather than guessing the prefix.
+    const base = window.location.href.replace(/\/console\/.*$/u, "").replace(/\/console$/u, "");
     try {
-      url = new URL(trimmed);
-    } catch {
-      say("error", `"${trimmed}" is not a valid address.`);
-      return false;
-    }
-    say("busy", `Reading ${url.origin}…`);
-    try {
-      const response = await fetch(new URL("/dsh-mascot/api/looks", url), { headers: { accept: "application/json" } });
-      if (!response.ok) {
-        say("error", response.status === 401
-          ? `DSH at ${url.origin} refused the read. Add ${window.location.origin} to the plugin's artOrigins.`
-          : `DSH at ${url.origin} answered HTTP ${String(response.status)}.`);
-        return false;
-      }
+      const response = await fetch(new URL("api/looks", `${base}/`), { headers: { accept: "application/json" } });
+      if (!response.ok) return "public";
       const payload = await response.json();
-      if (payload?.ok !== true || !Array.isArray(payload.looks) || payload.looks.length === 0) {
-        say("error", `DSH at ${url.origin} answered, but no artwork is installed. Run \`npm run fetch-art\` there.`);
-        return false;
-      }
-      origin = url.origin;
+      if (payload?.ok !== true || !Array.isArray(payload.looks)) return "public";
+      origin = new URL(base).origin;
       index = payload;
-      override = undefined;
-      say("ok", `Connected to ${url.origin} — ${String(payload.looks.length)} look(s) across ${String(payload.characters.length)} character(s).`);
-      return true;
+      return "local";
     } catch {
-      say("error", `Could not reach ${url.origin}. Is DSH Desktop running, and is that its address?`);
-      return false;
+      return "public";
     }
   }
 
   /** Render a visitor-supplied file, measured and rigged entirely in the browser. */
   async function useFile(file) {
-    stop();
     const url = URL.createObjectURL(file);
     const image = await loadImage(url);
     URL.revokeObjectURL(url);
@@ -229,66 +218,20 @@ export function createPreview(host, onStatus) {
       return false;
     }
     override = { image, measured };
-    say("ok", `Rigging ${file.name} (${String(image.naturalWidth)}×${String(image.naturalHeight)}) — measured and animated in this browser; the file was not uploaded.`);
+    showOverride();
+    say("ok", `Rigging ${file.name} (${String(image.naturalWidth)}×${String(image.naturalHeight)}). It was measured and animated inside this tab and was never uploaded.`);
     return true;
-  }
-
-  /**
-   * Show one look, from whichever source is active.
-   *
-   * @param characterId - the selected character.
-   * @param lookId - the selected look, or undefined for the character's first.
-   */
-  async function show(characterId, lookId) {
-    if (override !== undefined) {
-      host.textContent = "";
-      rig(override.image, override.measured.profile, override.measured.box);
-      return;
-    }
-    if (index === undefined) {
-      host.textContent = "";
-      const notice = document.createElement("p");
-      notice.className = "preview-empty";
-      notice.textContent = "No local DSH connected — the preview will appear here once you connect, or drop in an image file.";
-      host.append(notice);
-      return;
-    }
-    const looks = index.looks.filter((look) => look.character === characterId);
-    const look = looks.find((entry) => entry.id === lookId) ?? looks[0];
-    stop();
-    host.textContent = "";
-    if (look === undefined) {
-      const notice = document.createElement("p");
-      notice.className = "preview-empty";
-      notice.textContent =
-        `Your DSH has no artwork installed for "${characterId}". Run \`npm run fetch-art\` there, or switch character.`;
-      host.append(notice);
-      return;
-    }
-    const frame = look.frames[0];
-    const image = await loadImage(`${origin}${index.artBase}/${frame.file}`, true);
-    if (image === undefined) {
-      say("error", `${frame.file} did not load. It may be missing from the DSH's art directory.`);
-      return;
-    }
-    const box = frame.measured?.box;
-    if (Array.isArray(frame.profile) && Array.isArray(box)) {
-      rig(image, frame.profile, box);
-    } else {
-      still(image);
-      say("warn", `${look.id} carries no measured silhouette, so the preview shows a still image. Re-run \`npm run art:sync\` there.`);
-    }
   }
 
   /**
    * Render a neutral test pattern through the rig.
    *
-   * This is a diagnostic silhouette, not a character — it exists so the preview can
-   * demonstrate what the skeleton does before anything is installed, and so the
-   * whole chain (measure → rig → skin → animate) is testable in a headless browser
-   * with no host and no asset.
+   * A diagnostic silhouette, not a character. It exists so the preview can show
+   * what the skeleton does before anything is installed, and so the whole chain —
+   * measure, auto-rig, skin, animate — is exercisable in a headless browser with no
+   * host and no asset.
    */
-  function useTestPattern() {
+  async function useTestPattern() {
     const canvas = document.createElement("canvas");
     canvas.width = 220;
     canvas.height = 360;
@@ -296,51 +239,88 @@ export function createPreview(host, onStatus) {
     ctx.fillStyle = "#8d96a3";
     const capsule = (x, y, w, h, r) => {
       ctx.beginPath();
-      ctx.roundRect?.(x, y, w, h, r) ?? ctx.rect(x, y, w, h);
+      if (typeof ctx.roundRect === "function") ctx.roundRect(x, y, w, h, r);
+      else ctx.rect(x, y, w, h);
       ctx.fill();
     };
     capsule(88, 24, 44, 44, 22); // head
     capsule(78, 74, 64, 118, 26); // torso
-    capsule(52, 82, 22, 96, 11); // left arm
-    capsule(146, 82, 22, 96, 11); // right arm
-    capsule(84, 196, 22, 128, 11); // left leg
-    capsule(114, 196, 22, 128, 11); // right leg
+    capsule(52, 82, 22, 96, 11); // arms
+    capsule(146, 82, 22, 96, 11);
+    capsule(84, 196, 22, 128, 11); // legs
+    capsule(114, 196, 22, 128, 11);
     ctx.fillStyle = "#37e0d8";
     capsule(96, 104, 28, 6, 3);
     capsule(96, 122, 28, 6, 3);
-    const image = new Image();
-    return new Promise((resolve) => {
-      image.onload = () => {
-        const measured = measure(image);
-        stop();
-        host.textContent = "";
-        if (measured === undefined) {
-          say("error", "The test pattern measured as empty, which should be impossible.");
-          resolve(false);
-          return;
-        }
-        // Recorded as an override, exactly like a chosen file: `show()` runs on
-        // every console render, and without this the pattern would be wiped the
-        // first time the visitor switched character.
-        override = { image, measured };
-        const rigged = rig(image, measured.profile, measured.box);
-        say(rigged ? "ok" : "warn", rigged
-          ? "Rendering the built-in test pattern: measure → auto-rig → skinned animation, all in this browser. Connect a local DSH to see your own artwork instead."
-          : "The test pattern rendered as a still image because this browser could not start the renderer.");
-        resolve(rigged);
-      };
-      image.onerror = () => resolve(false);
-      image.src = canvas.toDataURL("image/png");
-    });
+
+    const image = await loadImage(canvas.toDataURL("image/png"));
+    if (image === undefined) {
+      say("error", "The built-in test pattern could not be drawn.");
+      return false;
+    }
+    const measured = measure(image);
+    if (measured === undefined) {
+      say("error", "The test pattern measured as empty, which should be impossible.");
+      return false;
+    }
+    // Recorded as an override, exactly like a chosen file: `show` runs on every
+    // console render, so without this the pattern would vanish the first time the
+    // visitor switched character.
+    override = { image, measured };
+    const rigged = showOverride();
+    say(rigged ? "ok" : "warn", rigged
+      ? "Rendering the built-in test pattern: measure → auto-rig → skinned animation, all inside this tab. Open this same console from your own DSH to see your installed artwork instead."
+      : "The test pattern rendered as a still image because this browser could not start the renderer.");
+    return rigged;
+  }
+
+  /**
+   * Show one look from the connected host.
+   *
+   * @param characterId - the selected character.
+   * @param lookId - the selected look, or undefined for the character's first.
+   */
+  async function show(characterId, lookId) {
+    if (override !== undefined) {
+      showOverride();
+      return;
+    }
+    if (index === undefined) {
+      notice("No artwork to preview yet. Open this console from your own DSH for the live view, or choose an image file below.");
+      return;
+    }
+    const looks = index.looks.filter((look) => look.character === characterId);
+    const look = looks.find((entry) => entry.id === lookId) ?? looks[0];
+    stop();
+    host.textContent = "";
+    if (look === undefined) {
+      notice(`Your DSH has no artwork installed for "${characterId}". Run \`npm run fetch-art\` there, or switch character.`);
+      return;
+    }
+    const frame = look.frames[0];
+    const image = await loadImage(`${origin}${index.artBase}/${frame.file}`);
+    if (image === undefined) {
+      say("error", `${frame.file} did not load. It may be missing from the DSH's art directory.`);
+      notice(`${frame.file} did not load.`);
+      return;
+    }
+    const box = frame.measured?.box;
+    if (Array.isArray(frame.profile) && Array.isArray(box)) {
+      rig(image, frame.profile, box);
+    } else {
+      still(image);
+      say("warn", `${look.id} carries no measured silhouette, so the preview shows a still image. Run \`npm run art:sync\` in the plugin directory.`);
+    }
   }
 
   return {
-    connect,
+    detect,
+    show,
     useFile,
     useTestPattern,
-    show,
     stop,
-    connected: () => origin !== undefined,
-    hasFile: () => override !== undefined,
+    /** Let the console report the outcome of a sequence it drove itself. */
+    report: (message, kind = "ok") => say(kind, message),
+    isLive: () => index !== undefined,
   };
 }

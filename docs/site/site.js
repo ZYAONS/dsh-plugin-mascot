@@ -16,8 +16,7 @@ import { createPreview } from "./preview.js";
 
 const REPO = "https://github.com/ZYAONS/dsh-plugin-mascot";
 const STATE_KEY = "dsh-mascot-console";
-/** Where a local DSH usually listens; the visitor can change it. */
-const DEFAULT_PREVIEW_URL = "http://127.0.0.1:43120";
+
 
 /** Which per-character interface style each theme maps to, for the card art. */
 const THEME_COLOURS = {
@@ -41,7 +40,7 @@ const state = {
   dir: "",
   /** "auto" follows the selected character; anything else pins one theme. */
   theme: "auto",
-  previewUrl: DEFAULT_PREVIEW_URL,
+
   /** Set by `?preview=test`; renders the rig test pattern instead of a host. */
   previewTest: false,
 };
@@ -296,42 +295,55 @@ function paintPreviewStatus({ kind, message }) {
   node.textContent = message;
   node.dataset.kind = kind;
   const badge = $("s-preview");
-  const connected = previewRef.current?.connected() === true || previewRef.current?.hasFile() === true;
+  // `isLive` means the plugin answered on this origin; a supplied file counts too.
+  const connected = previewRef.current?.isLive() === true || $("preview-host").querySelector("canvas, .preview-still") !== null;
   badge.className = connected ? "status" : "status off";
   badge.innerHTML = `<i></i>${connected ? "Previewing" : "Not connected"}`;
 }
 
 /** Create the preview and wire its controls. */
-function setupPreview() {
+async function setupPreview() {
   const preview = createPreview($("preview-host"), paintPreviewStatus);
   previewRef.current = preview;
 
-  $("preview-url").value = state.previewUrl;
-  $("preview-url").addEventListener("input", (event) => {
-    state.previewUrl = event.target.value;
-    save();
-  });
-  $("preview-connect").addEventListener("click", async () => {
-    const ok = await preview.connect(state.previewUrl);
-    if (ok) await preview.show(state.character, enabledLooks(state.character)[0]?.id);
+  $("preview-test").addEventListener("click", async () => {
+    await preview.useTestPattern();
     paintPreviewStatusRefresh();
   });
   $("preview-file").addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
     if (file === undefined) return;
-    const ok = await preview.useFile(file);
-    if (ok) await preview.show(state.character, undefined);
+    await preview.useFile(file);
     paintPreviewStatusRefresh();
   });
+
+  // Which of the two lives this page is depends on where it is served from, and
+  // that decides what the section can honestly offer.
+  const mode = await preview.detect();
+  if (mode === "local") {
+    $("preview-note").textContent = "Served by the plugin itself, so the frame below is reading the artwork installed on this machine.";
+    await preview.show(state.character, enabledLooks(state.character)[0]?.id);
+    const drawn = $("preview-host").querySelector("canvas, .preview-still") !== null;
+    preview.report(drawn
+      ? "Live from this machine: showing the artwork you installed, rigged and animated by the same skeleton the plugin runs."
+      : "Connected to the plugin, but nothing could be drawn — see the note below.");
+    return;
+  }
+
+  $("preview-note").innerHTML =
+    "This copy is the published one, so it cannot reach your DSH: a cross-origin read of a local " +
+    "install is refused before any plugin code runs. Open the console from your own DSH at " +
+    "<code>/dsh-mascot/console/</code> for the live view.";
+
   // A deep link can ask for the built-in test pattern, which exercises the whole
   // chain with no host and no asset — the path a headless run takes.
   if (state.previewTest) {
-    preview.useTestPattern().then(() => {
-      paintPreviewStatusRefresh();
-    }).catch(() => {});
+    await preview.useTestPattern();
+    paintPreviewStatusRefresh();
     return;
   }
-  preview.show(state.character, enabledLooks(state.character)[0]?.id).catch(() => {});
+  await preview.show(state.character, undefined);
+  paintPreviewStatusRefresh();
 }
 
 /** Re-read the connection badge after a connect or file pick changed it. */
@@ -489,8 +501,9 @@ async function main() {
 
   renderCharacters();
   renderLooks();
-  // The preview exists before the first render, so the render pass can drive it.
-  setupPreview();
+  // The preview is created and probed before the first render, so the render pass
+  // drives a preview that already knows which origin it is on.
+  await setupPreview();
   render();
 }
 

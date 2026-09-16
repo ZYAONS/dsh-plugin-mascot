@@ -125,12 +125,9 @@ before anything is installed on the machine:
 
 ![console](docs/site/preview.png)
 
-- **00 Live preview** — renders the mascot **from your own machine**: it connects to
-  the DSH you are running and animates the artwork you installed, with the same
-  skeleton the plugin runs. The official art is deliberately not published here, so
-  this is the only honest way to show it. With no host reachable, you can hand it a
-  file of your own — the image is measured and rigged entirely in the browser and is
-  never uploaded — or follow `?preview=test` for a built-in rig test pattern.
+- **00 Live preview** — shows the mascot **animated from your own machine**, wearing
+  whichever character you selected. See below: this works when the console is served
+  by the plugin, and the published copy explains why it cannot be.
 - **01 Plugin** — the plugin itself on/off, and the balance lookup on/off
 - **02 Character** — Closure (Rhodes Island console) or Sengoku Yuno (MEWTYPE LIVE)
 - **03 Looks** — tick which artwork may appear; an unticked look goes into an
@@ -139,23 +136,31 @@ before anything is installed on the machine:
 - **05 Output** — a ready-to-paste `cordis.patch.yml`, with copy and download
 - **06 Install** — five steps, including fetching the artwork and restarting
 
-### Letting the console read your art
+### Where the live preview works, and why
 
-The preview is a cross-origin read of a route that is otherwise session-gated, so
-the plugin carries an exact-match allowlist for it:
+The console is served from **two places**, and they are not equivalent:
 
-```yaml
-config:
-  # Origins allowed to read /art/ without a DSH browser session.
-  # Empty list turns the console preview off entirely.
-  artOrigins: ["https://zyaons.github.io"]
-```
+| | Published (GitHub Pages) | Served by the plugin |
+|---|---|---|
+| Address | `zyaons.github.io/dsh-plugin-mascot/` | `http://127.0.0.1:<port>/dsh-mascot/console/` |
+| Configure and download | yes | yes |
+| **Live preview of your art** | **no** | **yes** |
+| Preview a file of your own | yes | yes |
+| Rig test pattern | yes | yes |
 
-The carve-out covers `/art/` **only** — the balance and the look index still require
-the session cookie, and an origin that is not on the list is refused with a 401 and
-told nothing about itself. The preview reads the look index through that same
-allowlist, so a refused connection surfaces as a message naming the origin to add
-rather than a silent blank frame.
+The preview reads the artwork, and the artwork route is behind the DSH session. A
+page on a public origin cannot carry that cookie — and this was **measured, not
+assumed**: a cross-origin fetch from the published console to a local DSH comes back
+`BLOCKED: Failed to fetch`, refused before any plugin code runs. So no allowlist
+inside the plugin could have helped, and an earlier revision of this branch that
+added one was removed rather than shipped untested.
+
+Serving the same page from the plugin puts it on the origin that already has the
+session. Same origin, no CORS, no allowlist: the look index, the artwork and the
+skeleton all simply work, and the mascot appears in the frame wearing whichever
+character you select. The public copy stays the front door — it is what you read
+before installing anything — and it says so in its own status line rather than
+showing a connection box that could never succeed.
 
 ### Two page themes
 

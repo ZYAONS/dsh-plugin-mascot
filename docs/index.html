@@ -52,9 +52,11 @@
       <span class="status" id="s-preview"><i></i>Not connected</span>
     </div>
     <p class="sec-note">
-      The mascot is official game art, so it is not published here — this connects to
-      the DSH on <em>your</em> machine and animates the artwork you installed, with the
-      same skeleton the plugin runs. Nothing is uploaded and nothing is written.
+      The mascot is official game art, so it is published nowhere — not here, not in
+      the repository. This preview reads it from the one place it exists: the DSH on
+      your own machine, which also serves <em>this very page</em> at
+      <code>/dsh-mascot/console/</code>. Open it from there and the frame below fills
+      in with the artwork you installed, animated by the same skeleton the plugin runs.
     </p>
     <div class="preview">
       <div class="preview-stage">
@@ -62,18 +64,15 @@
         <div class="preview-floor"></div>
       </div>
       <div class="preview-side">
-        <div class="field" style="margin-top:0">
-          <span>Local DSH address</span>
-          <div class="row-inline">
-            <input id="preview-url" type="text" spellcheck="false" placeholder="http://127.0.0.1:43120">
-            <button class="btn" id="preview-connect">Connect</button>
-          </div>
+        <p class="preview-status" id="preview-status">Looking for the plugin on this origin…</p>
+        <div class="actions">
+          <button class="btn" id="preview-test">Show the rig test pattern</button>
         </div>
         <label class="field">
-          <span>…or preview a file of your own</span>
+          <span>…or preview an image of your own</span>
           <input id="preview-file" type="file" accept="image/*">
         </label>
-        <p class="preview-status" id="preview-status">Enter the address your DSH is listening on, then connect.</p>
+        <p class="preview-note" id="preview-note"></p>
       </div>
     </div>
   </section>

@@ -19,6 +19,7 @@
  */
 
 import { spawn } from "node:child_process";
+import { createServer } from "node:http";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -525,6 +526,82 @@ if (shot) {
   }
 }
 
+// ---- served by the real plugin, on its own origin --------------------------
+// The whole point of serving the console from the plugin is that the preview then
+// runs same-origin and can read the artwork. This starts the plugin's actual host
+// half behind a real HTTP server — not a stub of it — and drives the page through
+// that, which is the only way to know the two halves agree about the contract.
+let localServer;
+let localUrl;
+try {
+  const plugin = await import(pathToFileURL(join(root, "lib", "index.js")).href);
+  let registered;
+  const ctx = {
+    get: () => undefined,
+    effect: (callback) => callback(),
+    webServer: {
+      register(entry) {
+        registered = entry;
+        return () => {};
+      },
+    },
+  };
+  await plugin.apply(ctx, {});
+  localServer = createServer((request, response) => {
+    // A loopback Host is what the plugin's own fallback authorization wants when no
+    // Connection service is composed, which is exactly this situation.
+    registered.handler(request, response).catch(() => {
+      response.writeHead(500);
+      response.end();
+    });
+  });
+  await new Promise((resolve) => localServer.listen(0, "127.0.0.1", resolve));
+  localUrl = `http://127.0.0.1:${String(localServer.address().port)}/dsh-mascot/console/`;
+} catch (error) {
+  console.error(`  FAIL  could not start the plugin's host half for the same-origin check\n          → ${String(error.message)}`);
+  failures += 1;
+}
+
+if (localUrl !== undefined) {
+  await visit(localUrl, { width: 1360, height: 900 });
+  const local = await cdp.evaluate(
+    "({ note: document.getElementById('preview-note').textContent, status: document.getElementById('preview-status').textContent, canvas: document.querySelector('#preview-host canvas') !== null, still: document.querySelector('#preview-host .preview-still') !== null, empty: (document.getElementById('preview-host').textContent||'').trim().length })",
+  );
+  ok(
+    "the status line reports the live view rather than the boot placeholder",
+    /Live from this machine/iu.test(local.status),
+    `status="${local.status.slice(0, 120)}"`,
+  );
+  ok(
+    "served by the plugin, the console recognises its own origin",
+    /reading the artwork installed/iu.test(local.note),
+    `note="${local.note.slice(0, 120)}"`,
+  );
+  ok(
+    "and renders the artwork installed on this machine",
+    local.canvas === true,
+    `canvas=${String(local.canvas)} still=${String(local.still)} host text="${String(local.empty).slice(0, 90)}" status="${local.status.slice(0, 120)}"`,
+  );
+  const localRig = await cdp.evaluate("window.__dshRigReason === undefined ? null : window.__dshRigReason");
+  ok("with the rig actually running, not the still fallback", localRig === null, `rig reported: ${String(localRig)}`);
+
+  // And it must move here too, against real artwork rather than a test pattern.
+  const localStage = await cdp.evaluate("(() => { const n = document.querySelector('.preview-stage'); const r = n.getBoundingClientRect(); return { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }; })()");
+  const shotA = (await cdp.send("Page.captureScreenshot", { format: "png", clip: { ...localStage, scale: 1 } })).data;
+  await wait(700);
+  const shotB = (await cdp.send("Page.captureScreenshot", { format: "png", clip: { ...localStage, scale: 1 } })).data;
+  ok("the live artwork is genuinely animating (two frames differ)", shotA !== shotB, "the two captures are byte-identical, so the sprite is frozen");
+
+  // Switching character must swap what is drawn — the request that started all this.
+  const beforeSwitch = await cdp.evaluate("document.querySelector('#preview-host canvas') !== null");
+  await cdp.click("#characters .card:nth-child(2)");
+  await wait(900);
+  const afterSwitch = await cdp.evaluate(
+    "({ canvas: document.querySelector('#preview-host canvas') !== null, status: document.getElementById('preview-status').textContent })",
+  );
+  ok("switching character re-renders the preview in place", beforeSwitch && afterSwitch.canvas === true, `before=${String(beforeSwitch)} after=${JSON.stringify(afterSwitch)}`);
+}
+
 // ---- with no host, and nothing to preview -------------------------------
 // The first-visit state on a machine that has never installed the plugin. The
 // preview must explain itself rather than sit blank, and the rest of the console
@@ -533,7 +610,7 @@ await visit(targetUrl, { width: 1360, height: 900 });
 const noHost = await cdp.evaluate(
   "({ host: document.getElementById('preview-host').textContent.trim(), canvas: document.querySelector('#preview-host canvas') !== null, cards: document.querySelectorAll('#looks .card').length, output: document.getElementById('output').textContent.length })",
 );
-ok("with no local DSH the preview explains itself", noHost.host.length > 40 && /connect|drop in/iu.test(noHost.host), noHost.host.slice(0, 140));
+ok("with no local DSH the preview explains itself", noHost.host.length > 40 && /Open this console from your own DSH|no artwork/iu.test(noHost.host), noHost.host.slice(0, 140));
 ok("and shows no phantom canvas", noHost.canvas === false, "a canvas exists with nothing to draw");
 ok("the rest of the console is unaffected", noHost.cards > 0 && noHost.output > 200, `look cards=${String(noHost.cards)} output=${String(noHost.output)} chars`);
 
@@ -545,6 +622,7 @@ ok(
 
 cdp.close();
 browser.child.kill();
+if (localServer !== undefined) localServer.close();
 //#endregion
 
 console.log(`\ncheck-site: ${String(passes)} passed, ${String(failures)} failed`);
