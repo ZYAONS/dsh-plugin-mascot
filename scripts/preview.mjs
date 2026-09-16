@@ -288,11 +288,22 @@ ${SCRIPT}
 ${SCRIPT2}
 </script>
 <script>
-Promise.resolve(window.PREVIEW_READY).then(() => {
-  const rig = typeof plugin.rigStatus === "function" ? plugin.rigStatus() : null;
-  if (rig !== null) window.__errors.push("rig unavailable: " + rig);
-  document.getElementById("errors").textContent = JSON.stringify(window.__errors);
-});
+// The report must land even when the harness itself throws: a rejected
+// PREVIEW_READY used to leave the error block empty, so a completely broken page
+// looked exactly like a page with nothing to report.
+function report(errors) {
+  document.getElementById("errors").textContent = JSON.stringify(errors);
+}
+Promise.resolve(window.PREVIEW_READY)
+  .then(() => {
+    const rig = typeof plugin.rigStatus === "function" ? plugin.rigStatus() : null;
+    if (rig !== null) window.__errors.push("rig unavailable: " + rig);
+    report(window.__errors);
+  })
+  .catch((error) => {
+    window.__errors.push("PREVIEW_READY rejected: " + String(error && error.message ? error.message : error));
+    report(window.__errors);
+  });
 </script>
 </body></html>`;
 

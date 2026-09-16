@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DSH 看板娘 · 配置台 / MASCOT CONSOLE</title>
+<meta name="description" content="DeepSeek Harness 看板娘插件的网页配置台：选择角色与形象、开关功能，生成可直接粘贴的 cordis.patch.yml。">
+<link rel="stylesheet" href="site/site.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2308090b'/%3E%3Crect x='6' y='6' width='20' height='20' fill='none' stroke='%23ffd400' stroke-width='2'/%3E%3Cpath d='M16 11v10M11 16h10' stroke='%23ffd400' stroke-width='2'/%3E%3C/svg%3E">
+</head>
+<body>
+<div class="tape"></div>
+
+<div class="wrap">
+
+  <header>
+    <div class="brandline">
+      <div class="brandmark"></div>
+      <h1>Mascot Console<small>看板娘配置台</small></h1>
+    </div>
+    <p class="tagline">
+      在浏览器里决定这个插件开不开、用可露希尔还是千石由乃、开哪几套形象、
+      要不要骨骼动效与余额查询 —— 然后把生成好的配置贴进 DSH 的 profile。
+      这个页面不会碰你的机器：它只是把选择写成一段 YAML。
+    </p>
+    <div class="meta">
+      <span>插件 <b id="m-version">—</b></span>
+      <span>角色 <b id="m-characters">—</b></span>
+      <span>形象 <b id="m-looks">—</b></span>
+      <span>托管 <b>GitHub Pages</b></span>
+    </div>
+  </header>
+
+  <!-- ============ 01 plugin ============ -->
+  <section>
+    <div class="sec-head">
+      <span class="idx">01</span>
+      <h2>Plugin<span>插件开关</span></h2>
+      <span class="rule"></span>
+      <span class="status" id="s-plugin"><i></i>Enabled</span>
+    </div>
+    <div class="grid two">
+      <div class="toggle" id="t-plugin" data-on="1" role="switch" tabindex="0">
+        <span class="track"></span>
+        <span class="body">
+          <b>启用看板娘插件</b>
+          <em>关掉之后生成的配置里不会插入插件行 —— 已经挂上的把它删掉即可。</em>
+        </span>
+      </div>
+      <div class="toggle" id="t-balance" data-on="1" role="switch" tabindex="0">
+        <span class="track"></span>
+        <span class="body">
+          <b>余额查询</b>
+          <em>面板里显示账户余额。关掉之后浏览器完全不碰提供方接口。</em>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 02 character ============ -->
+  <section id="sec-character">
+    <div class="sec-head">
+      <span class="idx">02</span>
+      <h2>Character<span>角色</span></h2>
+      <span class="rule"></span>
+    </div>
+    <p class="sec-note">两位角色各有一套界面风格，不只是换颜色：形状、进度条、环境动效、数字字体都不同。</p>
+    <div class="grid two" id="characters"></div>
+  </section>
+
+  <!-- ============ 03 looks ============ -->
+  <section id="sec-look">
+    <div class="sec-head">
+      <span class="idx">03</span>
+      <h2>Looks<span>可选形象</span></h2>
+      <span class="rule"></span>
+    </div>
+    <p class="sec-note">
+      勾掉的形象会被写进配置的 allowlist：插件连列都不会列出来。
+      素材本身不在仓库里，靠 <code>npm run fetch-art</code> 下载到本机。
+    </p>
+    <div class="grid three" id="looks"></div>
+  </section>
+
+  <!-- ============ 04 motion ============ -->
+  <section>
+    <div class="sec-head">
+      <span class="idx">04</span>
+      <h2>Motion<span>动效</span></h2>
+      <span class="rule"></span>
+    </div>
+    <div class="grid two">
+      <div class="toggle" id="t-skeleton" data-on="1" role="switch" tabindex="0">
+        <span class="track"></span>
+        <span class="body">
+          <b>骨骼动效</b>
+          <em>按轮廓自动绑三根骨头、用网格蒙皮做呼吸与重心摆动。不支持 WebGL2 的机器会自动退回静图。</em>
+        </span>
+      </div>
+      <div class="toggle" id="t-animated" data-on="1" role="switch" tabindex="0">
+        <span class="track"></span>
+        <span class="body">
+          <b>多帧形象</b>
+          <em>两帧以上的形象（例如会转身的 Q 版）参与轮换。关掉只保留每种形象的第一帧。</em>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 05 output ============ -->
+  <section>
+    <div class="sec-head">
+      <span class="idx">05</span>
+      <h2>Output<span>生成配置</span></h2>
+      <span class="rule"></span>
+    </div>
+
+    <div class="field">
+      <span>安装方式 / Mount</span>
+      <div class="seg" id="mount">
+        <button type="button" data-mount="name" data-on="1">包名（dsh plugin add）</button>
+        <button type="button" data-mount="file">绝对路径（file: 挂载）</button>
+      </div>
+    </div>
+
+    <label class="field" id="dir-field">
+      <span>插件所在目录 / Plugin directory</span>
+      <input id="dir" type="text" spellcheck="false" placeholder="C:\Users\you\Desktop\kexier\dsh-plugin-mascot">
+    </label>
+
+    <div class="out">
+      <pre id="output">正在生成…</pre>
+    </div>
+
+    <div class="actions">
+      <button class="btn primary" id="copy">复制配置</button>
+      <button class="btn" id="download-config">下载 cordis.patch.yml</button>
+      <a class="btn" id="download-repo" href="#" target="_blank" rel="noopener">下载插件压缩包</a>
+    </div>
+  </section>
+
+  <!-- ============ 06 install ============ -->
+  <section>
+    <div class="sec-head">
+      <span class="idx">06</span>
+      <h2>Install<span>怎么装</span></h2>
+      <span class="rule"></span>
+    </div>
+    <ol class="steps">
+      <li><b>拿到插件。</b>下载上面的压缩包解压，或者 <code>git clone</code> 仓库。</li>
+      <li><b>装进 profile。</b>用 DSH 自带的 CLI：<code>dsh plugin --profile desktop add &lt;目录&gt;</code>；
+        或者干脆不装，直接在 patch 里用绝对路径挂载（插件零运行时依赖）。</li>
+      <li><b>写入 patch。</b>把上面生成的 YAML 贴进 <code>~/.dsh/profiles/desktop/cordis.patch.yml</code>。
+        注意 <code>cordis.yml</code> 每次启动都会被改写成 <code>[]</code>，不要动它。</li>
+      <li><b>下载素材。</b>在插件目录跑 <code>npm run fetch-art</code> —— 官方立绘不在仓库里，这一步才会下载到本机。</li>
+      <li><b>重启 DSH Desktop。</b>桌面端只在启动时组合一次 patch 层，刷新网页没用。</li>
+    </ol>
+  </section>
+
+  <footer>
+    <div class="tape thin"></div>
+    <p style="margin-top:18px">
+      代码 <a href="https://github.com/ZYAONS/dsh-plugin-mascot" target="_blank" rel="noopener">MIT</a> ·
+      仓库 <a id="f-repo" href="#" target="_blank" rel="noopener">ZYAONS/dsh-plugin-mascot</a> ·
+      <a id="f-readme" href="#" target="_blank" rel="noopener">README（中文）</a>
+    </p>
+    <p class="legal">
+      <b>版权与致谢。</b>可露希尔 © 上海鹰角网络（《明日方舟》）；千石由乃 © Bushiroad（《BanG Dream!》/ 梦限大 MewType）。
+      两位角色均为各自权利人的版权角色，本项目是非官方同人作品，与权利人无隶属或背书关系。
+      官方立绘<strong>不随仓库分发</strong>，由使用者在本机自行下载。
+      本页面的视觉风格是一般性的战术界面设计语言，<strong>没有</strong>使用任何游戏素材、Logo 或字体。
+    </p>
+    <p class="legal">
+      这个页面是纯静态的，托管在 GitHub Pages 上，不运行任何服务端代码，也不会读取或修改你本机上的任何东西 ——
+      它只是根据你的选择生成一段 YAML 文本。
+    </p>
+  </footer>
+
+</div>
+
+<script src="site/site.js"></script>
+</body>
+</html>

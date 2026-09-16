@@ -1,0 +1,63 @@
+{
+  "version": "0.1.0",
+  "repository": "https://github.com/ZYAONS/dsh-plugin-mascot",
+  "characters": [
+    {
+      "id": "closure",
+      "name": "可露希尔",
+      "latin": "Closure",
+      "role": "罗德岛 · 采购 / 工程",
+      "tagline": "罗德岛工程终端",
+      "theme": "rhodes",
+      "looks": [
+        "closure-chibi",
+        "closure-portrait"
+      ]
+    },
+    {
+      "id": "yuno",
+      "name": "千石由乃",
+      "latin": "Sengoku Yuno",
+      "role": "梦限大MewType · DJ / Manipulator",
+      "tagline": "MEWTYPE LIVE",
+      "theme": "mewtype",
+      "looks": [
+        "yuno-anime",
+        "yuno-casual",
+        "yuno-chibi"
+      ]
+    }
+  ],
+  "looks": [
+    {
+      "id": "closure-chibi",
+      "character": "closure",
+      "name": "基建小人",
+      "animated": false
+    },
+    {
+      "id": "closure-portrait",
+      "character": "closure",
+      "name": "官方立绘",
+      "animated": false
+    },
+    {
+      "id": "yuno-anime",
+      "character": "yuno",
+      "name": "动画",
+      "animated": false
+    },
+    {
+      "id": "yuno-casual",
+      "character": "yuno",
+      "name": "常服",
+      "animated": false
+    },
+    {
+      "id": "yuno-chibi",
+      "character": "yuno",
+      "name": "Q 版",
+      "animated": true
+    }
+  ]
+}

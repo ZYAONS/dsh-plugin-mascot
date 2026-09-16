@@ -35,6 +35,7 @@ actually cost you and how well the prompt cache is doing.
 - [Motion](#motion)
 - [Usage](#usage)
 - [Configuration](#configuration)
+- [Web console](#web-console)
 - [How it works](#how-it-works)
 - [Where the numbers come from](#where-the-numbers-come-from)
 - [Development](#development)
@@ -112,6 +113,40 @@ composes its patch layers once per launch. Reloading the page is not enough:
 the plugin was never part of that generation's load tree. After the first
 mount, later edits to `lib/client.js` hot-reload through client HMR without
 another restart.
+
+---
+
+## Web console
+
+Decide how this plugin is mounted and which character it wears **in a browser**,
+before anything is installed on the machine:
+
+**https://zyaons.github.io/dsh-plugin-mascot/**
+
+![console](docs/site/preview.png)
+
+- **01 Plugin** — the plugin itself on/off, and the balance lookup on/off
+- **02 Character** — Closure (Rhodes Island console) or Sengoku Yuno (MEWTYPE LIVE)
+- **03 Looks** — tick which artwork may appear; an unticked look goes into an
+  allowlist, so the plugin will not even list it
+- **04 Motion** — the bone rig, and multi-frame looks
+- **05 Output** — a ready-to-paste `cordis.patch.yml`, with copy and download
+- **06 Install** — five steps, including fetching the artwork and restarting
+
+The page is **purely static**, hosted on GitHub Pages. It runs no server code and
+**does not read or modify anything on your machine** — it turns your choices into a
+YAML string. State lives in your browser's localStorage.
+
+The palette and typography borrow from tactical-UI design generally (near-black
+ground, one signal colour, square corners, hairline rules, uppercase Latin labels
+over Chinese ones). **No game asset, logo or typeface is used.**
+
+Its catalogue comes from `docs/site/catalog.json`, which `scripts/build-site.mjs`
+generates from `art/looks.json` — the same declaration the plugin reads, so the two
+cannot drift. `scripts/check-site.mjs` drives the page in a real browser and asserts
+that the catalogue loads, the controls render, and that **every id in the YAML it
+produces actually exists** (one typo there would make the plugin silently fall back
+to its first look).
 
 ---
 
