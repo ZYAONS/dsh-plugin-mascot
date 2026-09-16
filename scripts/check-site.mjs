@@ -252,6 +252,24 @@ ok(
 //#endregion
 
 //#region browser
+/**
+ * Show the skeleton, however this page offers to.
+ *
+ * In Auto the console shows it on its own and hides the button as redundant, so a
+ * fixture that always clicks would be asserting against a control the page has
+ * deliberately put away. Clicks when there is something to click, and otherwise waits
+ * for the view the page has already chosen.
+ */
+async function showSkeleton() {
+  const visible = await cdp.evaluate("(() => { const n = document.getElementById('preview-skeleton'); if (n === null) return false; const r = n.getBoundingClientRect(); return r.width > 0 && r.height > 0; })()");
+  if (visible === true) {
+    await showSkeleton();
+    return "clicked";
+  }
+  await until(() => cdp.evaluate("document.querySelector('#preview-host canvas') !== null").catch(() => false), 8000, 150);
+  return "shown automatically";
+}
+
 /** A tiny CDP client over Node's built-in WebSocket. */
 class Cdp {
   constructor(socket) {
@@ -290,7 +308,17 @@ class Cdp {
     const id = (this.next += 1);
     this.socket.send(JSON.stringify({ id, method, params }));
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, method });
+      // A navigation can drop a reply, and a promise that never settles makes the
+      // whole suite hang silently — worse than any failure it could have reported.
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`${method} got no reply in 20s`));
+      }, 20000);
+      this.pending.set(id, {
+        resolve: (value) => { clearTimeout(timer); resolve(value); },
+        reject: (error) => { clearTimeout(timer); reject(error); },
+        method,
+      });
     });
   }
 
@@ -787,9 +815,8 @@ if (localUrl !== undefined) {
 // The one control that always has something to show: it needs the bounding box and
 // the silhouette profile, both numbers in the catalogue, and no image at all. So it
 // must work on the published copy for a look whose pixels WebGL refuses.
-await visit(withQuery("theme=closure&character=closure"), { width: 1360, height: 900 }, { fresh: true });
-await cdp.click("#preview-skeleton");
-await wait(700);
+await visit(withQuery("theme=auto&character=closure"), { width: 1360, height: 900 }, { fresh: true });
+await showSkeleton();
 const skeleton = await cdp.evaluate(
   "({ canvas: document.querySelector('#preview-host canvas') !== null, webgl: (() => { const c = document.querySelector('#preview-host canvas'); return c === null ? null : c.getContext('webgl2') !== null; })(), status: document.getElementById('preview-status').textContent })",
 );
@@ -810,9 +837,8 @@ const boneB = (await cdp.send("Page.captureScreenshot", { format: "png", clip: {
 ok("and the skeleton is animating, not a diagram", boneA !== boneB, "the two compositor captures are byte-identical");
 
 // It must work for the look whose artwork cannot be rigged, which is the whole point.
-await visit(withQuery("theme=yuno&character=yuno&look=yuno-casual"), { width: 1360, height: 900 }, { fresh: true });
-await cdp.click("#preview-skeleton");
-await wait(700);
+await visit(withQuery("theme=auto&character=yuno&look=yuno-casual"), { width: 1360, height: 900 }, { fresh: true });
+await showSkeleton();
 const yunoSkeleton = await cdp.evaluate(
   "({ canvas: document.querySelector('#preview-host canvas') !== null, empty: (document.querySelector('#preview-host .preview-empty')||{}).textContent || '' })",
 );
@@ -822,6 +848,35 @@ ok(
   `canvas=${String(yunoSkeleton.canvas)} status="${String(yunoSkeleton.status)}" html="${String(yunoSkeleton.html)}"`,
 );
 
+// ---- the neutral theme owns the manual controls -----------------------------
+// And leaving it has to give the artwork back: the skeleton button used to go behind
+// the driver's back, so the record still said "artwork", switching back computed the
+// same key, and nothing was redrawn — the frame stayed on the skeleton for good.
+await visit(targetUrl, { width: 1360, height: 900 });
+const neutralPreview = await cdp.evaluate(
+  "({ theme: document.documentElement.dataset.theme, tools: !document.getElementById('preview-tools').classList.contains('hidden'), canvas: document.querySelector('#preview-host canvas') !== null, credit: document.getElementById('preview-credit').textContent.trim() })",
+);
+ok("the neutral theme shows the skeleton", neutralPreview.theme === "auto" && neutralPreview.canvas === true, `theme=${String(neutralPreview.theme)} canvas=${String(neutralPreview.canvas)}`);
+ok("and offers the skeleton and file controls", neutralPreview.tools === true, "the controls are hidden on the neutral theme");
+ok("and names no character, because it shows none", neutralPreview.credit === "", `credit="${neutralPreview.credit.slice(0, 90)}"`);
+
+await cdp.click("#theme button[data-theme-choice='closure']");
+await wait(1600);
+const charmed = await cdp.evaluate(
+  "({ theme: document.documentElement.dataset.theme, tools: !document.getElementById('preview-tools').classList.contains('hidden'), art: document.querySelector('#preview-host canvas, #preview-host .css-rig, #preview-host img') !== null, credit: document.getElementById('preview-credit').textContent.trim() })",
+);
+ok("a character's theme hides those controls", charmed.tools === false, "the skeleton and file controls are still offered");
+ok(
+  "and the artwork comes back",
+  charmed.theme === "closure" && charmed.art === true && !/skeleton/iu.test(charmed.credit),
+  `theme=${String(charmed.theme)} art=${String(charmed.art)} credit="${charmed.credit.slice(0, 70)}"`,
+);
+
+// The round trip, which is what was reported as impossible.
+await cdp.click("#theme button[data-theme-choice='auto']");
+await wait(1600);
+const back = await cdp.evaluate("({ theme: document.documentElement.dataset.theme, tools: !document.getElementById('preview-tools').classList.contains('hidden'), canvas: document.querySelector('#preview-host canvas') !== null })");
+ok("and switching back to the neutral theme works both ways", back.theme === "auto" && back.tools === true && back.canvas === true, JSON.stringify(back));
 // ---- nothing is left behind -------------------------------------------------
 // Switching faster than an image loads used to leave the previous frame on screen:
 // each draw is async, and an older one that finished later appended on top of a newer
@@ -877,7 +932,7 @@ await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 0,
 
 // The same race through the skeleton, which is a different renderer: the skeleton
 // claims the frame synchronously, so a pending artwork load must not land on top of it.
-await cdp.click("#preview-skeleton");
+await showSkeleton();
 await cdp.click("#looks .card:nth-child(2)");
 await wait(2500);
 const mixed = await layers();

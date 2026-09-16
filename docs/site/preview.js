@@ -455,10 +455,15 @@ export function createPreview(host, onStatus) {
         return toCanvas(moved.x, moved.y);
       };
 
-      // The outline, skinned by the same weights the mesh uses. Drawn in rest pose it
-      // would disagree with the mesh the moment the pose moved, which reads as a bug
-      // rather than as a reference.
-      const rows = frame.profile.length / 2;
+      // A person, drawn from the figure's own measurements.
+      //
+      // This used to trace the artwork's silhouette and lay a deformation mesh over it,
+      // which showed the rig working but at the cost of reading as a grey blob with a
+      // grid on it. A drawn figure says the same thing and looks like what it is: the
+      // joints sit where this look's silhouette says they sit — a chibi's head lands at
+      // half its height, a full-body portrait's at an eighth — and the limbs are placed
+      // between them in ordinary human proportions. Skinned by the same weights, so the
+      // figure bends with the rig rather than beside it.
       const weightsAt = (normalisedY) => {
         const head = smoothstep(bones.neck.y + RIG.band, bones.neck.y - RIG.band, normalisedY);
         const lower = smoothstep(RIG.hip - RIG.band, RIG.hip + RIG.band, normalisedY);
@@ -466,53 +471,78 @@ export function createPreview(host, onStatus) {
         const total = head + spine + lower;
         return [lower / total, spine / total, head / total];
       };
-      const outlineAt = (normalisedX, normalisedY) => {
+      const joint = (normalisedX, normalisedY) => {
         const rest = { x: box[0] + normalisedX * box[2], y: box[1] + normalisedY * box[3] };
         const moved = skin(matrices, weightsAt(normalisedY), rest);
         return toCanvas(moved.x, moved.y);
       };
-      ctx.beginPath();
-      for (let row = 0; row < rows; row++) {
-        const point = outlineAt(frame.profile[row * 2], (row + 0.5) / rows);
-        if (row === 0) ctx.moveTo(point.x, point.y);
-        else ctx.lineTo(point.x, point.y);
-      }
-      for (let row = rows - 1; row >= 0; row--) {
-        const point = outlineAt(frame.profile[row * 2 + 1], (row + 0.5) / rows);
-        ctx.lineTo(point.x, point.y);
-      }
-      ctx.closePath();
-      ctx.fillStyle = dim;
-      ctx.globalAlpha = 0.14;
-      ctx.fill();
-      ctx.globalAlpha = 0.38;
-      ctx.strokeStyle = dim;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.globalAlpha = 1;
 
-      // The deformation mesh, skinned, so the surface the rig drives is visible.
-      ctx.strokeStyle = signal;
-      ctx.globalAlpha = 0.16;
-      ctx.lineWidth = 1;
+      const neck = bones.neck.y;
+      const hip = RIG.hip;
+      const limb = Math.max(1.6, box[2] * 0.055);
+      const torso = limb * 1.7;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = dim;
+
+      // Arms, then legs, then the spine over them — drawn back to front so the joins
+      // read as one body rather than as overlapping sticks.
+      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = limb;
+      const arm = (side) => {
+        const shoulder = joint(0.5 + side * 0.15, neck + (hip - neck) * 0.08);
+        const elbow = joint(0.5 + side * 0.22, neck + (hip - neck) * 0.55);
+        const hand = joint(0.5 + side * 0.2, neck + (hip - neck) * 0.98);
+        ctx.beginPath();
+        ctx.moveTo(shoulder.x, shoulder.y);
+        ctx.lineTo(elbow.x, elbow.y);
+        ctx.lineTo(hand.x, hand.y);
+        ctx.stroke();
+      };
+      const leg = (side) => {
+        const top = joint(0.5 + side * 0.09, hip);
+        const knee = joint(0.5 + side * 0.13, hip + (1 - hip) * 0.5);
+        const foot = joint(0.5 + side * 0.12, 0.98);
+        ctx.beginPath();
+        ctx.moveTo(top.x, top.y);
+        ctx.lineTo(knee.x, knee.y);
+        ctx.lineTo(foot.x, foot.y);
+        ctx.stroke();
+      };
+      arm(-1);
+      arm(1);
+      leg(-1);
+      leg(1);
+
+      // The trunk, and a head sized to the neck the measurement found.
+      ctx.globalAlpha = 0.62;
+      ctx.lineWidth = torso;
+      const top = joint(0.5, neck);
+      const bottom = joint(0.5, hip);
       ctx.beginPath();
-      for (let row = 0; row <= bones.rows; row++) {
-        for (let col = 0; col <= bones.cols; col++) {
-          const point = skinnedAt(row * stride + col);
-          if (col === 0) ctx.moveTo(point.x, point.y);
-          else ctx.lineTo(point.x, point.y);
-        }
-      }
+      ctx.moveTo(top.x, top.y);
+      ctx.lineTo(bottom.x, bottom.y);
       ctx.stroke();
+
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = 2;
+      const skull = joint(0.5, neck * 0.5);
+      // The head owns everything above the neck, so its diameter is that much: a chibi
+      // gets a big head and a portrait a small one, both from the same measurement.
+      const radius = Math.max(3, (neck * box[3] * scale) / 2 * 0.9);
       ctx.beginPath();
-      for (let col = 0; col < stride; col++) {
-        for (let row = 0; row <= bones.rows; row++) {
-          const point = skinnedAt(row * stride + col);
-          if (row === 0) ctx.moveTo(point.x, point.y);
-          else ctx.lineTo(point.x, point.y);
-        }
-      }
+      ctx.arc(skull.x, skull.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = dim;
+      ctx.fill();
       ctx.stroke();
+
+      // The joints, so the figure reads as a skeleton rather than a pictogram.
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = text;
+      for (const point of [joint(0.5, neck), joint(0.5, hip)]) {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 2.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.globalAlpha = 1;
 
       // The chain: root at the feet, spine at the hip, neck carrying the head. Each
@@ -857,6 +887,17 @@ export function createPreview(host, onStatus) {
     useSkeleton,
     useTestPattern,
     stop,
+    /**
+     * Drop a chosen file or the test pattern, and report whether there was one.
+     *
+     * The caller needs to know: the frame changes, so any record of what it holds is
+     * no longer true.
+     */
+    clearOverride: () => {
+      if (override === undefined) return false;
+      override = undefined;
+      return true;
+    },
     /** Hand the preview the published catalogue, so it can work without a host. */
     setCatalogue: (value) => {
       catalogue = value;

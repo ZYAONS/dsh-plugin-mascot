@@ -376,6 +376,9 @@ function render() {
   // The preview follows the selection: switching character switches what floats in
   // the frame, which is the point of having it here at all.
   paintCredit(state.character);
+  // Offered only by the neutral theme: a character's theme is a statement about who is
+  // on screen, and "or preview an image of your own" is a different statement.
+  $("preview-tools").classList.toggle("hidden", !state.autoTheme);
   drivePreview();
   save();
 }
@@ -396,8 +399,14 @@ const CREDITS = {
 
 /** Paint the attribution for the selected character. */
 function paintCredit(characterId) {
-  const credit = CREDITS[characterId];
   const node = $("preview-credit");
+  // The neutral theme draws the rig, not a character, so naming one would attribute
+  // artwork that is not on screen.
+  if (state.autoTheme === true) {
+    node.textContent = "";
+    return;
+  }
+  const credit = CREDITS[characterId];
   if (credit === undefined) {
     node.textContent = "";
     return;
@@ -435,12 +444,16 @@ async function setupPreview() {
     // rather than one of the roster's outlines — the theme has just declined to say who
     // is on screen, and drawing a specific silhouette would say it anyway.
     await preview.useSkeleton(state.character, previewedLook(), { generic: state.autoTheme });
+    // The driver did not ask for this, so its record is stale: null it and the next
+    // render re-decides instead of trusting a key that no longer describes the frame.
+    previewShows = null;
     paintPreviewStatusRefresh();
   });
   $("preview-file").addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
     if (file === undefined) return;
     await preview.useFile(file);
+    previewShows = null;
     paintPreviewStatusRefresh();
   });
 
@@ -493,6 +506,11 @@ let previewShows = null;
 function drivePreview() {
   const preview = previewRef.current;
   if (preview === null || preview === undefined) return;
+  // A character's theme shows that character's artwork. A file the visitor chose, or
+  // the skeleton, belongs to the neutral theme that offered the control — leaving one
+  // in place here is the page contradicting the selection it is displaying. Clearing
+  // it changes the frame, so the record below is no longer true either.
+  if (!state.autoTheme && preview.clearOverride() === true) previewShows = null;
   const look = previewedLook();
   const key = [state.autoTheme ? "skeleton" : "art", state.character, look ?? ""].join("|");
   if (key === previewShows) return;

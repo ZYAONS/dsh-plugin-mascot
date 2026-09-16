@@ -73,13 +73,17 @@
       </div>
       <div class="preview-side">
         <p class="preview-status" id="preview-status">Looking for the plugin on this origin…</p>
-        <div class="actions">
-          <button class="btn" id="preview-skeleton">Show the skeleton</button>
+        <!-- Both belong to the neutral theme, which shows the rig rather than a
+             character, and are hidden when a character's theme is chosen. -->
+        <div id="preview-tools">
+          <div class="actions">
+            <button class="btn" id="preview-skeleton">Show the skeleton</button>
+          </div>
+          <label class="field">
+            <span>…or preview an image of your own</span>
+            <input id="preview-file" type="file" accept="image/*">
+          </label>
         </div>
-        <label class="field">
-          <span>…or preview an image of your own</span>
-          <input id="preview-file" type="file" accept="image/*">
-        </label>
         <p class="preview-note" id="preview-note"></p>
         <p class="credit" id="preview-credit"></p>
       </div>
