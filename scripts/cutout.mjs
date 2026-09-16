@@ -160,10 +160,14 @@ img.onload = () => {
       const out = document.createElement("canvas");
       out.width = fw; out.height = fh;
       out.getContext("2d").drawImage(layer, gx0, gy0, fw, fh, 0, 0, fw, fh);
-      return { png: out.toDataURL("image/png"), w: fw, h: fh };
+      // The crop origin is kept, not discarded: the web console hotlinks the
+      // *original* image, and without this it cannot tell which part of it a frame
+      // corresponds to — so the measured geometry would be applied to the wrong
+      // pixels, which is exactly what happened to the two-pose Q-version.
+      return { png: out.toDataURL("image/png"), w: fw, h: fh, x: gx0, y: gy0 };
     });
 
-    done({ w, h, count: frames.length, kept: keep.length, frames });
+    done({ w: W, h: H, count: frames.length, kept: keep.length, frames });
   } catch (error) {
     done({ error: String(error && error.message ? error.message : error) });
   }
@@ -213,7 +217,12 @@ export function cutout(input, outputs, options = {}) {
       if (bytes.length === 0) throw new Error(`cutout: frame ${String(index)} decoded empty`);
       writeFileSync(outputs[index], bytes);
     });
-    return { width: report.w, height: report.h, count: report.frames.length, frames: report.frames.map((f) => ({ width: f.w, height: f.h })) };
+    return {
+      sourceWidth: report.w,
+      sourceHeight: report.h,
+      count: report.frames.length,
+      frames: report.frames.map((f) => ({ width: f.w, height: f.h, x: f.x, y: f.y })),
+    };
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
@@ -232,5 +241,5 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.a
   }
   // `all` may yield more figures than paths given; the caller names them all.
   const size = cutout(input, outputs, { mode });
-  console.log(`cutout: ${String(size.count)} frame(s), ${String(size.width)}x${String(size.height)}`);
+  console.log(`cutout: ${String(size.count)} frame(s) from a ${String(size.sourceWidth)}x${String(size.sourceHeight)} source`);
 }

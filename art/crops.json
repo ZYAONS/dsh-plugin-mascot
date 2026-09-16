@@ -1,0 +1,22 @@
+{
+  "yuno-chibi": {
+    "width": 645,
+    "height": 645,
+    "frames": [
+      {
+        "file": "yuno-chibi-1.png",
+        "width": 236,
+        "height": 391,
+        "x": 72,
+        "y": 150
+      },
+      {
+        "file": "yuno-chibi-2.png",
+        "width": 215,
+        "height": 396,
+        "x": 322,
+        "y": 144
+      }
+    ]
+  }
+}

@@ -15,7 +15,7 @@
  * Everything here reads. Nothing is written, and nothing is uploaded.
  */
 
-import { buildRig, createSkinner, poseRig, rigStatus } from "./rig.js";
+import { buildRig, createSkinner, findNeck, poseRig, RIG, rigStatus } from "./rig.js";
 
 /** The dock seat the plugin renders into, in CSS pixels. Mirrors `.dsh-mascot-frames`. */
 const SEAT = { width: 104, height: 172 };
@@ -107,15 +107,15 @@ function loadImage(url, crossOrigin) {
 async function acquire(frame, look) {
   if (frame.local === true) {
     const local = await loadImage(`art/${frame.file}`);
-    if (local !== undefined) return { image: local, riggable: true };
+    if (local !== undefined) return { image: local, riggable: true, alreadyCropped: true };
   }
   for (const url of look.sources ?? []) {
     if (look.cors !== false) {
       const cors = await loadImage(url, true);
-      if (cors !== undefined) return { image: cors, riggable: true };
+      if (cors !== undefined) return { image: cors, riggable: true, alreadyCropped: false };
     }
     const plain = await loadImage(url);
-    if (plain !== undefined) return { image: plain, riggable: false };
+    if (plain !== undefined) return { image: plain, riggable: false, alreadyCropped: false };
   }
   return undefined;
 }
@@ -192,6 +192,101 @@ export function createPreview(host, onStatus) {
     timers.push(window.setTimeout(advance, 5200));
   }
 
+  /**
+   * Animate a look with CSS layers, when the WebGL rig is not allowed near it.
+   *
+   * A cross-origin image without a CORS header cannot be uploaded as a texture, so
+   * no vertex of it can be deformed. It can still be decomposed: `index.json`
+   * already records where this figure's neck pinches and where its hip sits, and
+   * two masked copies of the same image — each rotating about one of those joints —
+   * produce a head that leads and a body that sways. The head copy is feathered
+   * into the body across the neck, so a small angle reads as movement rather than
+   * as two pictures sliding past one another.
+   *
+   * Two rigid layers rather than a skinned mesh: nothing bends. That is the honest
+   * description of what can be done with an image whose pixels are off-limits.
+   *
+   * @param images - one loaded image per drawn pose.
+   * @param frame - the frame record, carrying `box` and `profile`.
+   */
+  function cssRig(images, frame) {
+    const image = images[0];
+    const sourceWidth = image.naturalWidth;
+    const sourceHeight = image.naturalHeight;
+    // A frame cut out of a larger download arrives as the *whole* download when it
+    // is hotlinked, so the crop rectangle says which part of it this frame is. The
+    // measured box and profile are in the crop's coordinates, because that is what
+    // they were measured on.
+    const crop = frame.crop ?? { x: 0, y: 0, width: sourceWidth, height: sourceHeight };
+    const box = frame.box;
+    const neck = findNeck(frame.profile);
+
+    // Everything below is a percentage of the source image, which is what the
+    // browser actually holds and what the transform origins and the mask line are
+    // resolved against.
+    const asSourceX = (value) => ((crop.x + value) / sourceWidth) * 100;
+    const asSourceY = (value) => ((crop.y + value) / sourceHeight) * 100;
+    const neckX = asSourceX(box[0] + neck.x * box[2]);
+    const neckY = asSourceY(box[1] + neck.y * box[3]);
+    const hipY = asSourceY(box[1] + RIG.hip * box[3]);
+
+    // The visible box is the crop, scaled so its height is the seat height.
+    const scale = SEAT.height / crop.height;
+    const viewWidth = crop.width * scale;
+    const sourceDisplayWidth = sourceWidth * scale;
+    const sourceDisplayHeight = sourceHeight * scale;
+
+    host.textContent = "";
+    const rig = document.createElement("div");
+    rig.className = "css-rig";
+    rig.style.width = `${viewWidth.toFixed(1)}px`;
+    rig.style.height = `${SEAT.height}px`;
+    rig.style.setProperty("--off-x", `${(-crop.x * scale).toFixed(1)}px`);
+    rig.style.setProperty("--off-y", `${(-crop.y * scale).toFixed(1)}px`);
+    rig.style.setProperty("--src-w", `${sourceDisplayWidth.toFixed(1)}px`);
+    rig.style.setProperty("--src-h", `${sourceDisplayHeight.toFixed(1)}px`);
+    rig.style.setProperty("--cut", `${neckY.toFixed(2)}%`);
+    rig.style.setProperty("--neck-x", `${neckX.toFixed(2)}%`);
+    rig.style.setProperty("--neck-y", `${neckY.toFixed(2)}%`);
+    rig.style.setProperty("--hip-x", "50%");
+    rig.style.setProperty("--hip-y", `${hipY.toFixed(2)}%`);
+
+    for (const [position, pose] of images.entries()) {
+      const layer = document.createElement("div");
+      layer.className = "rig-pose";
+      if (position === 0) layer.dataset.shown = "1";
+
+      // One root per pose, holding the body and the head: the head is its child, so
+      // it inherits the sway and adds its own nod on top.
+      const root = document.createElement("div");
+      root.className = "rig-root";
+      const bodyImage = document.createElement("img");
+      bodyImage.src = pose.src;
+      bodyImage.alt = "";
+      const headLayer = document.createElement("div");
+      headLayer.className = "rig-head-layer";
+      const headImage = document.createElement("img");
+      headImage.src = pose.src;
+      headImage.alt = "";
+      headLayer.append(headImage);
+      root.append(bodyImage, headLayer);
+      layer.append(root);
+      rig.append(layer);
+    }
+    host.append(rig);
+
+    if (images.length > 1) {
+      const poses = [...rig.children];
+      let shown = 0;
+      const advance = () => {
+        delete poses[shown].dataset.shown;
+        shown = (shown + 1) % poses.length;
+        poses[shown].dataset.shown = "1";
+        timers.push(window.setTimeout(advance, 5200));
+      };
+      timers.push(window.setTimeout(advance, 5200));
+    }
+  }
   /** An explanatory placeholder, so the frame is never merely blank. */
   function notice(text) {
     host.textContent = "";
@@ -413,18 +508,25 @@ export function createPreview(host, onStatus) {
     // Report only once the frame is actually on screen. Reporting first would light
     // the badge before anything exists to look at, which reads as "not connected" on
     // a page that is showing the character perfectly well.
-    if (acquired.length > 1 && (!first.riggable || first.frame.profile === null)) {
-      cycle(acquired.map((entry) => entry.image));
-      say("ok", `${look.nameEn ?? look.id} is cycling its ${String(acquired.length)} drawn poses. It cannot be deformed: its host sends no CORS header, so the artwork cannot be read into WebGL.`);
-      return;
-    }
-    if (first.riggable && Array.isArray(first.frame.profile) && Array.isArray(first.frame.box)) {
+    const boxes = acquired.every((entry) => Array.isArray(entry.frame.box) && Array.isArray(entry.frame.profile));
+    if (first.riggable && boxes) {
       rig(first.image, first.frame.profile, first.frame.box);
       say("ok", `Showing ${look.nameEn ?? look.id}, rigged and animated by the same skeleton the plugin runs.`);
       return;
     }
+    if (boxes && Array.isArray(first.frame.profile)) {
+      // No CORS header means no texture, so the WebGL rig cannot touch these
+      // pixels — but the measured silhouette still says where the neck and hip are,
+      // and that is enough to compose two masked layers into a moving figure.
+      // A frame fetched by URL is the whole download, so the crop rectangle tells the
+      // rig which part of it this is. A frame read from a local file is already the
+      // crop, and offsetting it again would push it out of the box.
+      cssRig(acquired.map((entry) => entry.image), { ...first.frame, crop: first.alreadyCropped ? null : first.frame.crop });
+      say("ok", `${look.nameEn ?? look.id} is animated with the layered CSS rig: its host sends no CORS header, so its pixels cannot be skinned, but the measured silhouette still places the head and the hip. Publish a local copy for the full skeleton.`);
+      return;
+    }
     still(first.image);
-    say("warn", `${look.nameEn ?? look.id} is shown as-is: its host sends no CORS header, so the artwork cannot be read into WebGL and cannot be deformed. Publish a local copy to animate it.`);
+    say("warn", `${look.nameEn ?? look.id} is shown as-is: no measured silhouette was found for it.`);
   }
 
   return {

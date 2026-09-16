@@ -41,6 +41,12 @@ const state = {
   /** "auto" follows the selected character; anything else pins one theme. */
   theme: "auto",
 
+  /**
+   * The look the frame is showing, when the visitor picked one by clicking a card.
+   * Distinct from the allowlist ticks: the ticks decide what the *plugin* may offer,
+   * this decides what you are looking at.
+   */
+  previewLook: undefined,
   /** Set by `?preview=test`; renders the rig test pattern instead of a host. */
   previewTest: false,
 };
@@ -55,6 +61,16 @@ const characterOf = (id) => state.catalog.characters.find((entry) => entry.id ==
 
 /** The looks of one character, in declaration order. */
 const looksOf = (id) => state.catalog.looks.filter((look) => look.character === id);
+
+/**
+ * The look the frame is showing: the one the visitor chose, or the first the plugin
+ * would offer. Resolved against what is enabled, so unticking the look on screen
+ * moves the frame on rather than leaving it showing something the plugin will not.
+ */
+function previewedLook() {
+  const available = enabledLooks(state.character);
+  return available.some((look) => look.id === state.previewLook) ? state.previewLook : available[0]?.id;
+}
 
 /** Whether a look is currently enabled. */
 const lookOn = (id) => !state.off.has(id);
@@ -156,6 +172,9 @@ function renderCharacters() {
     ].join("");
     const choose = () => {
       state.character = character.id;
+      // A look belongs to one character, so a choice made for the last one is not a
+      // choice about this one.
+      state.previewLook = undefined;
       renderCharacters();
       renderLooks();
       render();
@@ -179,6 +198,7 @@ function renderLooks() {
     const card = document.createElement("div");
     card.className = "card";
     card.dataset.on = lookOn(look.id) ? "1" : "0";
+    card.dataset.preview = look.id === previewedLook() ? "1" : "0";
     card.tabIndex = 0;
     card.innerHTML = [
       `<span class="check"></span>`,
@@ -186,9 +206,13 @@ function renderLooks() {
       `<div class="name">${look.nameEn ?? look.name}</div>`,
       look.animated ? `<span class="badge">Multi-frame</span>` : "",
     ].join("");
+    // One click does both, because both are what the visitor means by it: tick the
+    // look into the plugin's allowlist, and put it in the frame so they can see the
+    // thing they just picked.
     const toggle = () => {
       if (lookOn(look.id)) state.off.add(look.id);
       else state.off.delete(look.id);
+      state.previewLook = look.id;
       renderLooks();
       render();
     };
@@ -280,7 +304,7 @@ function render() {
   paintCredit(state.character);
   const preview = previewRef.current;
   if (preview !== null && preview !== undefined) {
-    preview.show(state.character, enabledLooks(state.character)[0]?.id).catch(() => {});
+    preview.show(state.character, previewedLook()).catch(() => {});
   }
   save();
 }
@@ -349,7 +373,7 @@ async function setupPreview() {
   const mode = await preview.detect();
   if (mode === "local") {
     $("preview-note").textContent = "Served by the plugin itself, so the frame below is reading the artwork installed on this machine.";
-    await preview.show(state.character, enabledLooks(state.character)[0]?.id);
+    await preview.show(state.character, previewedLook());
     const drawn = $("preview-host").querySelector("canvas, .preview-still") !== null;
     preview.report(drawn
       ? "Live from this machine: showing the artwork you installed, rigged and animated by the same skeleton the plugin runs."
@@ -463,6 +487,8 @@ function applyQuery() {
   if (theme === "auto" || theme === "closure" || theme === "yuno") state.theme = theme;
   const character = query.get("character");
   if (character !== null && character !== "") state.character = character;
+  const look = query.get("look");
+  if (look !== null && look !== "") state.previewLook = look;
   const preview = query.get("preview");
   if (preview === "test") state.previewTest = true;
 }

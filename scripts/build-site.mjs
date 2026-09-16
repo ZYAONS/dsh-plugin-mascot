@@ -68,12 +68,26 @@ function trackedInGit(relative) {
 const publishingArt = trackedInGit("docs/art");
 
 /** One frame as the browser needs it: where it is, and how to place and rig it. */
+/**
+ * Crop rectangles, when `fetch-art` had to cut figures out of a larger download.
+ * The console hotlinks that download, so this is what maps a frame onto it.
+ */
+let crops = {};
+try {
+  crops = JSON.parse(readFileSync(join(root, "art", "crops.json"), "utf8"));
+} catch {
+  /* nothing was cut out, or the file predates this */
+}
+
 function frameOf(look, frame) {
+  const cut = crops[look.id]?.frames?.find((entry) => entry.file === frame.file);
   return {
     file: frame.file,
     seat: frame.seat,
     box: frame.measured?.box ?? null,
     profile: frame.profile ?? null,
+    // Where this frame sits inside the file the console will actually download.
+    crop: cut === undefined ? null : { x: cut.x, y: cut.y, width: cut.width, height: cut.height },
     // True only when the copy beside the console is committed, so the page never
     // reaches for a file the deployment does not serve.
     local: publishingArt && existsSync(join(published, frame.file)),

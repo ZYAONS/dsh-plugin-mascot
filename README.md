@@ -173,6 +173,30 @@ to guess why one of them is still.
 Served by the plugin at `/dsh-mascot/console/` there is a fourth source — the artwork
 on your own machine — and there everything rigs, because it is all same-origin.
 
+### When the pixels cannot be touched, they can still be composed
+
+Case 3 above is the interesting one: a cross-origin image with no CORS header cannot
+be uploaded as a texture, so no vertex of it can be deformed. It can still be
+*decomposed*. `index.json` already records where each figure's neck pinches and where
+its hip sits, so the console stacks **two masked copies of the same image** — the head
+above, the body below — and rotates each about its own joint. The head copy is a child
+of the body's transform, so it inherits the sway and adds its own nod on top, the same
+parent-then-child order the bone chain uses. The join is feathered across the neck
+rather than cut, so a small angle reads as a head moving rather than as two pictures
+sliding past each other.
+
+Two rigid layers, no skinning — nothing bends. That is the honest description of what
+can be done with an image whose pixels are off-limits, and it is what puts **all five
+looks in motion on the published page**, not just the one whose host sends CORS.
+
+It also needed one piece of geometry that did not exist before. Yuno's Q-version is
+two drawn poses **cut out of a single 645×645 download**, and the published page
+hotlinks that download — so the measured silhouette was being applied to an image
+containing both figures, and the head was being masked in the wrong place. `cutout.mjs`
+now keeps the crop rectangle it already computed, `fetch-art` records it in
+`art/crops.json`, and the console maps the measurements through it. A local copy is
+already cropped, so the rectangle is applied only to a fetched image.
+
 ### Publishing the artwork (opt in)
 
 ```bash

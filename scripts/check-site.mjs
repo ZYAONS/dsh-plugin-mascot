@@ -690,6 +690,32 @@ ok(
   "the two compositor captures are byte-identical",
 );
 
+// The Q-version specifically: two drawn poses cut out of one download, hotlinked as
+// the download. This is the case that needs the crop rectangle to map the measured
+// geometry onto the image the browser actually holds.
+// Pinned through the deep link rather than by clicking: the look cards are allowlist
+// toggles, so clicking one that is already ticked would remove it from the very set
+// the frame resolves against, and the frame would fall back to another look.
+await visit(withQuery("theme=yuno&character=yuno&look=yuno-chibi"), { width: 1360, height: 900 });
+await wait(1600);
+const qVersion = await cdp.evaluate(
+  "({ rig: document.querySelector('#preview-host .css-rig') !== null, poses: document.querySelectorAll('#preview-host .css-rig .rig-pose').length, heads: document.querySelectorAll('#preview-host .rig-head-layer').length, cut: (document.querySelector('.css-rig')||{style:{}}).style.getPropertyValue('--cut'), status: document.getElementById('preview-status').textContent })",
+);
+ok(
+  "the two-pose Q-version renders as a layered rig",
+  qVersion.rig && qVersion.poses === 2 && qVersion.heads === 2,
+  `rig=${String(qVersion.rig)} poses=${String(qVersion.poses)} head layers=${String(qVersion.heads)}`,
+);
+ok(
+  "its geometry was mapped onto the image the browser actually holds",
+  /%$/u.test(qVersion.cut) && Number.parseFloat(qVersion.cut) > 30,
+  `mask line at ${String(qVersion.cut)}; unmapped it would sit near 21%, above her head`,
+);
+const qA = await shootStage();
+await wait(800);
+const qB = await shootStage();
+ok("and the Q-version is moving", qA !== qB, "the two compositor captures are byte-identical");
+
 // And Yuno must actually be on screen, not an empty frame.
 const drawn = await cdp.evaluate(
   "({ canvas: document.querySelector('#preview-host canvas') !== null, stills: document.querySelectorAll('#preview-host img').length, notice: (document.querySelector('#preview-host .preview-empty')||{}).textContent || '' })",

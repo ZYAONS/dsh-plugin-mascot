@@ -19,7 +19,9 @@
       "name": "可露希尔",
       "latin": "Closure",
       "role": "罗德岛 · 采购 / 工程",
+      "roleEn": "Rhodes Island · Procurement / Engineering",
       "tagline": "罗德岛工程终端",
+      "taglineEn": "Rhodes Island console",
       "theme": "rhodes",
       "looks": [
         "closure-chibi",
@@ -31,7 +33,9 @@
       "name": "千石由乃",
       "latin": "Sengoku Yuno",
       "role": "梦限大MewType · DJ / Manipulator",
+      "roleEn": "Mugendai MewType · DJ / Manipulator",
       "tagline": "MEWTYPE LIVE",
+      "taglineEn": "MEWTYPE live set",
       "theme": "mewtype",
       "looks": [
         "yuno-anime",

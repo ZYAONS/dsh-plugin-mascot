@@ -36,6 +36,8 @@ const artDir = join(root, "art");
 const force = process.argv.includes("--force");
 
 const declaration = JSON.parse(readFileSync(join(artDir, "looks.json"), "utf8"));
+/** Crop rectangles per look, written to art/crops.json for the web console. */
+const crops = {};
 const sha256 = (buffer) => createHash("sha256").update(buffer).digest("hex");
 
 /** Fetch one url as bytes, or undefined when it fails or is empty. */
@@ -128,7 +130,16 @@ for (const look of declaration.looks) {
       console.log(`  cut   removing the background (mode: ${mode}, needs Chromium)`);
       const size = cutout(staged, outputs.map((file) => join(artDir, file)), { mode });
       written += 1;
-      console.log(`  ok    ${String(size.count)} frame(s), ${String(size.width)}x${String(size.height)}`);
+      // Record where each frame was cut from. The published console hotlinks the
+      // original file, so without the crop rectangle it cannot tell which part of
+      // that image a frame is, and would apply the measured silhouette to the wrong
+      // pixels — which is exactly what happened to the two-pose Q-version.
+      crops[look.id] = {
+        width: size.sourceWidth,
+        height: size.sourceHeight,
+        frames: outputs.map((file, index) => ({ file, ...size.frames[index] })),
+      };
+      console.log(`  ok    ${String(size.count)} frame(s) cropped from a ${String(size.sourceWidth)}x${String(size.sourceHeight)} source`);
     } catch (error) {
       console.error(`  FAIL  cutout: ${error instanceof Error ? error.message : String(error)}`);
       failed += 1;
@@ -148,6 +159,13 @@ console.log(`\nfetch-art: ${String(written)} written, ${String(skipped)} already
 
 if (written + skipped > 0) {
   console.log("");
+  // Written before the index is rebuilt, so `build-site` can read it either way.
+  // Only looks that were actually cut out appear here; a look downloaded whole needs
+  // no crop, because its source file *is* the frame.
+  writeFileSync(join(artDir, "crops.json"), `${JSON.stringify(crops, null, 2)}\n`);
+  if (Object.keys(crops).length > 0) {
+    console.log(`fetch-art: recorded crop rectangles for ${String(Object.keys(crops).length)} look(s)`);
+  }
   const index = sync();
   console.log(`art-sync: indexed ${String(index.looks.length)} look(s) across ${String(index.characters.length)} character(s)`);
   for (const miss of index.missing) {
