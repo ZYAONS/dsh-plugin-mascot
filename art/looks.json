@@ -86,6 +86,23 @@
       "cors": false
     },
     {
+      "id": "yuno-chibi",
+      "character": "yuno",
+      "name": "Q 版",
+      "nameEn": "Q-version",
+      "frames": [
+        "yuno-chibi-1.png",
+        "yuno-chibi-2.png"
+      ],
+      "rights": "《BanG Dream!》/ 梦限大 MewType © Bushiroad — 官方 Q 版形象（初代双姿势）",
+      "cutout": "all",
+      "sha256": "aa0336ac83385f99ba68d0dc2240482a8084c6b998b65121fb288319ea4d8c5b",
+      "urls": [
+        "https://mzh.moegirl.org.cn/Special:FilePath/%E5%8D%83%E7%9F%B3%E7%94%B1%E4%B9%83%20%E5%85%83%E7%A5%96.png"
+      ],
+      "cors": false
+    },
+    {
       "id": "yuno-anime",
       "character": "yuno",
       "name": "动画",
@@ -108,23 +125,6 @@
       "sha256": "c20ddcffca3187739cd5155108123099db6897bff812322060b3e7b2dc647ec1",
       "urls": [
         "https://mzh.moegirl.org.cn/Special:FilePath/%E5%8D%83%E7%9F%B3%E7%94%B1%E4%B9%83%20%E5%8A%A8%E7%94%BB%E5%B8%B8%E6%9C%8D.png"
-      ],
-      "cors": false
-    },
-    {
-      "id": "yuno-chibi",
-      "character": "yuno",
-      "name": "Q 版",
-      "nameEn": "Q-version",
-      "frames": [
-        "yuno-chibi-1.png",
-        "yuno-chibi-2.png"
-      ],
-      "rights": "《BanG Dream!》/ 梦限大 MewType © Bushiroad — 官方 Q 版形象（初代双姿势）",
-      "cutout": "all",
-      "sha256": "aa0336ac83385f99ba68d0dc2240482a8084c6b998b65121fb288319ea4d8c5b",
-      "urls": [
-        "https://mzh.moegirl.org.cn/Special:FilePath/%E5%8D%83%E7%9F%B3%E7%94%B1%E4%B9%83%20%E5%85%83%E7%A5%96.png"
       ],
       "cors": false
     },

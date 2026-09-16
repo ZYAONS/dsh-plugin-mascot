@@ -111,9 +111,154 @@ Promise.all(sources.map((src) => new Promise((done) => {
         profile.push(lo < 0 ? 0 : Math.round(((lo - x0) / bw) * 1000) / 1000);
         profile.push(lo < 0 ? 0 : Math.round(((hi - x0) / bw) * 1000) / 1000);
       }
+      // ---- eyes --------------------------------------------------------------
+      // The neck, by the same rule the client uses: the narrowest band in the upper
+      // part of the figure, and only if it is a real pinch. Everything above it is
+      // the head, which is the only region worth searching for a face.
+      const bandWidth = (r) => profile[r * 2 + 1] - profile[r * 2];
+      const firstRow = Math.max(1, Math.floor(PROFILE_ROWS * 0.08));
+      const lastRow = Math.min(PROFILE_ROWS - 2, Math.ceil(PROFILE_ROWS * 0.55));
+      let neckRow = -1, neckWidth = Infinity;
+      for (let r = firstRow; r <= lastRow; r++) {
+        if (profile[r * 2 + 1] <= profile[r * 2]) continue;
+        if (bandWidth(r) < neckWidth) { neckWidth = bandWidth(r); neckRow = r; }
+      }
+      // A neck is a pinch, not merely the narrowest band: the crown of a head is
+      // narrower than any neck and sits inside the search window. Same test the
+      // client's findNeck applies, so the two agree on where the head ends.
+      if (neckRow >= 0) {
+        let above = 0, below = 0;
+        for (let r = 1; r < PROFILE_ROWS; r++) {
+          if (profile[r * 2 + 1] <= profile[r * 2]) continue;
+          if (r < neckRow) above = Math.max(above, bandWidth(r));
+          if (r > neckRow) below = Math.max(below, bandWidth(r));
+        }
+        if (!(neckWidth < above * 0.82 && neckWidth < below * 0.9)) neckRow = -1;
+      }
+      const headBottom = neckRow < 0 ? y0 + Math.floor(bh * 0.45) : y0 + Math.floor(((neckRow + 1) * bh) / PROFILE_ROWS);
+
+      const findEyes = () => {
+        const step = Math.max(1, Math.round(Math.min(bw, headBottom - y0) / 220));
+        const cols = Math.ceil(bw / step), rowsN = Math.ceil((headBottom - y0) / step);
+        const lum = new Float32Array(cols * rowsN);
+        const sat = new Float32Array(cols * rowsN);
+        const opaque = new Uint8Array(cols * rowsN);
+        for (let r = 0; r < rowsN; r++) {
+          for (let c = 0; c < cols; c++) {
+            const x = x0 + c * step, y = y0 + r * step, i = (y * W + x) * 4;
+            const R = px[i], G = px[i + 1], B = px[i + 2], A = px[i + 3];
+            const k = r * cols + c;
+            if (A < 200) { lum[k] = -1; continue; }
+            opaque[k] = 1;
+            const mx = Math.max(R, G, B), mn = Math.min(R, G, B);
+            lum[k] = 0.2126 * R + 0.7152 * G + 0.0722 * B;
+            sat[k] = mx === 0 ? 0 : (mx - mn) / mx;
+          }
+        }
+        const blobsOf = (mask) => {
+          const seen = new Uint8Array(cols * rowsN);
+          const found = [];
+          for (let s = 0; s < mask.length; s++) {
+            if (mask[s] === 0 || seen[s] === 1) continue;
+            seen[s] = 1;
+            const stack = [s], cells = [];
+            while (stack.length > 0) {
+              const i = stack.pop();
+              cells.push(i);
+              const c = i % cols, r = (i - c) / cols;
+              const push = (j) => { if (j >= 0 && seen[j] === 0 && mask[j] === 1) { seen[j] = 1; stack.push(j); } };
+              if (c > 0) push(i - 1);
+              if (c < cols - 1) push(i + 1);
+              if (r > 0) push(i - cols);
+              if (r < rowsN - 1) push(i + cols);
+            }
+            let ax = cols, ay = rowsN, bx = -1, by = -1;
+            for (const i of cells) {
+              const c = i % cols, r = (i - c) / cols;
+              if (c < ax) ax = c; if (c > bx) bx = c;
+              if (r < ay) ay = r; if (r > by) by = r;
+            }
+            found.push({ n: cells.length, x: ax * step, y: ay * step, w: (bx - ax + 1) * step, h: (by - ay + 1) * step });
+          }
+          return found.sort((a, b) => b.n - a.n);
+        };
+
+        // The face is bright and not colourful: anime skin is pale and low in
+        // saturation, whatever the character's palette is.
+        const isSkin = (i) => opaque[i] === 1 && lum[i] > 165 && sat[i] < 0.42;
+        const skinMask = new Uint8Array(cols * rowsN);
+        for (let i = 0; i < skinMask.length; i++) skinMask[i] = isSkin(i) ? 1 : 0;
+        const face = blobsOf(skinMask)[0];
+        if (face === undefined) return null;
+
+        // Everything inside the face that is not skin: eyes, brows, mouth.
+        const marks = new Uint8Array(cols * rowsN);
+        const fx0 = Math.max(0, Math.floor(face.x / step)), fx1 = Math.min(cols, Math.ceil((face.x + face.w) / step));
+        const fy0 = Math.max(0, Math.floor(face.y / step)), fy1 = Math.min(rowsN, Math.ceil((face.y + face.h) / step));
+        for (let r = fy0; r < fy1; r++) {
+          for (let c = fx0; c < fx1; c++) {
+            const i = r * cols + c;
+            if (opaque[i] === 1 && isSkin(i) === false) marks[i] = 1;
+          }
+        }
+        const candidates = blobsOf(marks)
+          .filter((b) => b.n > face.n * 0.004 && b.n < face.n * 0.35)
+          .map((b) => ({
+            ...b,
+            fx: (b.x + b.w / 2 - face.x) / face.w,
+            fy: (b.y + b.h / 2 - face.y) / face.h,
+          }))
+          // Below the fringe and above the chin: the band an eye can be in.
+          .filter((b) => b.fy > 0.4 && b.fy < 0.95)
+          .slice(0, 8);
+
+        // The pair that best mirrors itself about the face's centre line.
+        let best = null, bestScore = Infinity;
+        for (let i = 0; i < candidates.length; i++) {
+          for (let j = i + 1; j < candidates.length; j++) {
+            const a = candidates[i], b = candidates[j];
+            if (a.fx > b.fx) continue;
+            const balance = Math.abs(a.fx + b.fx - 1);
+            const size = Math.max(a.n, b.n) / Math.min(a.n, b.n);
+            const height = Math.abs(a.fy - b.fy);
+            const gap = b.fx - a.fx;
+            if (gap < 0.2 || balance > 0.35 || size > 2.6 || height > 0.22) continue;
+            const score = balance + height + (size - 1) * 0.2;
+            if (score < bestScore) { bestScore = score; best = [a, b]; }
+          }
+        }
+        return best;
+      };
+
+      const eyeBoxes = findEyes();
+      let eyes = null, skin = null;
+      if (eyeBoxes !== null) {
+        // Normalised to the bounding box, like the profile, so the client does not
+        // have to know which file it came from.
+        eyes = eyeBoxes.map((b) => [
+          Math.round(((b.x) / bw) * 1000) / 1000,
+          Math.round(((b.y) / bh) * 1000) / 1000,
+          Math.round(((b.w) / bw) * 1000) / 1000,
+          Math.round(((b.h) / bh) * 1000) / 1000,
+        ]);
+        // Skin, sampled just below each eye: the cheek is the one patch of face that
+        // is reliably not hair, not an eye and not a highlight.
+        const samples = [];
+        for (const b of eyeBoxes) {
+          const sx = x0 + b.x + Math.floor(b.w / 2);
+          const sy = Math.min(y1, y0 + b.y + b.h + Math.max(2, Math.floor(b.h * 0.6)));
+          const i = (sy * W + sx) * 4;
+          if (px[i + 3] > 200) samples.push([px[i], px[i + 1], px[i + 2]]);
+        }
+        if (samples.length > 0) {
+          const mid = (k) => Math.round(samples.reduce((sum, s) => sum + s[k], 0) / samples.length);
+          skin = [mid(0), mid(1), mid(2)];
+        }
+      }
+
       const dominant = buckets.reduce((best, bucket) => (bucket.weight > best.weight ? bucket : best), buckets[0]);
       const accent = dominant.weight === 0 ? null : [dominant.r / dominant.weight, dominant.g / dominant.weight, dominant.b / dominant.weight];
-      done({ src, W, H, x0, y0, w: x1 - x0 + 1, h: y1 - y0 + 1, accent, profile });
+      done({ src, W, H, x0, y0, w: x1 - x0 + 1, h: y1 - y0 + 1, accent, profile, eyes, skin });
     } catch (error) { done({ src, error: String(error && error.message ? error.message : error) }); }
   };
   img.onerror = () => done({ src, error: "load failed" });

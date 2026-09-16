@@ -22,7 +22,7 @@ const STATE_KEY = "dsh-mascot-console";
 const THEME_COLOURS = {
   rhodes: { accent: "#37e0d8", label: "CONSOLE", page: "closure" },
   mewtype: { accent: "#ff4d9d", label: "LIVE SET", page: "yuno" },
-  rhine: { accent: "#5fb8f0", label: "RHINE LAB", page: "muelsyse" },
+  rhine: { accent: "#a3dd7a", label: "RHINE LAB", page: "muelsyse" },
 };
 
 /** Human names for the page themes, for the header readout. */
@@ -30,7 +30,7 @@ const PAGE_THEME_NAMES = {
   auto: "neutral silver",
   closure: "blue on silver",
   yuno: "pink neon",
-  muelsyse: "Rhine blue",
+  muelsyse: "Muelsyse · light green",
 };
 
 const state = {
@@ -64,6 +64,12 @@ const state = {
    * this decides what you are looking at.
    */
   previewLook: undefined,
+  /**
+   * Set when a link named the look. A deep link is an instruction, not a preference,
+   * so it is honoured even for a look the visitor has unticked — otherwise the page
+   * silently shows a different one and the link appears not to work.
+   */
+  previewLookPinned: false,
   /** Set by `?preview=test`; renders the rig test pattern instead of a host. */
   previewTest: false,
 };
@@ -85,6 +91,8 @@ const looksOf = (id) => state.catalog.looks.filter((look) => look.character === 
  * moves the frame on rather than leaving it showing something the plugin will not.
  */
 function previewedLook() {
+  const all = looksOf(state.character);
+  if (state.previewLookPinned && all.some((look) => look.id === state.previewLook)) return state.previewLook;
   const available = enabledLooks(state.character);
   return available.some((look) => look.id === state.previewLook) ? state.previewLook : available[0]?.id;
 }
@@ -152,8 +160,10 @@ function applyTheme() {
   }
   document.documentElement.dataset.theme = theme;
   $("m-theme").textContent = PAGE_THEME_NAMES[theme] ?? theme;
-  const character = characterOf(state.character);
-  $("theme-name").textContent = `${character?.nameEn ?? state.character} · ${PAGE_THEME_NAMES[theme] ?? theme}`;
+  // The name already carries whatever identifies it — the character where there is one,
+  // the colour where there is not — so it is used as written rather than prefixed with
+  // the character again, which is how it came to read "Muelsyse · Muelsyse · light green".
+  $("theme-name").textContent = PAGE_THEME_NAMES[theme] ?? theme;
   $("theme-swatch").style.background = getComputedStyle(document.documentElement).getPropertyValue("--signal").trim();
 }
 
@@ -273,6 +283,7 @@ function renderLooks() {
       if (lookOn(look.id)) state.off.add(look.id);
       else state.off.delete(look.id);
       state.previewLook = look.id;
+      state.previewLookPinned = false;
       renderLooks();
       render();
     };
@@ -365,10 +376,7 @@ function render() {
   // The preview follows the selection: switching character switches what floats in
   // the frame, which is the point of having it here at all.
   paintCredit(state.character);
-  const preview = previewRef.current;
-  if (preview !== null && preview !== undefined) {
-    preview.show(state.character, previewedLook()).catch(() => {});
-  }
+  drivePreview();
   save();
 }
 //#endregion
@@ -461,10 +469,33 @@ async function setupPreview() {
     paintPreviewStatusRefresh();
     return;
   }
-  // The selected look, not the character's first one: the frame is meant to show
-  // what the cards above it say is on screen.
-  await preview.show(state.character, previewedLook());
+  // Through the same driver the render pass uses, so the first frame and every later
+  // one are chosen by one rule.
+  drivePreview();
   paintPreviewStatusRefresh();
+}
+
+/**
+ * What the frame should be showing, and whether it already is.
+ *
+ * The key matters: the preview starts an animation, and re-issuing the same request
+ * on every render restarted it whenever an unrelated toggle was flipped. It also
+ * makes the Auto rule a one-liner — the neutral theme belongs to no character, so it
+ * shows the rig itself rather than borrowing someone's artwork, and switching to a
+ * character's theme swaps the skeleton back out for the character.
+ */
+let previewShows = null;
+
+/** Point the preview at the current selection, if it is not already there. */
+function drivePreview() {
+  const preview = previewRef.current;
+  if (preview === null || preview === undefined) return;
+  const look = previewedLook();
+  const key = [state.autoTheme ? "skeleton" : "art", state.character, look ?? ""].join("|");
+  if (key === previewShows) return;
+  previewShows = key;
+  if (state.autoTheme) preview.useSkeleton(state.character, look).catch(() => {});
+  else preview.show(state.character, look).catch(() => {});
 }
 
 /** Re-read the connection badge after a connect or file pick changed it. */
@@ -563,7 +594,10 @@ function applyQuery() {
   // `?theme=` moves the character too, through the same rule the buttons use.
   if (theme !== null && theme !== "" && PAGE_THEME_NAMES[theme] !== undefined) chooseTheme(theme);
   const look = query.get("look");
-  if (look !== null && look !== "") state.previewLook = look;
+  if (look !== null && look !== "") {
+    state.previewLook = look;
+    state.previewLookPinned = true;
+  }
   const preview = query.get("preview");
   if (preview === "test") state.previewTest = true;
 }

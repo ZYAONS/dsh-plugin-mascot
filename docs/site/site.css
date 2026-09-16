@@ -80,28 +80,31 @@
 }
 
 /* ================= muelsyse — Rhine Lab ecology =================
- * Clean, scientific, water. A cool blue signal, soft corners, plain labels rather
- * than the console's monospace or the stage's rounded face, and a thin inset ring on
- * what is selected instead of brackets or a glow. */
+ * Light green, taken from her own artwork: pale green hair and the acid-green cords
+ * and laces on that translucent white lab coat. It was a Rhine blue before, which is
+ * her faction's colour rather than hers, and it sat close enough to Rhodes Island's
+ * that the two were hard to tell apart. Clean and scientific otherwise — soft corners,
+ * plain labels rather than the console's monospace or the stage's rounded face, and a
+ * thin inset ring on what is selected instead of brackets or a glow. */
 [data-theme="muelsyse"] {
-  --ink: #070d12;
-  --panel: #0d161d;
-  --panel-2: #122029;
-  --line: rgba(140, 200, 240, 0.11);
-  --line-strong: rgba(140, 200, 240, 0.28);
-  --signal: #5fb8f0;
-  --signal-ink: #04121c;
-  --signal-dim: rgba(95, 184, 240, 0.13);
-  --text: #e6f0f8;
-  --dim: #7f95a6;
-  --dimmer: #4e6373;
-  --ok: #5fb8f0;
+  --ink: #080d09;
+  --panel: #0e150f;
+  --panel-2: #141d15;
+  --line: rgba(178, 218, 168, 0.12);
+  --line-strong: rgba(192, 230, 182, 0.3);
+  --signal: #a3dd7a;
+  --signal-ink: #0a1405;
+  --signal-dim: rgba(163, 221, 122, 0.13);
+  --text: #eaf2e5;
+  --dim: #8d9c85;
+  --dimmer: #596552;
+  --ok: #a3dd7a;
   --radius: 10px;
   --radius-sm: 6px;
-  --grid: rgba(120, 190, 230, 0.026);
-  --glow: rgba(95, 184, 240, 0.09);
-  --tape-a: #5fb8f0;
-  --tape-b: #06121a;
+  --grid: rgba(178, 218, 168, 0.026);
+  --glow: rgba(163, 221, 122, 0.09);
+  --tape-a: #a3dd7a;
+  --tape-b: #091105;
   --label-font: var(--sans);
   --label-spacing: 0.12em;
   --card-lift: translateY(-1px);

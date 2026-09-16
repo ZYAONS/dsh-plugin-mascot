@@ -229,16 +229,20 @@ ok(
   `--signal=${String(yunoSignal)} is not pink-dominant`,
 );
 
-// Muelsyse is white-haired with a blue-and-water palette, so her signal is blue —
-// but a different blue from Closure's, which the distinctness loop above enforces.
+// Muelsyse is pale-green-haired with acid-green cords on a white coat, so her signal is
+// light green — green-dominant, and light rather than a deep foliage tone.
 const mueSignal = muelsyseTheme["--signal"];
 const mueRgb = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/u.exec(mueSignal ?? "");
+const mue = mueRgb === null ? null : { r: Number.parseInt(mueRgb[1], 16), g: Number.parseInt(mueRgb[2], 16), b: Number.parseInt(mueRgb[3], 16) };
 ok(
-  "the Muelsyse theme is blue-dominant and lighter than Closure's",
-  mueRgb !== null
-    && Number.parseInt(mueRgb[3], 16) > Number.parseInt(mueRgb[1], 16) + 40
-    && Number.parseInt(mueRgb[3], 16) > Number.parseInt(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/u.exec(closureTheme["--signal"] ?? "#000000")?.[3] ?? "0", 16),
-  `--signal=${String(mueSignal)} against Closure's ${String(closureTheme["--signal"])}`,
+  "the Muelsyse theme is green-dominant",
+  mue !== null && mue.g > mue.r + 20 && mue.g > mue.b + 40,
+  `--signal=${String(mueSignal)} is not green-dominant`,
+);
+ok(
+  "and it is a light green, not a foliage one",
+  mue !== null && (mue.r + mue.g + mue.b) / 3 > 120,
+  `--signal=${String(mueSignal)} has a mean channel of ${mue === null ? "?" : String(Math.round((mue.r + mue.g + mue.b) / 3))}, which is darker than a light green`,
 );
 
 // The pairing rule is asserted in the interaction section, where the theme buttons and
@@ -603,7 +607,7 @@ const afterCharacterClick = await cdp.evaluate(
   "({ theme: document.documentElement.dataset.theme, ink: getComputedStyle(document.body).backgroundColor, chip: document.getElementById('theme-name').textContent, lookCards: document.querySelectorAll('#looks .card').length, firstLookId: (document.querySelector('#looks .card .code')||{}).textContent || '', output: document.getElementById('output').textContent, previewCanvas: document.querySelector('#preview-host canvas, #preview-host .css-rig, #preview-host img') !== null })",
 );
 ok("selecting Yuno changes the theme in the same click", afterCharacterClick.theme === "yuno", `data-theme=${String(afterCharacterClick.theme)}`);
-ok("the artwork and the theme agree on which character it is", /Yuno/iu.test(afterCharacterClick.chip), `chip="${afterCharacterClick.chip}"`);
+ok("and the readout names the theme it moved to", /pink/iu.test(afterCharacterClick.chip), `chip="${afterCharacterClick.chip}"`);
 ok("the switch repainted the page", afterCharacterClick.ink !== beforeCharacterClick.ink, `was ${beforeCharacterClick.ink}, now ${String(afterCharacterClick.ink)}`);
 ok("the panel follows the character too", afterCharacterClick.lookCards > 0 && /^yuno-/u.test(afterCharacterClick.firstLookId), `first look card = "${afterCharacterClick.firstLookId}"`);
 ok("and so does the generated config", /character: yuno/u.test(afterCharacterClick.output), afterCharacterClick.output.split("\n").filter((line) => line.includes("character:")).join(" | "));

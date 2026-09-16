@@ -224,8 +224,8 @@ The console carries an interface style for each character, and they are not hue 
 
 | | Neutral (`auto`) | Closure | Yuno | Muelsyse |
 |---|---|---|---|---|
-| Ground | neutral charcoal | blue-black | purple-black | deep blue |
-| Signal | silver | blue | magenta | Rhine blue |
+| Ground | neutral charcoal | blue-black | purple-black | dark green |
+| Signal | silver | blue | magenta | light green |
 | Corners | square | square | 14px rounded | 10px rounded |
 | Selection cue | brackets | corner brackets | a glow | an inset ring |
 | Labels | monospace | monospace | rounded | sans |
