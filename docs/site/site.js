@@ -20,7 +20,7 @@ const THEME_COLOURS = {
 };
 
 /** Human names for the page themes, for the header readout. */
-const PAGE_THEME_NAMES = { closure: "可露希尔 · 罗德岛工程终端", yuno: "千石由乃 · MEWTYPE LIVE" };
+const PAGE_THEME_NAMES = { closure: "Closure · Rhodes Island console", yuno: "Yuno · MEWTYPE live set" };
 
 const state = {
   catalog: { characters: [], looks: [], version: "0.0.0", repository: REPO },
@@ -141,9 +141,9 @@ function renderCharacters() {
     card.innerHTML = [
       `<span class="check"></span>`,
       `<div class="code">${theme.label} / ${character.id}</div>`,
-      `<div class="name">${character.name}</div>`,
+      `<div class="name">${character.nameEn ?? character.name}</div>`,
       `<div class="latin">${character.latin}</div>`,
-      `<div class="role">${character.role}<br>${character.tagline ?? ""}</div>`,
+      `<div class="role">${character.roleEn ?? character.role}<br>${character.taglineEn ?? character.tagline ?? ""}</div>`,
       `<div class="swatch" style="background:${theme.accent}"></div>`,
     ].join("");
     const choose = () => {
@@ -175,8 +175,8 @@ function renderLooks() {
     card.innerHTML = [
       `<span class="check"></span>`,
       `<div class="code">${look.id}</div>`,
-      `<div class="name">${look.name}</div>`,
-      look.animated ? `<span class="badge">多帧</span>` : "",
+      `<div class="name">${look.nameEn ?? look.name}</div>`,
+      look.animated ? `<span class="badge">Multi-frame</span>` : "",
     ].join("");
     const toggle = () => {
       if (lookOn(look.id)) state.off.add(look.id);
@@ -209,8 +209,8 @@ function buildConfig() {
   const lines = [];
 
   if (!state.plugin) {
-    lines.push("# 看板娘插件：已关闭 —— 不插入这一行就是关闭状态。");
-    lines.push("# 想重新打开，把下面这段前面的 # 去掉。");
+    lines.push("# Mascot plugin: disabled — leaving the entry out is what disables it.");
+    lines.push("# To turn it back on, drop the leading # from the block below.");
     lines.push("#");
     lines.push("# - insert:");
     lines.push("#     - id: mascot");
@@ -218,29 +218,36 @@ function buildConfig() {
     return lines.join("\n");
   }
 
-  lines.push("# DSH profile patch —— 贴进 ~/.dsh/profiles/desktop/cordis.patch.yml");
-  lines.push("# 不要写 cordis.yml：它每次启动都会被改写成 []。");
+  lines.push("# DSH profile patch — paste into ~/.dsh/profiles/desktop/cordis.patch.yml");
+  lines.push("# Do not edit cordis.yml: it is rewritten to [] on every launch.");
   lines.push("- insert:");
   lines.push("    - id: mascot");
   if (state.mount === "file") {
     const resolved = fileUrl(state.dir);
-    lines.push(`      # 绝对路径挂载：本插件零运行时依赖，不需要装进 profile。`);
-    lines.push(`      name: ${yamlString(resolved === "" ? "file:///填入/插件目录/lib/index.js" : `${resolved}/lib/index.js`)}`);
+    lines.push("      # Mounted by absolute path: the plugin has no runtime dependencies,");
+    lines.push("      # so it does not need to be installed into the profile.");
+    lines.push(`      name: ${yamlString(resolved === "" ? "file:///path/to/dsh-plugin-mascot/lib/index.js" : `${resolved}/lib/index.js`)}`);
   } else {
-    lines.push(`      name: dsh-plugin-mascot`);
+    lines.push("      name: dsh-plugin-mascot");
   }
   lines.push("      config:");
-  lines.push(`        # 默认角色：${character === undefined ? state.character : character.name}`);
+  lines.push(`        # Default character: ${character === undefined ? state.character : (character.nameEn ?? character.name)}`);
   lines.push(`        character: ${state.character}`);
   const preferred = enabledLooks(state.character).find((look) => (state.animated ? true : !look.animated)) ?? enabledLooks(state.character)[0];
+  lines.push(`        # Default look within that character.`);
   lines.push(`        look: ${preferred.id}`);
-  lines.push(`        # 允许出现的形象（allowlist）。空列表 = 全部已安装的。`);
-  lines.push(`        looks:`);
+  lines.push("        # Allowlist of looks the panel may offer. An empty list means");
+  lines.push("        # every installed look.");
+  lines.push("        looks:");
   for (const id of looks) lines.push(`          - ${id}`);
+  lines.push("        # Skeletal animation: three bones rigged from the silhouette, driving");
+  lines.push("        # a skinned mesh. Falls back to a still image without WebGL2.");
   lines.push(`        skeleton: ${state.skeleton}`);
+  lines.push("        # Account balance in the panel; off means the browser never queries it.");
   lines.push(`        balance: ${state.balance}`);
   if (!state.animated) {
-    lines.push(`        # 多帧形象已在配置台关闭：下面的 allowlist 里只留下了单帧形象。`);
+    lines.push("        # Multi-frame looks were switched off in the console, so only");
+    lines.push("        # single-frame looks are allowlisted above.");
   }
   return lines.join("\n");
 }
@@ -401,11 +408,11 @@ async function main() {
 
   $("copy").addEventListener("click", async () => {
     const ok = await copyText(buildConfig());
-    flash($("copy"), ok ? "已复制" : "复制失败");
+    flash($("copy"), ok ? "Copied" : "Copy failed");
   });
   $("download-config").addEventListener("click", () => {
     download("cordis.patch.yml", `${buildConfig()}\n`);
-    flash($("download-config"), "已下载");
+    flash($("download-config"), "Downloaded");
   });
 
   renderCharacters();

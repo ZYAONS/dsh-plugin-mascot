@@ -147,9 +147,10 @@ and they are not a hue swap:
 | Labels | monospace | rounded |
 | Hazard tape | cyan | magenta |
 
-**Follow the character** is the default, so picking Yuno in section 02 recolours the
-page — which makes the console a live preview of what the plugin will look like.
-Choosing a theme explicitly pins it.
+**Auto** is the default, so picking Yuno in section 02 recolours the page — which
+makes the console a live preview of what the plugin will look like. Choosing a
+theme explicitly pins it against the character, and the lit button always says which
+of the two is in charge.
 
 Both are deep-linkable, which is also what makes them testable without driving
 clicks:
@@ -158,21 +159,32 @@ clicks:
 ?theme=auto|closure|yuno      ?character=closure|yuno
 ```
 
+### Language
+
+The console is **English**; the plugin's own panel is Chinese. The split is
+deliberate — the console is what strangers see first, the panel is what the operator
+reads every day — and the names that need both live in one place: `art/looks.json`
+carries `nameEn` / `roleEn` / `taglineEn` next to the plugin's `name` / `role` /
+`tagline`, and `build-site.mjs` copies the English set into the console's catalogue.
+Adding a look to the plugin gets it an English name by editing one file, and
+`check-site` fails if a record it renders has no translation, or if Chinese text
+reappears in the page outside the rights notice.
+
 The page is **purely static**, hosted on GitHub Pages. It runs no server code and
 **does not read or modify anything on your machine** — it turns your choices into a
 YAML string. State lives in your browser's localStorage.
 
 The palette and typography borrow from tactical-UI design generally (near-black
-ground, one signal colour, hairline rules, uppercase Latin labels over Chinese
-ones). **No game asset, logo or typeface is used.**
+ground, one signal colour, hairline rules, uppercase Latin labels). **No game asset,
+logo or typeface is used.**
 
 Its catalogue comes from `docs/site/catalog.json`, which `scripts/build-site.mjs`
 generates from `art/looks.json` — the same declaration the plugin reads, so the two
-cannot drift. `scripts/check-site.mjs` drives the page in a real browser and asserts
-that the catalogue loads, the controls render, that the two themes differ in
-substance (six tokens compared, not just the accent), and that **every id in the
-YAML it produces actually exists** (one typo there would make the plugin silently
-fall back to its first look).
+cannot drift. `scripts/check-site.mjs` drives the page in a real browser (37 checks)
+and asserts that the catalogue loads, the controls render, that the two themes differ
+in substance (six tokens compared, not just the accent), that the switcher lights the
+button actually in charge, and that **every id in the YAML it produces actually
+exists** (one typo there would make the plugin silently fall back to its first look).
 
 ---
 

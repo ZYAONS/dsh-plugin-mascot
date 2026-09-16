@@ -148,7 +148,11 @@ h1 small {
   display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em;
   color: var(--dimmer); text-transform: uppercase; margin-bottom: 6px; text-align: right;
 }
-.themer .seg { width: 290px; }
+.themer .lbl small {
+  display: block; font-size: 9px; letter-spacing: 0.06em; text-transform: none;
+  color: var(--dimmer); opacity: 0.7; margin-top: 2px;
+}
+.themer .seg { width: 260px; }
 
 .tagline { color: var(--dim); font-size: 13px; line-height: 1.7; margin: 14px 0 0; max-width: 62ch; }
 .meta {

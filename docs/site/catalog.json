@@ -5,9 +5,12 @@
     {
       "id": "closure",
       "name": "可露希尔",
+      "nameEn": "Closure",
       "latin": "Closure",
       "role": "罗德岛 · 采购 / 工程",
+      "roleEn": "Rhodes Island · Procurement / Engineering",
       "tagline": "罗德岛工程终端",
+      "taglineEn": "Rhodes Island console",
       "theme": "rhodes",
       "looks": [
         "closure-chibi",
@@ -17,9 +20,12 @@
     {
       "id": "yuno",
       "name": "千石由乃",
+      "nameEn": "Sengoku Yuno",
       "latin": "Sengoku Yuno",
       "role": "梦限大MewType · DJ / Manipulator",
+      "roleEn": "Mugendai MewType · DJ / Manipulator",
       "tagline": "MEWTYPE LIVE",
+      "taglineEn": "MEWTYPE live set",
       "theme": "mewtype",
       "looks": [
         "yuno-anime",
@@ -33,30 +39,35 @@
       "id": "closure-chibi",
       "character": "closure",
       "name": "基建小人",
+      "nameEn": "Base sprite",
       "animated": false
     },
     {
       "id": "closure-portrait",
       "character": "closure",
       "name": "官方立绘",
+      "nameEn": "Operator portrait",
       "animated": false
     },
     {
       "id": "yuno-anime",
       "character": "yuno",
       "name": "动画",
+      "nameEn": "Anime",
       "animated": false
     },
     {
       "id": "yuno-casual",
       "character": "yuno",
       "name": "常服",
+      "nameEn": "Casual",
       "animated": false
     },
     {
       "id": "yuno-chibi",
       "character": "yuno",
       "name": "Q 版",
+      "nameEn": "Q-version",
       "animated": true
     }
   ]

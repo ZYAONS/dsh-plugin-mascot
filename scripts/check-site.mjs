@@ -50,6 +50,25 @@ const text = (pattern) => {
 const catalog = JSON.parse(readFileSync(join(root, "docs", "site", "catalog.json"), "utf8"));
 ok(`catalogue loaded: ${String(catalog.characters.length)} characters, ${String(catalog.looks.length)} looks`);
 
+// The console is English-only, so every record it renders needs an English name.
+// A missing translation would otherwise render the plugin's Chinese copy, or
+// `undefined` — both of which look like a styling bug rather than a data gap.
+const untranslated = [
+  ...catalog.characters.filter((entry) => typeof entry.nameEn !== "string" || entry.nameEn.length === 0).map((entry) => `character ${entry.id}`),
+  ...catalog.characters.filter((entry) => typeof entry.roleEn !== "string" || entry.roleEn.length === 0).map((entry) => `role of ${entry.id}`),
+  ...catalog.looks.filter((entry) => typeof entry.nameEn !== "string" || entry.nameEn.length === 0).map((entry) => `look ${entry.id}`),
+];
+if (untranslated.length === 0) ok("every character and look has an English name");
+else bad(`missing English names: ${untranslated.join(", ")}`);
+
+// The page itself must be English: the only Chinese left should be the original
+// character names inside the rights notice, where they belong to the attribution.
+const html = readFileSync(index, "utf8");
+const cjk = html.match(/[\u4e00-\u9fff]+/gu) ?? [];
+const strayCjk = cjk.filter((run) => run !== "可露希尔" && run !== "千石由乃");
+if (strayCjk.length === 0) ok(`the page carries no Chinese outside the rights notice (${String(cjk.length)} allowed occurrence(s))`);
+else bad(`the page still contains Chinese: ${strayCjk.slice(0, 6).join(" / ")}`);
+
 const charactersMeta = text(/id="m-characters"[^>]*>([^<]*)</u);
 const looksMeta = text(/id="m-looks"[^>]*>([^<]*)</u);
 if (charactersMeta === String(catalog.characters.length)) ok(`the page reports ${String(charactersMeta)} characters`);
@@ -62,6 +81,15 @@ const cards = (dom.match(/class="card"/gu) ?? []).length;
 const expectedCards = catalog.characters.length + catalog.looks.filter((look) => look.character === catalog.characters[0].id).length;
 if (cards === expectedCards) ok(`${String(cards)} cards rendered (characters + the selected character's looks)`);
 else bad(`rendered ${String(cards)} cards, expected ${String(expectedCards)}`);
+
+// The cards must show the English names the catalogue carries, not the Chinese
+// ones the plugin uses internally.
+const firstName = catalog.characters[0].nameEn;
+const firstLook = catalog.looks.find((look) => look.character === catalog.characters[0].id).nameEn;
+if (dom.includes(`>${firstName}</div>`)) ok(`the character card reads "${firstName}"`);
+else bad(`the character card does not read "${firstName}"`);
+if (dom.includes(`>${firstLook}</div>`)) ok(`the look card reads "${firstLook}"`);
+else bad(`the look card does not read "${firstLook}"`);
 
 // ---- the YAML it produces --------------------------------------------------
 const yaml = text(/<pre id="output"[^>]*>([\s\S]*?)<\/pre>/u);
@@ -118,6 +146,13 @@ const autoClosure = themeOf("?theme=auto&character=closure");
 if (autoClosure.theme === "closure") ok("theme=auto with Closure selected resolves to the Closure theme");
 else bad(`theme=auto with Closure selected gave "${String(autoClosure.theme)}"`);
 
+// The switcher must show which control is responsible: with auto selected, Auto
+// is the lit button even though the resolved theme is Closure's.
+if (/data-theme-choice="auto" data-on="1"/u.test(autoClosure.dom)) ok("the Auto button is lit when following the character");
+else bad("the Auto button is not lit while the theme follows the character");
+if (/data-theme-choice="closure" data-on="0"/u.test(autoClosure.dom)) ok("the Closure button is unlit while Auto is in charge");
+else bad("the theme switcher highlights the wrong button");
+
 const autoYuno = themeOf("?theme=auto&character=yuno");
 if (autoYuno.theme === "yuno") ok("theme=auto with Yuno selected resolves to the Yuno theme");
 else bad(`theme=auto with Yuno selected gave "${String(autoYuno.theme)}"`);
@@ -160,7 +195,10 @@ if (/\[data-theme="yuno"\]\s+\.card::before/u.test(css) && /\[data-theme="yuno"\
 
 // ---- optional screenshot ---------------------------------------------------
 if (shot) {
-  for (const [name, query] of [["preview.png", "?theme=closure"], ["preview-yuno.png", "?theme=yuno"]]) {
+  // The first shot is the page with no query at all — the real first-visit state,
+  // which is what a reader of the README should be shown. The second pins the
+  // other theme so both are visible side by side.
+  for (const [name, query] of [["preview.png", ""], ["preview-yuno.png", "?theme=yuno"]]) {
     const png = join(root, "docs", "site", name);
     execFileSync(
       chrome,

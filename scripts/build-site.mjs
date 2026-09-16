@@ -9,9 +9,14 @@
  *
  *   npm run build:site
  *
- * Only fields that are safe and useful in public are copied: identities, names,
- * the theme key and whether a look animates. Rights lines and source URLs stay in
- * the repository.
+ * Only fields that are safe and useful in public are copied: identities, names in
+ * both languages, the theme key and whether a look animates. Rights lines and
+ * source URLs stay in the repository.
+ *
+ * The English wording (`nameEn`, `roleEn`, `taglineEn`) lives in the same
+ * declaration rather than in the page, so a look added for the plugin gets an
+ * English name in the console by editing one file — and a missing translation
+ * falls back to the plugin's own copy instead of rendering `undefined`.
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -38,9 +43,12 @@ const catalog = {
   characters: declaration.characters.map((character) => ({
     id: character.id,
     name: character.name,
+    nameEn: character.latin,
     latin: character.latin,
     role: character.role,
+    roleEn: character.roleEn ?? character.role,
     tagline: character.tagline,
+    taglineEn: character.taglineEn ?? character.tagline,
     theme: character.theme,
     looks: declaration.looks
       .filter((look) => look.character === character.id)
@@ -50,6 +58,7 @@ const catalog = {
     id: look.id,
     character: look.character,
     name: look.name,
+    nameEn: look.nameEn ?? look.name,
     animated: animated.has(look.id) || (look.frames ?? []).length > 1,
   })),
 };
