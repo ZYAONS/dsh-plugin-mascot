@@ -508,7 +508,10 @@ await it("the art route stays behind the session, and the console is served from
   const page = await request(own, "/dsh-mascot/console/");
   assert.equal(page.status, 200, "the console index is served");
   assert.match(String(page.headers["content-type"]), /text\/html/u, "as HTML");
-  assert.match(String(page.body), /<title>DSH Mascot/u, "and it is the console page");
+  // Identified by its structure rather than its title: a title is copy, and copy gets
+  // translated. The generator and the preview host are what make it the console.
+  assert.match(String(page.body), /id="output"/u, "and it is the console page");
+  assert.match(String(page.body), /type="module" src="site\/site\.js"/u, "and loads its own module");
 
   const asset = await request(own, "/dsh-mascot/console/site/preview.js");
   assert.equal(asset.status, 200, "the console's own scripts are served");

@@ -364,7 +364,7 @@ export function createPreview(host, onStatus) {
       };
       timers.push(window.setTimeout(advance, 5200));
     }
-    say("ok", `${label} is animated with the layered CSS rig: its host sends no CORS header, so its pixels cannot be skinned, but the measured silhouette still places the head and the hip.` + (poses.length > 1 ? ` Its ${String(poses.length)} drawn poses cycle.` : " Publish a local copy for the full skeleton."));
+    say("ok", `${label} 由分层 CSS 骨架驱动：源站不发 CORS 头，像素无法蒙皮，但量出的轮廓仍然给出了头和胯的位置。` + (poses.length > 1 ? ` 它的 ${String(poses.length)} 个姿势会轮流切换。` : " 发布一份本地副本即可获得完整骨骼。"));
   }
   /**
    * Draw the skeleton itself, for the selected look.
@@ -588,7 +588,7 @@ export function createPreview(host, onStatus) {
     };
     raf = window.requestAnimationFrame(loop);
     host.append(canvas);
-    say("ok", `Showing the skeleton derived from ${label}: root at the feet, spine at the hip, neck at ${(findNeck(frame.profile).y * 100).toFixed(0)}% of the figure — found, not assumed, by the pinch in the silhouette. The mesh is skinned by those three bones, the same sum the vertex shader performs.`);
+    say("ok", `正在展示由 ${label} 推出的骨架：根在脚下，脊柱在胯，脖子在人物身高的 ${(findNeck(frame.profile).y * 100).toFixed(0)}% 处 —— 这是从轮廓收窄处<em>找</em>出来的，不是写死的。网格由这三根骨头蒙皮，算法与顶点着色器同源。`);
   }
 
   /**
@@ -622,7 +622,7 @@ export function createPreview(host, onStatus) {
         return true;
       }
     }
-    notice("No measured silhouette is available for this look, so there is no skeleton to draw.");
+    notice("这套形象没有量出轮廓，所以没有骨架可画。");
     return false;
   }
 
@@ -648,7 +648,7 @@ export function createPreview(host, onStatus) {
     const built = createSkinner(image, bones, { width: SEAT.width, left: 0, top: 0 }, box, SEAT);
     if (built === undefined) {
       still(image);
-      say("warn", `This browser could not start the renderer, so the preview shows a still image (${String(rigStatus() ?? "no reason reported")}).`);
+      say("warn", `这个浏览器起不了渲染器，预览退回静态图（${String(rigStatus() ?? "未报告原因")}）。`);
       return false;
     }
     skinner = built;
@@ -713,17 +713,17 @@ export function createPreview(host, onStatus) {
     URL.revokeObjectURL(url);
     if (stale(mine)) return false;
     if (image === undefined) {
-      say("error", "That file could not be decoded as an image.");
+      say("error", "这个文件解不出图像。");
       return false;
     }
     const measured = measure(image);
     if (measured === undefined) {
-      say("error", "That image is fully transparent, so there is nothing to rig.");
+      say("error", "这张图完全透明，没有东西可绑。");
       return false;
     }
     override = { image, measured };
     showOverride();
-    say("ok", `Rigging ${file.name} (${String(image.naturalWidth)}×${String(image.naturalHeight)}). It was measured and animated inside this tab and was never uploaded.`);
+    say("ok", `正在为 ${file.name}（${String(image.naturalWidth)}×${String(image.naturalHeight)}）绑骨。测量与动画都在这个标签页里完成，文件没有被上传。`);
     return true;
   }
 
@@ -761,12 +761,12 @@ export function createPreview(host, onStatus) {
     const image = await loadImage(canvas.toDataURL("image/png"));
     if (stale(mine)) return false;
     if (image === undefined) {
-      say("error", "The built-in test pattern could not be drawn.");
+      say("error", "内置测试图案画不出来。");
       return false;
     }
     const measured = measure(image);
     if (measured === undefined) {
-      say("error", "The test pattern measured as empty, which should be impossible.");
+      say("error", "测试图案量出来是空的，这不应该发生。");
       return false;
     }
     // Recorded as an override, exactly like a chosen file: `show` runs on every
@@ -775,8 +775,8 @@ export function createPreview(host, onStatus) {
     override = { image, measured };
     const rigged = showOverride();
     say(rigged ? "ok" : "warn", rigged
-      ? "Rendering the built-in test pattern: measure → auto-rig → skinned animation, all inside this tab. Open this same console from your own DSH to see your installed artwork instead."
-      : "The test pattern rendered as a still image because this browser could not start the renderer.");
+      ? "正在渲染内置测试图案：测量 → 自动绑骨 → 蒙皮动画，全部在这个标签页里完成。从你自己的 DSH 打开同一个配置台，就能看到你装好的素材。"
+      : "这个浏览器起不了渲染器，测试图案退回了静态图。");
     return rigged;
   }
 
@@ -810,7 +810,7 @@ export function createPreview(host, onStatus) {
     stop();
     host.textContent = "";
     if (look === undefined) {
-      notice(`Your DSH has no artwork installed for "${characterId}". Run \`npm run fetch-art\` there, or switch character.`);
+      notice(`你的 DSH 里没有装 "${characterId}" 的素材。在那边跑 \`npm run fetch-art\`，或者换一位角色。`);
       return;
     }
     const frame = look.frames[0];
@@ -825,7 +825,7 @@ export function createPreview(host, onStatus) {
       rig(image, frame.profile, box);
     } else {
       still(image);
-      say("warn", `${look.id} carries no measured silhouette, so the preview shows a still image. Run \`npm run art:sync\` in the plugin directory.`);
+      say("warn", `${look.id} 没有量出轮廓，预览退回静态图。请在插件目录跑 \`npm run art:sync\`。`);
     }
   }
 
@@ -836,7 +836,7 @@ export function createPreview(host, onStatus) {
     stop();
     host.textContent = "";
     if (look === undefined) {
-      notice("No look to preview for this character.");
+      notice("这位角色没有可预览的形象。");
       return;
     }
     const acquired = [];
@@ -844,8 +844,8 @@ export function createPreview(host, onStatus) {
       const got = await acquire(frame, look);
       if (stale(mine)) return;
       if (got === undefined) {
-        notice(`${look.nameEn ?? look.id} could not be loaded from its source. It may have moved, or the host may be blocking this page.`);
-        say("error", `${String(look.sources?.[0] ?? look.id)} did not load.`);
+        notice(`${look.name ?? look.nameEn ?? look.id} 无法从源站加载。可能文件挪了位置，或者源站挡住了这个页面。`);
+        say("error", `${String(look.sources?.[0] ?? look.id)} 加载失败。`);
         return;
       }
       acquired.push({ ...got, frame });
@@ -857,7 +857,7 @@ export function createPreview(host, onStatus) {
     const boxes = acquired.every((entry) => Array.isArray(entry.frame.box) && Array.isArray(entry.frame.profile));
     if (first.riggable && boxes) {
       rig(first.image, first.frame.profile, first.frame.box);
-      say("ok", `Showing ${look.nameEn ?? look.id}, rigged and animated by the same skeleton the plugin runs.`);
+      say("ok", `正在显示 ${look.name ?? look.nameEn ?? look.id}，由插件同一套骨架绑定驱动。`);
       return;
     }
     if (boxes && Array.isArray(first.frame.profile)) {
@@ -877,7 +877,7 @@ export function createPreview(host, onStatus) {
       return;
     }
     still(first.image);
-    say("warn", `${look.nameEn ?? look.id} is shown as-is: no measured silhouette was found for it.`);
+    say("warn", `${look.name ?? look.nameEn ?? look.id} 原样显示：没有为它量出轮廓。`);
   }
 
   return {

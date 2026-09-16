@@ -27,10 +27,10 @@ const THEME_COLOURS = {
 
 /** Human names for the page themes, for the header readout. */
 const PAGE_THEME_NAMES = {
-  auto: "neutral silver",
-  closure: "blue on silver",
-  yuno: "pink neon",
-  muelsyse: "Muelsyse · light green",
+  auto: "中性银",
+  closure: "银上之蓝",
+  yuno: "霓虹粉",
+  muelsyse: "莱茵绿",
 };
 
 const state = {
@@ -163,7 +163,15 @@ function applyTheme() {
   // The name already carries whatever identifies it — the character where there is one,
   // the colour where there is not — so it is used as written rather than prefixed with
   // the character again, which is how it came to read "Muelsyse · Muelsyse · light green".
-  $("theme-name").textContent = PAGE_THEME_NAMES[theme] ?? theme;
+  // Read once, before anything uses it: the declaration used to sit below this point,
+  // and reading it here first threw a ReferenceError from inside the first render.
+  const character = characterOf(state.character);
+  // 角色名在前、主题名在后，两者都用中文名 —— 中文界面里出现英文角色名就是把
+  // 名称留给了机器翻译去猜。
+  const named = character?.name ?? character?.nameEn ?? state.character;
+  $("theme-name").textContent = state.autoTheme === true
+    ? (PAGE_THEME_NAMES[theme] ?? theme)
+    : `${named} · ${PAGE_THEME_NAMES[theme] ?? theme}`;
   $("theme-swatch").style.background = getComputedStyle(document.documentElement).getPropertyValue("--signal").trim();
 }
 
@@ -230,7 +238,7 @@ function renderCharacters() {
     card.innerHTML = [
       `<span class="check"></span>`,
       `<div class="code">${theme.label} / ${character.id}</div>`,
-      `<div class="name">${character.nameEn ?? character.name}</div>`,
+      `<div class="name">${character.name ?? character.nameEn}</div>`,
       `<div class="latin">${character.latin}</div>`,
       `<div class="role">${character.roleEn ?? character.role}<br>${character.taglineEn ?? character.tagline ?? ""}</div>`,
       `<div class="swatch" style="background:${theme.accent}"></div>`,
@@ -273,7 +281,7 @@ function renderLooks() {
     card.innerHTML = [
       `<span class="check"></span>`,
       `<div class="code">${look.id}</div>`,
-      `<div class="name">${look.nameEn ?? look.name}</div>`,
+      `<div class="name">${look.name ?? look.nameEn}</div>`,
       look.animated ? `<span class="badge">Multi-frame</span>` : "",
     ].join("");
     // One click does both, because both are what the visitor means by it: tick the
@@ -312,8 +320,8 @@ function buildConfig() {
   const lines = [];
 
   if (!state.plugin) {
-    lines.push("# Mascot plugin: disabled — leaving the entry out is what disables it.");
-    lines.push("# To turn it back on, drop the leading # from the block below.");
+    lines.push("# 看板娘插件：已关闭 —— 不插入这一行就是关闭状态。");
+    lines.push("# 想重新打开，把下面这段前面的 # 去掉。");
     lines.push("#");
     lines.push("# - insert:");
     lines.push("#     - id: mascot");
@@ -321,8 +329,8 @@ function buildConfig() {
     return lines.join("\n");
   }
 
-  lines.push("# DSH profile patch — paste into ~/.dsh/profiles/desktop/cordis.patch.yml");
-  lines.push("# Do not edit cordis.yml: it is rewritten to [] on every launch.");
+  lines.push("# DSH profile patch —— 贴进 ~/.dsh/profiles/desktop/cordis.patch.yml");
+  lines.push("# 不要写 cordis.yml：它每次启动都会被改写成 []。");
   lines.push("- insert:");
   lines.push("    - id: mascot");
   if (state.mount === "file") {
@@ -334,7 +342,7 @@ function buildConfig() {
     lines.push("      name: dsh-plugin-mascot");
   }
   lines.push("      config:");
-  lines.push(`        # Default character: ${character === undefined ? state.character : (character.nameEn ?? character.name)}`);
+  lines.push(`        # 默认角色：${character === undefined ? state.character : (character.name ?? character.nameEn)}`);
   lines.push(`        character: ${state.character}`);
   const available = enabledLooks(state.character);
   const preferred = available.find((look) => (state.animated ? true : !look.animated)) ?? available[0];
@@ -349,7 +357,7 @@ function buildConfig() {
   lines.push("        # Skeletal animation: three bones rigged from the silhouette, driving");
   lines.push("        # a skinned mesh. Falls back to a still image without WebGL2.");
   lines.push(`        skeleton: ${state.skeleton}`);
-  lines.push("        # Account balance in the panel; off means the browser never queries it.");
+  lines.push("        # 面板里的账户余额；关闭后浏览器完全不查询。");
   lines.push(`        balance: ${state.balance}`);
   if (!state.animated) {
     lines.push("        # Multi-frame looks were switched off in the console, so only");
@@ -365,7 +373,7 @@ function render() {
   paintToggle("t-skeleton", state.skeleton);
   paintToggle("t-animated", state.animated);
   $("s-plugin").className = state.plugin ? "status" : "status off";
-  $("s-plugin").innerHTML = `<i></i>${state.plugin ? "Enabled" : "Disabled"}`;
+  $("s-plugin").innerHTML = `<i></i>${state.plugin ? "已启用" : "已关闭"}`;
   $("dir-field").classList.toggle("hidden", state.mount !== "file");
   $("sec-look").classList.toggle("hidden", !state.plugin);
   $("sec-character").classList.toggle("hidden", !state.plugin);
@@ -393,8 +401,9 @@ function render() {
  * See COPYRIGHT.md — this project ships no artwork and claims no rights in it.
  */
 const CREDITS = {
-  closure: { work: "Arknights", owner: "Hypergryph", note: "unofficial fan project" },
-  yuno: { work: "BanG Dream! / Mugendai MewType", owner: "Bushiroad", note: "unofficial fan project" },
+  closure: { work: "明日方舟（Arknights）", owner: "鹰角网络 Hypergryph" },
+  yuno: { work: "BanG Dream! ／ 梦限大 MewType", owner: "Bushiroad" },
+  muelsyse: { work: "明日方舟（Arknights）", owner: "鹰角网络 Hypergryph" },
 };
 
 /** Paint the attribution for the selected character. */
@@ -413,8 +422,8 @@ function paintCredit(characterId) {
   }
   const character = characterOf(characterId);
   node.innerHTML =
-    `Artwork: <b>${character?.nameEn ?? characterId}</b> © <b>${credit.owner}</b> — ${credit.work}. ` +
-    `Shown from its original source; not redistributed by this project. ${credit.note}, not affiliated with or endorsed by the rights holder.`;
+    `素材：<b>${character?.name ?? characterId}</b> © <b>${credit.owner}</b> —— ${credit.work}。` +
+    `从原始出处加载，本项目不再分发。非官方同人作品，与权利人无隶属或背书关系。`;
 }
 /** The live preview, created on boot. A ref so `render` can reach it. */
 const previewRef = { current: null };
@@ -428,7 +437,7 @@ function paintPreviewStatus({ kind, message }) {
   // `isLive` means the plugin answered on this origin; a supplied file counts too.
   const connected = previewRef.current?.isLive() === true || $("preview-host").querySelector("canvas, .preview-still") !== null;
   badge.className = connected ? "status" : "status off";
-  badge.innerHTML = `<i></i>${connected ? "Previewing" : "Not connected"}`;
+  badge.innerHTML = `<i></i>${connected ? "预览中" : "未连接"}`;
 }
 
 /** Create the preview and wire its controls. */
@@ -461,20 +470,22 @@ async function setupPreview() {
   // that decides what the section can honestly offer.
   const mode = await preview.detect();
   if (mode === "local") {
-    $("preview-note").textContent = "Served by the plugin itself, so the frame below is reading the artwork installed on this machine.";
+    // 标记模式，而不是让断言去读句子：读句子的断言会在任何一次翻译后变成假失败。
+    $("preview-note").dataset.mode = "local";
+    $("preview-note").textContent = "这一份由插件自己托管，所以下框读的是这台机器上装好的素材。";
     await preview.show(state.character, previewedLook());
     const drawn = $("preview-host").querySelector("canvas, .preview-still") !== null;
     preview.report(drawn
-      ? "Live from this machine: showing the artwork you installed, rigged and animated by the same skeleton the plugin runs."
+      ? "来自本机：显示你装好的素材，由插件同一套骨架绑定驱动。"
       : "Connected to the plugin, but nothing could be drawn — see the note below.");
     return;
   }
 
   $("preview-note").innerHTML =
-    "This copy is the published one, so it shows the artwork from the sources declared in " +
-    "<code>art/looks.json</code>. A host that sends no CORS header cannot be read into WebGL, so only " +
-    "artwork it does send headers for is deformed by the rig. Run <code>npm run art:publish</code> and " +
-    "commit <code>docs/art/</code> to animate everything.";
+    ($("preview-note").dataset.mode = "published") &&
+    "这一份是公网版本，素材来自 <code>art/looks.json</code> 里声明的源站。" +
+    "不发 CORS 头的源站读不进 WebGL，只有发了头的那些才会被骨骼形变。" +
+    "想全部动起来，跑 <code>npm run art:publish</code> 并提交 <code>docs/art/</code>。";
 
   // `?preview=test` drives the synthetic figure through the WebGL path. It is not a
   // control on the page — the page offers the skeleton, which is the useful thing —
@@ -690,11 +701,11 @@ async function main() {
 
   $("copy").addEventListener("click", async () => {
     const ok = await copyText(buildConfig());
-    flash($("copy"), ok ? "Copied" : "Copy failed");
+    flash($("copy"), ok ? "已复制" : "复制失败");
   });
   $("download-config").addEventListener("click", () => {
     download("cordis.patch.yml", `${buildConfig()}\n`);
-    flash($("download-config"), "Downloaded");
+    flash($("download-config"), "已下载");
   });
 
   renderCharacters();
