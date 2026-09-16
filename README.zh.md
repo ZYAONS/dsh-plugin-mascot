@@ -5,21 +5,20 @@
 给 **DeepSeek Harness**（DSH）Web GUI 加一个可以点的看板娘：平时缩在右下角，
 点一下弹出一块面板，把这一局到底花了多少钱、命中率怎么样，一次说清楚。
 
-**看板娘用的是官方 Q 版（Q版 / 小人）立绘** —— 可露希尔的官方 Q 版干员小人、
-千石由乃的官方 Q 版形象，都是画师画的，不是手绘图。因为官方图是版权素材，
-仓库里**不含图片**，只带一个下载脚本；跑一次 `npm run fetch-art` 就位（见[立绘](#立绘)）。
-
 - **Token 缓存命中率** —— 命中读取 ÷ 全部计费输入（命中率越高，单价越低）
 - **Token 明细** —— 输入（未命中）/ 缓存读取 / 缓存写入 / 输出 / 本会话累计
 - **上下文占用** —— 当前占用 ÷ 上下文窗口，带进度条
 - **账户余额** —— 主机侧向 DeepSeek 查询，API Key 不进浏览器
-- **两个角色，随时切换** —— 明日方舟的**可露希尔**，梦限大 MewType 的**千石由乃**
+- **两个角色、五套官方形象，随时切换** —— 可露希尔（罗德岛）× 千石由乃（梦限大 MewType）
+- **一人一套界面风格** —— 可露希尔的「罗德岛工程终端」和由乃的「MEWTYPE LIVE」是两套
+  不同的设计，不只是换个颜色
+- **立绘会动** —— 待机浮动、呼吸、悬停反应、点击回弹，带两帧的 Q 版还会**真的转身**
 
 ![预览](docs/preview.png)
 
-> 上面这张预览图是 `lib/client.js` 在真实 Chromium 里跑出来的（点开面板、切换角色
-> 都是真 DOM 点击），用的是**内置占位图** —— 也就是刚 clone 下来、还没跑
-> `npm run fetch-art` 时的样子。装上官方 Q 版之后的样子见 `docs/preview-official.png`
+> 上面这张预览图是 `lib/client.js` 在真实 Chromium 里跑出来的（开面板、切角色、切形象
+> 全是真 DOM 点击），用的是**内置占位图** —— 也就是刚 clone 下来、还没跑
+> `npm run fetch-art` 时的样子。装了官方素材之后的样子见 `docs/preview-official.png`
 > （本地生成，不进仓库）。
 
 ---
@@ -27,7 +26,9 @@
 ## 目录
 
 - [安装](#安装)
-- [立绘](#立绘)
+- [形象](#形象)
+- [风格](#风格)
+- [动态](#动态)
 - [使用](#使用)
 - [配置](#配置)
 - [它是怎么工作的](#它是怎么工作的)
@@ -106,37 +107,96 @@ dsh plugin --profile desktop add "github:ZYAONS/dsh-plugin-mascot"
 
 ---
 
-## 立绘
+## 形象
 
-看板娘用的是**官方 Q 版图**，是画师产出的官方素材，不是手绘图。但官方图的版权属于
-鹰角和 Bushiroad，把图片塞进公开仓库等于替别人分发受版权保护的素材 —— 所以本仓库
-**只带下载清单，不带图片**：
+看板娘用的是**画师产出的官方素材**，不是手绘图。但官方图版权属于鹰角和 Bushiroad，
+把图片塞进公开仓库等于替别人分发受版权保护的素材 —— 所以本仓库**只带下载清单，
+不带图片**：
 
 ```bash
-npm run fetch-art              # 按 art/sources.json 下载到 art/
+npm run fetch-art              # 下载 + 自动抠图 + 自动同步索引
 npm run fetch-art -- --force   # 强制重下
 ```
 
-| 角色 | 素材 | 处理 |
+| 角色 | 形象 | 素材 | 处理 |
+|---|---|---|---|
+| 可露希尔 | 基建小人 | 官方 Q 版干员小人（512×640，透明，含悬浮无人机） | 直接用 |
+| 可露希尔 | 官方立绘 | 官方干员立绘（1024×1024，透明） | 直接用 |
+| 千石由乃 | 动画 | 官方动画立绘（1550×2085，透明） | 直接用 |
+| 千石由乃 | 常服 | 官方动画常服立绘（粉发眼镜版，1499×2088，透明） | 直接用 |
+| 千石由乃 | Q 版 | 官方 Q 版初代双姿势版式 | **自动抠图 → 拆成 2 帧** |
+
+`art/looks.json` 是手写的清单，`art/index.json` 是 `art-sync` 生成的索引。
+每一项都写了来源 URL 和 **sha256**，脚本逐个校验，上游文件变了会明确报出来
+（但仍然写入，免得你手上什么都没有）。
+
+### 加一套形象
+
+不用改任何代码：
+
+1. 在 `art/looks.json` 的 `looks` 里加一条（`id` / `character` / `name` / `urls` / `rights`）；
+2. `npm run fetch-art`。
+
+`scripts/art-sync.mjs` 会用真浏览器量出每张图的 **alpha 边界框**，据此算出两个座位
+（浮动立绘 104×172、面板头像 38×50）的取景参数，再从人物主色里采一个强调色。
+也就是说：**取景数字和配色都是量出来的，不是手填的**。量完写进 `art/index.json`，
+主机半边读它、按文件是否在盘上过滤，再发给浏览器。
+
+### 会自动同步
+
+- `npm run fetch-art` 跑完会**自动调用** `art-sync`，索引立刻更新；
+- `npm run art:sync` 单独同步一次；
+- `npm run art:watch` 常驻监听 `art/`，**丢一张图进去就自动重新测量并更新索引**，
+  刷新页面即可看到新形象 —— 不用重启、不用改代码。
+
+### 没装素材也能用
+
+内置一个**中性占位图**（虚线框 + 「图片缺失」图标），官方图 404 时自动顶上，
+面板里还会提示去跑 `fetch-art`。占位图是通用图形，不是任何角色的画像。
+
+---
+
+## 风格
+
+**一人一套界面风格**，不是换个主色就算数 —— 两套主题在**形状语言、数据可视化方式、
+环境动效、数字字体**四处都不同：
+
+| | 可露希尔 · 罗德岛工程终端 | 千石由乃 · MEWTYPE LIVE |
 |---|---|---|
-| 可露希尔 | 《明日方舟》官方 Q 版干员小人（512×640，透明背景，含悬浮无人机） | 直接用 |
-| 千石由乃 | 《BanG Dream!》梦限大 MewType 官方 Q 版形象（初代） | 自动抠图 |
+| 形状 | 方角（6px），工程仪器感 | 圆角（18px），软糖感 |
+| 进度条 | **分段刻度**，像仪表盘 | **VU 表**，带辉光 |
+| 环境动效 | 扫描线上下扫过 | 脉冲圆环 + 跳动均衡器 |
+| 头像 | 圆角矩形 | 圆形 + 辉光描边 |
+| 数字字体 | 等宽（工程读数） | 圆体（演出感） |
+| 顶栏标签 | `罗德岛 · 工程终端` | `MEWTYPE · LIVE` |
 
-由乃那张原图是宣传用的双人版式：两个姿势 + 粉色星形背景和彩纸。`scripts/cutout.mjs`
-会用真浏览器把它处理干净 —— 从边缘采样背景色、向内洪泛填充、只保留最大的连通域
-（也就是人物本体），最后裁到人物边界。步骤都写在脚本注释里，`fetch-art` 会自动调用。
+主题定义在 `lib/client.js` 的 `THEMES` 里，按 `art/looks.json` 里角色的 `theme`
+字段选择 —— 加一个新角色，在清单里写上主题名即可自动套用。
 
-`art/sources.json` 里每一项都写了来源 URL 和 **sha256**；脚本逐个校验，上游文件变了
-会明确报出来（但仍然写入，免得你手上什么都没有）。抠图产物另外记 `derivedSha256`
-供参考，因为不同 Chromium 版本的 PNG 编码可能不同。
+---
 
-**没跑 `fetch-art` 也能用**：内置一个**中性占位图**（虚线框 + 「图片缺失」图标），
-官方图 404 时自动顶上。占位图是通用图形，不是任何角色的画像。
+## 动态
 
-**换图**：把 `art/` 里的文件替换掉，文件名保持 `closure.png` / `yuno.png`。
-想换别的角色，改 `lib/client.js` 里 `MASCOTS` 的 `art` 与 `sprite` / `face` 取景参数 ——
-两个数字都是从素材的 alpha 边界算出来的（`width` 是图片渲染宽度，`left` / `top` 是
-把人物或头部拉进框内的负偏移）。
+立绘会动，分三层：
+
+**1. 程序化动效（任何静态图都有）**
+- 待机：上下浮动 + 呼吸缩放，脚下阴影跟着收放
+- 悬停：抬起、放大、按主题色发光
+- 点击：squash & stretch 回弹；展开面板时先跳一下
+- 环境：扫描线 / 脉冲环 + 均衡器，随主题切换
+
+**2. 真·多帧动画**
+由乃的 Q 版原图是**两个姿势**。`scripts/cutout.mjs` 用 `mode: "all"` 保留两个连通域，
+每个姿势各自裁到自己的边界框，**共用同一个缩放比例**（否则一个姿势会被放大、
+看起来像在长大），浏览器端按 5.2 秒一轮**交叉淡入淡出** —— 效果就是她慢慢转身。
+面板里这套形象会标一个「动态」角标。
+
+**3. 动图直接支持**
+清单里任意一帧是 GIF / 动图 WebP，浏览器原生就会播放，不需要额外处理。
+
+**做不到的**：真正的 Live2D / Spine 骨骼动画。游戏里的动态小人是 Spine 工程文件，
+需要运行时才能解算，公开渠道只有别人导出的**静帧**（我们用的就是这种）。
+所以这里做的是「静帧 + 程序化动效 + 多帧交叉淡化」，不是骨骼动画。
 
 ---
 
@@ -145,9 +205,13 @@ npm run fetch-art -- --force   # 强制重下
 | 操作 | 结果 |
 |---|---|
 | 点右下角的立绘 | 展开 / 收起面板 |
-| 点面板里的两个小头像 | 切换看板娘（选择存在 localStorage） |
+| 面板里「角色」一行 | 切换看板娘 |
+| 面板里「形象」一行 | 切换这个角色的立绘（带「动态」角标的是多帧动画） |
 | 点空白处 或 按 `Esc` | 关掉面板 |
 | 点「刷新」 | 立刻重新问一次余额（默认 2 分钟自动刷新一次） |
+
+选择存在 localStorage，下次打开还是这套。
+勾选了系统「减少动态效果」（`prefers-reduced-motion`）时，所有动效自动关闭。
 
 面板展开时，立绘下面的胶囊会显示余额；查询失败时显示「点我 Token / 余额」，
 不会假装自己知道。
@@ -179,17 +243,19 @@ npm run fetch-art -- --force   # 强制重下
 ```
 dsh-plugin-mascot/
 ├── lib/
-│   ├── index.js        主机半边：/dsh-mascot 路由（余额 + 立绘），查余额
-│   └── client.js       浏览器半边：看板娘 + 面板（window.__ModuleLoader__ 格式）
+│   ├── index.js        主机半边：/dsh-mascot 路由（余额 + 形象索引 + 素材），查余额
+│   └── client.js       浏览器半边：看板娘 + 面板 + 两套主题 + 动效
 ├── art/
-│   ├── sources.json    官方 Q 版图的下载清单（进仓库）
-│   ├── closure.png     ← npm run fetch-art 下载，不进仓库
-│   └── yuno.png        ← 同上（下载后自动抠图）
+│   ├── looks.json      手写的形象清单：角色、主题、来源 URL、sha256（进仓库）
+│   ├── index.json      art-sync 生成的索引：取景参数、强调色、帧列表（进仓库）
+│   ├── closure-*.png   ← npm run fetch-art 下载，不进仓库
+│   └── yuno-*.png      ← 同上（Q 版那张会先抠图再拆帧）
 └── scripts/
-    ├── fetch-art.mjs   按清单下载官方图；带 cutout 标记的会走抠图
-    ├── cutout.mjs      用真浏览器洪泛填充抠背景 + 裁到人物边界
-    ├── chrome.mjs      Chromium 定位（preview 与 cutout 共用）
-    ├── check.mjs       自检：清单契约、bundle 装载、统计函数、素材与路由
+    ├── fetch-art.mjs   按清单下载 →（需要时）抠图 → 自动调用 art-sync
+    ├── cutout.mjs      真浏览器里抠背景；多姿势版式拆成对齐的多帧
+    ├── art-sync.mjs    量 alpha 边界/主色 → 算取景 → 写 index.json；--watch 常驻
+    ├── chrome.mjs      Chromium 定位（preview / cutout / art-sync 共用）
+    ├── check.mjs       自检：清单与索引一致性、bundle 装载、统计函数、路由
     ├── preview.mjs     在真实浏览器里渲染 docs/preview*.png
     └── verify-profile.mjs  上线前体检：解析 patch 层、导入模块、检查浏览器半边
 ```
@@ -212,13 +278,14 @@ DSH 的 GUI 是一套 **slot 注册表**。本插件只注册了一个条目：
 ### 主机半边
 
 余额是浏览器够不着的那一个数字：问答需要 API Key，而 Key 不能离开主机进程。
-立绘也是浏览器自己拿不到的 —— 官方图不在仓库里，得由主机从磁盘上读。
-所以主机半边干两件事 —— 提供同源路由：
+形象也是浏览器自己拿不到的 —— 官方图不在仓库里，得由主机从磁盘上读、按安装情况过滤。
+所以主机半边提供四条同源路由：
 
 ```
 GET /dsh-mascot/api/balance   账户余额（带缓存）
 GET /dsh-mascot/api/health    路由存活检查
-GET /dsh-mascot/art/<文件>    从插件自己的 art/ 目录读立绘
+GET /dsh-mascot/api/looks     有哪些形象装了，连带取景参数与强调色
+GET /dsh-mascot/art/<文件>    从插件自己的 art/ 目录读素材
 ```
 
 - Key 每次请求都用 `ctx.credentials.resolve()` 现取，**轮换后下一次调用即生效**，
@@ -226,8 +293,10 @@ GET /dsh-mascot/art/<文件>    从插件自己的 art/ 目录读立绘
 - Key 只作为 `Authorization: Bearer` 头发出去，**绝不**进入响应体、日志或错误信息；
 - 路由先过 `ctx.connection.isAuthenticated(req)`，也就是和 GUI 其余部分同一张
   浏览器 cookie；万一组合里没有 Connection 服务，退回到只接受回环 `Host`；
-- 立绘路由先做路径越界检查（`..`、编码分隔符一律 403），再限制扩展名，
-  最后才落盘读文件；文件不在就 404，浏览器那边自动切到矢量兜底图。
+- 素材路由先做路径越界检查（`..`、编码分隔符一律 403），再限制扩展名，
+  最后才落盘读文件；文件不在就 404，浏览器那边自动切到占位图；
+- `/api/looks` 每次现读 `art/index.json` 并**按文件是否在盘上过滤** ——
+  所以刚 clone 下来（索引在、图不在）会返回空，浏览器就用占位图，不会去猜。
 
 ---
 
@@ -242,7 +311,8 @@ GET /dsh-mascot/art/<文件>    从插件自己的 art/ 目录读立绘
 | Token 缓存命中 | 由上一行推导 | `cacheReadTokens ÷ (uncachedInputTokens + cacheReadTokens + cacheWriteTokens)` |
 | 上下文占用 | `useProjection("contextPressure")` | `{ contextWindow?, pressureTokens?, projectedTokens? }`，优先用 `projectedTokens` |
 | 账户余额 | 本插件的 `/dsh-mascot/api/balance` | `GET {baseUrl}/user/balance` |
-| 立绘 | 本插件的 `/dsh-mascot/art/<文件>` | 磁盘上的 `art/`，缺失时用内置矢量图 |
+| 可选形象 | 本插件的 `/dsh-mascot/api/looks` | 现读 `art/index.json`，按盘上文件过滤 |
+| 立绘 | 本插件的 `/dsh-mascot/art/<文件>` | 磁盘上的 `art/`，缺失时用内置占位图 |
 
 拿不到的数就显示 `—`，**不会**当成 0 —— 没有会话时命中率是没有意义的，
 面板也不会编一个 0% 出来。
@@ -253,37 +323,42 @@ GET /dsh-mascot/art/<文件>    从插件自己的 art/ 目录读立绘
 
 ```bash
 npm install                # 只为 preview 装的 react / react-dom（devDependencies）
-npm run fetch-art          # 下载官方 Q 版图到 art/（由乃那张会自动抠图）
-npm test                   # 自检（22 项）
+npm run fetch-art          # 下载形象 → 抠图 → 同步索引（一条龙）
+npm run art:sync           # 只重新测量并写 art/index.json
+npm run art:watch          # 常驻监听 art/，丢图进去就自动同步
+npm test                   # 自检（24 项）
 npm run check              # node --check 两个半边 + 自检
 npm run preview            # 渲染 docs/preview.png（占位图，会进仓库）
 npm run preview:official   # 渲染 docs/preview-official.png（官方图，不进仓库）
 npm run verify             # 体检当前 profile 能不能挂上
 ```
 
-单独跑抠图：
+单独跑抠图（多姿势版式会拆成多帧）：
 
 ```bash
-node scripts/cutout.mjs <原图.png> <输出.png>
+node scripts/cutout.mjs <版式.png> <帧1.png> <帧2.png> --mode all
 ```
 
-改立绘取景的流程：调 `lib/client.js` 里 `MASCOTS` 的 `sprite` / `face` 参数
-→ `npm run preview:official` 看图 → 满意后重启 DSH。
-取景数字的算法：量出素材的 alpha 边界框，按座位尺寸等比缩放，再把边界框居中。
+改取景**不需要手调数字**：`npm run art:sync` 会重新测量并写进索引。
+如果你就是想手动干预，改 `art/index.json` 里对应帧的 `seat`，然后刷新页面。
+
+改主题：编辑 `lib/client.js` 里的 `THEMES`，加一个新键，再让角色在
+`art/looks.json` 里 `theme` 指向它。
 
 ---
 
 ## 素材与授权
 
 - **代码**：[MIT](LICENSE)
-- **官方 Q 版图（`art/`，不进仓库）**：可露希尔的《明日方舟》官方 Q 版干员小人、
-  千石由乃的《BanG Dream!》官方 Q 版形象。**版权归各自权利人所有，是画师产出的官方素材。**
-  本仓库不分发这些文件，只提供 `art/sources.json` 清单和 `npm run fetch-art` 下载脚本，
-  由使用者自行下载到本机。个人自己用没问题；**再分发或商用请先取得授权**。
-  由乃那张经过 `scripts/cutout.mjs` 抠图处理（去掉背景与第二个姿势），处理的是像素，
+- **官方素材（`art/*.png`，不进仓库）**：可露希尔的《明日方舟》官方 Q 版干员小人与
+  官方立绘、千石由乃的《BanG Dream!》官方动画立绘 / 常服立绘 / Q 版形象。
+  **版权归各自权利人所有，是画师产出的官方素材。** 本仓库不分发这些文件，
+  只提供 `art/looks.json` 清单和 `npm run fetch-art` 下载脚本，由使用者自行下载到本机。
+  个人自己用没问题；**再分发或商用请先取得授权**。
+  `scripts/cutout.mjs` 对由乃的 Q 版版式做了抠图与拆帧 —— 处理的是像素，
   没有改动画面内容。
 - **内置占位图**：`lib/client.js` 里的通用「图片缺失」图标（虚线框 + 图形符号），
-  不描绘任何角色，仅在官方图缺失时显示，同为 MIT。
+  不描绘任何角色，仅在素材缺失时显示，同为 MIT。
 - **角色权利**：可露希尔 © 上海鹰角网络（《明日方舟》）；千石由乃 © Bushiroad
   （《BanG Dream!》/ 梦限大 MewType）。二者均为各自权利人的商标／版权角色，
   本插件是非官方同人作品，与权利人无隶属或背书关系。

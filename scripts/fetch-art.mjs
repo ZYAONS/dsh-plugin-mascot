@@ -1,42 +1,41 @@
 #!/usr/bin/env node
 /**
- * Download the mascot artwork declared in `art/sources.json`.
+ * Download every declared look, then hand off to `art-sync` so the plugin's
+ * runtime index matches what is now on disk.
  *
- * Why this exists: the artwork is official game art owned by Hypergryph and
- * Bushiroad. Committing it here would redistribute someone else's copyrighted
- * asset, so the repository ships a neutral placeholder plus this script, and the
- * operator pulls the real art onto their own machine (art/ is gitignored).
+ * Why the artwork is not in the repository: it is official game art owned by
+ * Hypergryph and Bushiroad. Committing it would redistribute someone else's
+ * copyrighted asset, so the repo ships the declaration plus these scripts, and
+ * the operator pulls the real art onto their own machine (art/*.png is
+ * gitignored).
  *
- *   npm run fetch-art            # download anything missing
+ *   npm run fetch-art            # download what is missing, then sync
  *   npm run fetch-art -- --force # re-download even when the hash matches
  *
- * Two kinds of entry:
- *   - plain entries are verified against the sha256 pinned in the manifest;
- *   - `cutout: true` entries download a promotional sheet and then run
- *     `scripts/cutout.mjs` over it, because the sheet carries two poses on a
- *     decorated background. The pinned hash covers the SOURCE; the derived file
- *     is sanity-checked instead, since browser PNG encoding may differ between
- *     Chromium builds.
- *
- * A mismatch is reported loudly — an upstream that changed under us is worth
- * knowing about — but the file is still written, so a moved asset never leaves
- * the plugin with nothing to render.
+ * Pipeline, per look:
+ *   1. try each `urls` entry until one returns a non-empty body;
+ *   2. verify the body against the pinned `sha256` (a mismatch is reported
+ *      loudly but still written, so a moved asset never leaves you with nothing);
+ *   3. if the look declares `cutout`, run scripts/cutout.mjs over the download —
+ *      official sheets carry decorated backgrounds and sometimes two poses, and
+ *      `mode: "all"` turns those into pixel-aligned animation frames;
+ *   4. after every look, run scripts/art-sync.mjs to measure the images and
+ *      rewrite art/index.json.
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { cutout } from "./cutout.mjs";
+import { sync } from "./art-sync.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const artDir = join(root, "art");
 const force = process.argv.includes("--force");
 
-const manifest = JSON.parse(readFileSync(join(artDir, "sources.json"), "utf8"));
-mkdirSync(artDir, { recursive: true });
-
+const declaration = JSON.parse(readFileSync(join(artDir, "looks.json"), "utf8"));
 const sha256 = (buffer) => createHash("sha256").update(buffer).digest("hex");
 
 /** Fetch one url as bytes, or undefined when it fails or is empty. */
@@ -63,34 +62,37 @@ async function grab(url) {
   }
 }
 
-/** Download the first working source for one entry. */
-async function download(image) {
-  for (const url of image.urls) {
-    console.log(`  try   ${url}`);
-    const body = await grab(url);
-    if (body !== undefined) return body;
-  }
-  return undefined;
+/** The files a look produces. */
+function outputsOf(look) {
+  return look.frames ?? (look.file === undefined ? [] : [look.file]);
 }
 
-let downloaded = 0;
+/** A look whose files are all present and newer than nothing to do. */
+function installed(look) {
+  const files = outputsOf(look);
+  return files.length > 0 && files.every((file) => existsSync(join(artDir, file)));
+}
+
+let written = 0;
 let skipped = 0;
 let failed = 0;
 
-for (const image of manifest.images) {
-  const target = join(artDir, image.file);
-  console.log(`\n${image.file}  (${image.character})`);
+for (const look of declaration.looks) {
+  const outputs = outputsOf(look);
+  console.log(`\n${look.id}  (${look.name})`);
 
-  if (!force && existsSync(target) && !image.cutout) {
-    if (sha256(readFileSync(target)) === image.sha256) {
-      console.log("  ok    already present and verified");
-      skipped += 1;
-      continue;
-    }
-    console.log("  note  present but the hash differs — re-fetching");
+  if (!force && installed(look) && look.sha256 === undefined) {
+    console.log("  ok    already present");
+    skipped += 1;
+    continue;
   }
 
-  const body = await download(image);
+  let body;
+  for (const url of look.urls) {
+    console.log(`  try   ${url}`);
+    body = await grab(url);
+    if (body !== undefined) break;
+  }
   if (body === undefined) {
     console.error("  FAIL  every source failed");
     failed += 1;
@@ -98,33 +100,35 @@ for (const image of manifest.images) {
   }
 
   const actual = sha256(body);
-  if (actual !== image.sha256) {
-    console.log(`  warn  source hash differs from the manifest`);
-    console.log(`        expected ${image.sha256}`);
+  if (look.sha256 === undefined) {
+    console.log(`  note  no sha256 pinned; got ${actual}`);
+  } else if (actual !== look.sha256) {
+    console.log("  warn  source hash differs from the declaration");
+    console.log(`        expected ${look.sha256}`);
     console.log(`        actual   ${actual}`);
-    console.log(`        the upstream file changed — update art/sources.json if this is intended`);
+    console.log("        the upstream file changed — update art/looks.json if this is intended");
   } else {
     console.log(`  ok    source verified (${String(Math.round(body.length / 1024))} KB)`);
   }
 
-  if (image.cutout !== true) {
-    writeFileSync(target, body);
-    downloaded += 1;
+  if (look.cutout === undefined) {
+    if (outputs.length !== 1) {
+      console.error(`  FAIL  a look without cutout must declare exactly one file`);
+      failed += 1;
+      continue;
+    }
+    writeFileSync(join(artDir, outputs[0]), body);
+    written += 1;
   } else {
+    const mode = look.cutout === true ? "largest" : String(look.cutout);
     const work = mkdtempSync(join(tmpdir(), "dsh-mascot-fetch-"));
     try {
-      const staged = join(work, `source${extname(image.file) || ".png"}`);
+      const staged = join(work, `source${extname(outputs[0]) || ".png"}`);
       writeFileSync(staged, body);
-      console.log("  cut   removing the background (needs Chromium)");
-      const size = cutout(staged, target);
-      const derived = sha256(readFileSync(target));
-      downloaded += 1;
-      console.log(`  ok    ${String(size.width)}x${String(size.height)}, ${String(Math.round(readFileSync(target).length / 1024))} KB`);
-      if (image.derivedSha256 !== undefined && derived !== image.derivedSha256) {
-        console.log(`  note  derived hash differs from the recorded one (encoding drift, not content)`);
-        console.log(`        recorded ${image.derivedSha256}`);
-        console.log(`        derived  ${derived}`);
-      }
+      console.log(`  cut   removing the background (mode: ${mode}, needs Chromium)`);
+      const size = cutout(staged, outputs.map((file) => join(artDir, file)), { mode });
+      written += 1;
+      console.log(`  ok    ${String(size.count)} frame(s), ${String(size.width)}x${String(size.height)}`);
     } catch (error) {
       console.error(`  FAIL  cutout: ${error instanceof Error ? error.message : String(error)}`);
       failed += 1;
@@ -133,13 +137,25 @@ for (const image of manifest.images) {
       rmSync(work, { recursive: true, force: true });
     }
   }
-  console.log(`        ${image.rights}`);
+
+  if (look.sha256 === undefined) {
+    console.log(`        pin this hash in art/looks.json: ${actual}`);
+  }
+  console.log(`        ${look.rights}`);
 }
 
-console.log(`\nfetch-art: ${String(downloaded)} written, ${String(skipped)} already present, ${String(failed)} failed`);
-if (downloaded + skipped > 0) {
+console.log(`\nfetch-art: ${String(written)} written, ${String(skipped)} already present, ${String(failed)} failed`);
+
+if (written + skipped > 0) {
+  console.log("");
+  const index = sync();
+  console.log(`art-sync: indexed ${String(index.looks.length)} look(s) across ${String(index.characters.length)} character(s)`);
+  for (const miss of index.missing) {
+    console.log(`  still missing: ${miss.id} (${miss.files.join(", ")})`);
+  }
   console.log("\nThe artwork is official game art and stays out of git on purpose.");
-  for (const image of manifest.images) console.log(`  ${image.file}: ${image.rights}`);
+  for (const look of declaration.looks) console.log(`  ${look.id}: ${look.rights}`);
   console.log("\nRestart DSH Desktop if this is the first time art/ has been populated.");
 }
+
 process.exit(failed === 0 ? 0 : 1);

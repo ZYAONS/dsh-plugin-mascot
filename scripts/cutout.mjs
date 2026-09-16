@@ -11,15 +11,20 @@
  *   1. sample the opaque colours on the outer ring to learn the background;
  *   2. flood-fill inward from every border pixel through transparent or
  *      background-coloured pixels, which walks around the figure's outline;
- *   3. keep only the largest remaining connected component — the figure —
- *      which is what discards stray confetti and the second pose;
- *   4. crop to what survived.
+ *   3. keep the requested connected components and drop the rest, which is what
+ *      discards stray confetti;
+ *   4. crop to the union of what survived.
  *
- * The page returns the finished PNG as a data URL inside the DOM, read back with
+ * When more than one component survives, one PNG is written per component from
+ * the SAME crop window. That is what makes a two-pose sheet usable as a
+ * two-frame animation: the frames are pixel-aligned, so cross-fading them looks
+ * like the character moving rather than jumping.
+ *
+ * The page returns finished PNGs as data URLs inside the DOM, read back with
  * `--dump-dom`. Screenshotting instead would drag in headless Chromium's minimum
  * viewport width, which silently reflows the page and re-scales the output.
  *
- *   node scripts/cutout.mjs <in.png> <out.png>
+ *   node scripts/cutout.mjs <in.png> <out.png> [--mode largest|second|all]
  */
 
 import { execFileSync } from "node:child_process";
@@ -32,13 +37,22 @@ import { findChromium } from "./chrome.mjs";
 /** Tolerance for "this pixel is the background colour", sum of RGB deltas. */
 const TOLERANCE = 96;
 
+/** Which components a mode keeps. */
+const MODES = new Set(["largest", "second", "all"]);
+
 const PAGE = `<!doctype html>
 <html><head><meta charset="utf-8"><title>cutout</title></head><body>
-<pre id="out"></pre>
+<pre id="report"></pre>
 <script>
+const query = new URLSearchParams(location.search);
+const MODE = query.get("mode") || "largest";
 const img = new Image();
 img.onload = () => {
-  const report = (payload) => { document.getElementById("out").textContent = JSON.stringify(payload); };
+  const done = (payload) => {
+    const node = document.getElementById("report");
+    node.id = "done";
+    node.textContent = JSON.stringify(payload);
+  };
   try {
     const W = img.naturalWidth, H = img.naturalHeight, N = W * H;
     const src = document.createElement("canvas");
@@ -81,93 +95,142 @@ img.onload = () => {
       if (y < H - 1) push(i + W);
     }
 
-    const seen = new Uint8Array(N), keep = new Uint8Array(N);
-    let bestArea = -1, bestCells = null;
+    const seen = new Uint8Array(N);
+    const components = [];
     for (let s = 0; s < N; s++) {
-      if (background[s] || seen[s] || alpha(s) < 16) continue;
+      if (background[s] || seen[s] || alpha(s) < 24) continue;
       seen[s] = 1;
       const cells = [s], st = [s];
       while (st.length) {
         const i = st.pop(); cells.push(i);
         const x = i % W, y = (i - x) / W;
-        const push = (j) => { if (j >= 0 && !seen[j] && !background[j] && alpha(j) >= 16) { seen[j] = 1; st.push(j); } };
+        const push = (j) => { if (j >= 0 && !seen[j] && !background[j] && alpha(j) >= 24) { seen[j] = 1; st.push(j); } };
         if (x > 0) push(i - 1);
         if (x < W - 1) push(i + 1);
         if (y > 0) push(i - W);
         if (y < H - 1) push(i + W);
       }
-      if (cells.length > bestArea) { bestArea = cells.length; bestCells = cells; }
+      components.push(cells);
     }
-    if (bestCells === null) { report({ error: "nothing survived the key" }); return; }
-    for (const i of bestCells) keep[i] = 1;
+    if (components.length === 0) { done({ error: "nothing survived the key" }); return; }
+    components.sort((a, b) => b.length - a.length);
 
+    const biggest = components[0].length;
+    let keep;
+    if (MODE === "second") keep = components.slice(1, 2);
+    else if (MODE === "all") keep = components.filter((cells) => cells.length >= Math.max(biggest * 0.15, 2000));
+    else keep = components.slice(0, 1);
+    if (keep.length === 0) { done({ error: "no component matched mode " + MODE }); return; }
+
+    // Union box over everything being kept, so the frames share one window.
     let x0 = W, y0 = H, x1 = -1, y1 = -1;
-    for (let i = 0; i < N; i++) {
-      if (!keep[i]) { px[i * 4 + 3] = 0; continue; }
-      const x = i % W, y = (i - x) / W;
-      if (x < x0) x0 = x; if (x > x1) x1 = x;
-      if (y < y0) y0 = y; if (y > y1) y1 = y;
+    for (const cells of keep) {
+      for (const i of cells) {
+        const x = i % W, y = (i - x) / W;
+        if (x < x0) x0 = x; if (x > x1) x1 = x;
+        if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
     }
     const w = x1 - x0 + 1, h = y1 - y0 + 1;
-    sctx.putImageData(data, 0, 0);
 
-    const out = document.createElement("canvas");
-    out.width = w; out.height = h;
-    out.getContext("2d").drawImage(src, x0, y0, w, h, 0, 0, w, h);
-    report({ w, h, kept: bestArea, png: out.toDataURL("image/png") });
+    // One frame per kept component (or one frame holding all of them). Each frame
+    // is cropped to its OWN bounding box: the caller scales a look's frames by a
+    // shared factor, so tight crops keep each pose the same size on screen and a
+    // shared window would only shrink the whole set into the middle of a wide
+    // canvas.
+    const groups = keep.length > 1 ? keep.map((cells) => [cells]) : [keep];
+    const frames = groups.map((group) => {
+      let gx0 = W, gy0 = H, gx1 = -1, gy1 = -1;
+      for (const cells of group) {
+        for (const i of cells) {
+          const x = i % W, y = (i - x) / W;
+          if (x < gx0) gx0 = x; if (x > gx1) gx1 = x;
+          if (y < gy0) gy0 = y; if (y > gy1) gy1 = y;
+        }
+      }
+      const fw = gx1 - gx0 + 1, fh = gy1 - gy0 + 1;
+      const frame = new ImageData(W, H);
+      frame.data.set(data.data);
+      const keepMask = new Uint8Array(N);
+      for (const cells of group) for (const i of cells) keepMask[i] = 1;
+      for (let i = 0; i < N; i++) if (!keepMask[i]) frame.data[i * 4 + 3] = 0;
+      const layer = document.createElement("canvas");
+      layer.width = W; layer.height = H;
+      layer.getContext("2d").putImageData(frame, 0, 0);
+      const out = document.createElement("canvas");
+      out.width = fw; out.height = fh;
+      out.getContext("2d").drawImage(layer, gx0, gy0, fw, fh, 0, 0, fw, fh);
+      return { png: out.toDataURL("image/png"), w: fw, h: fh };
+    });
+
+    done({ w, h, count: frames.length, kept: keep.length, frames });
   } catch (error) {
-    report({ error: String(error && error.message ? error.message : error) });
+    done({ error: String(error && error.message ? error.message : error) });
   }
 };
 img.onerror = () => {
-  document.getElementById("out").textContent = JSON.stringify({ error: "image failed to load" });
+  const node = document.getElementById("report");
+  node.id = "done";
+  node.textContent = JSON.stringify({ error: "image failed to load" });
 };
-img.src = new URLSearchParams(location.search).get("src");
+img.src = query.get("src");
 </script>
 </body></html>`;
 
 /**
- * Remove the background from one image.
+ * Remove the background from one image and write one PNG per surviving figure.
  *
  * @param input - source image path.
- * @param output - destination PNG path.
- * @param options - `chromium` overrides binary discovery (for tests).
- * @returns `{ width, height }` of the written file.
+ * @param outputs - destination PNG paths; extras must match the component count.
+ * @param options - `mode` (`largest` | `second` | `all`) and `chromium`.
+ * @returns `{ width, height, count }`.
  */
-export function cutout(input, output, options = {}) {
+export function cutout(input, outputs, options = {}) {
+  const mode = options.mode ?? "largest";
+  if (!MODES.has(mode)) throw new Error(`cutout: unknown mode ${JSON.stringify(mode)}`);
   const chromium = options.chromium ?? findChromium();
   const work = mkdtempSync(join(tmpdir(), "dsh-mascot-cutout-"));
   try {
     const page = join(work, "cutout.html");
     writeFileSync(page, PAGE);
-    const url = `${pathToFileURL(page).href}?src=${encodeURIComponent(pathToFileURL(resolve(input)).href)}`;
+    const url = `${pathToFileURL(page).href}?src=${encodeURIComponent(pathToFileURL(resolve(input)).href)}&mode=${mode}`;
     const dom = execFileSync(
       chromium,
-      ["--headless=new", "--disable-gpu", "--no-sandbox", "--hide-scrollbars", "--allow-file-access-from-files", "--virtual-time-budget=20000", "--dump-dom", url],
+      ["--headless=new", "--disable-gpu", "--no-sandbox", "--hide-scrollbars", "--allow-file-access-from-files", "--virtual-time-budget=60000", "--dump-dom", url],
       { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 },
     );
-    const match = /<pre id="out">([\s\S]*?)<\/pre>/u.exec(dom);
+    const match = /<pre id="done">([\s\S]*?)<\/pre>/u.exec(dom);
     if (match === null) throw new Error(`cutout: the page reported nothing for ${input}`);
     const report = JSON.parse(match[1].replaceAll("&amp;", "&").replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&quot;", '"'));
     if (report.error !== undefined) throw new Error(`cutout: ${report.error} (${input})`);
-    const png = /^data:image\/png;base64,(.+)$/u.exec(report.png);
-    if (png === null) throw new Error(`cutout: the page returned no PNG for ${input}`);
-    const bytes = Buffer.from(png[1], "base64");
-    if (bytes.length === 0) throw new Error(`cutout: decoded an empty PNG for ${input}`);
-    writeFileSync(output, bytes);
-    return { width: report.w, height: report.h };
+    if (report.frames.length !== outputs.length) {
+      throw new Error(`cutout: ${input} yielded ${String(report.frames.length)} figure(s) but ${String(outputs.length)} output path(s) were given`);
+    }
+    report.frames.forEach((frame, index) => {
+      const parts = /^data:image\/png;base64,(.+)$/u.exec(frame.png);
+      if (parts === null) throw new Error(`cutout: frame ${String(index)} came back without a PNG`);
+      const bytes = Buffer.from(parts[1], "base64");
+      if (bytes.length === 0) throw new Error(`cutout: frame ${String(index)} decoded empty`);
+      writeFileSync(outputs[index], bytes);
+    });
+    return { width: report.w, height: report.h, count: report.frames.length, frames: report.frames.map((f) => ({ width: f.w, height: f.h })) };
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
 }
 
-/** CLI entry: `node scripts/cutout.mjs <in> <out>`. */
+/** CLI entry: `node scripts/cutout.mjs <in> <out.png> [--mode all]`. */
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [input, output] = process.argv.slice(2);
-  if (input === undefined || output === undefined) {
-    console.error("usage: node scripts/cutout.mjs <in.png> <out.png>");
+  const args = process.argv.slice(2);
+  const modeFlag = args.indexOf("--mode");
+  const mode = modeFlag >= 0 ? args[modeFlag + 1] : "largest";
+  const positional = args.filter((arg, index) => !arg.startsWith("--") && index !== modeFlag + 1);
+  const [input, ...outputs] = positional;
+  if (input === undefined || outputs.length === 0) {
+    console.error("usage: node scripts/cutout.mjs <in.png> <out.png> [<out2.png> ...] [--mode largest|second|all]");
     process.exit(2);
   }
-  const size = cutout(input, output);
-  console.log(`cutout: ${output} (${String(size.width)}x${String(size.height)})`);
+  // `all` may yield more figures than paths given; the caller names them all.
+  const size = cutout(input, outputs, { mode });
+  console.log(`cutout: ${String(size.count)} frame(s), ${String(size.width)}x${String(size.height)}`);
 }

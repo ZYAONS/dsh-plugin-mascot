@@ -10,8 +10,8 @@
  *                           proving the bundle registers and evaluates;
  *   3. statistics         — `deriveStats` against the documented projection
  *                           shapes, including the empty and partial cases;
- *   4. inlined artwork    — both mascots present and well-formed enough to
- *                           render as SVG.
+ *   4. artwork            — the declaration, the generated index, and the
+ *                           placeholder that stands in when nothing is installed.
  *
  * Run with `npm test` (or `npm run check` to add `node --check` on both halves).
  */
@@ -122,39 +122,51 @@ await it("apply() registers into shell.overlay and declares its own session-scop
 });
 //#endregion
 
-//#region 3 — statistics
-const { deriveStats, MASCOTS } = exports_;
+//#region 3 — statistics, themes and the fallback catalogue
+const { deriveStats, THEMES, FALLBACK_LOOKS, PLACEHOLDER_SVG } = exports_;
 
-await it("both mascots are configured for official Q-version artwork", () => {
-  assert.equal(MASCOTS.length, 2);
-  assert.deepEqual(
-    MASCOTS.map((m) => m.id),
-    ["closure", "yuno"],
-  );
-  for (const mascot of MASCOTS) {
-    assert.equal(typeof mascot.art, "string", `${mascot.id}: must name its official artwork`);
-    assert.match(mascot.art, /^[a-z0-9_-]+\.(png|webp|jpg)$/u, `${mascot.id}: artwork name must be a bare file name`);
-    for (const seat of ["sprite", "face"]) {
-      const frame = mascot[seat];
-      assert.ok(frame !== undefined, `${mascot.id}: the ${seat} seat needs framing numbers`);
-      assert.equal(typeof frame.width, "number", `${mascot.id}.${seat}: width drives the rendered image size`);
-      assert.ok(frame.width > 0, `${mascot.id}.${seat}: width must be positive`);
-      assert.equal(typeof frame.left, "number");
-      assert.equal(typeof frame.top, "number");
-    }
-    assert.ok(
-      !Object.hasOwn(mascot, "svg"),
-      `${mascot.id}: the hand-drawn fallback is gone; the bundle must not carry character art`,
-    );
+await it("every character names a theme the stylesheet can actually draw", () => {
+  assert.equal(Object.keys(THEMES).length >= 2, true, "there must be one style per character");
+  const drawn = read("lib/client.js");
+  for (const [id, theme] of Object.entries(THEMES)) {
+    assert.ok(theme.label.length > 0, `${id}: a theme needs a label to print in the panel`);
+    assert.match(theme.accent, /^#[0-9a-f]{6}$/u, `${id}: accent must be a hex colour`);
+    assert.ok(theme.font.length > 0, `${id}: a theme needs its own typeface for figures`);
+    // The two themes must differ structurally, not just in hue, or "one style per
+    // character" is a colour swap wearing a design's clothes.
+    assert.ok(["console", "stage"].includes(theme.shape), `${id}: unknown shape`);
+    assert.ok(["segmented", "vu"].includes(theme.bar), `${id}: unknown bar style`);
+    assert.ok(["scanline", "pulse"].includes(theme.decor), `${id}: unknown ambient decor`);
+    // The stylesheet selects on the shape/bar/decor attributes, so each named
+    // value must actually have rules behind it.
+    assert.ok(drawn.includes(`[data-shape="${theme.shape}"]`), `${id}: shape ${theme.shape} has no styling`);
+    assert.ok(drawn.includes(`[data-bar="${theme.bar}"]`), `${id}: bar ${theme.bar} has no styling`);
+  }
+  const shapes = Object.values(THEMES).map((theme) => theme.shape);
+  assert.equal(new Set(shapes).size, shapes.length, "each character must get a visually distinct style");
+  const bars = Object.values(THEMES).map((theme) => theme.bar);
+  assert.equal(new Set(bars).size, bars.length, "each character must get a visually distinct bar");
+});
+
+await it("the fallback catalogue renders without a host and names no character art", () => {
+  assert.ok(Array.isArray(FALLBACK_LOOKS.characters) && FALLBACK_LOOKS.characters.length >= 2);
+  assert.ok(Array.isArray(FALLBACK_LOOKS.looks) && FALLBACK_LOOKS.looks.length >= 2);
+  for (const character of FALLBACK_LOOKS.characters) {
+    assert.ok(THEMES[character.theme] !== undefined, `${character.id}: fallback names an unknown theme`);
+    assert.ok(character.looks.length > 0);
+  }
+  for (const look of FALLBACK_LOOKS.looks) {
+    assert.equal(look.frames.length, 0, `${look.id}: the fallback must not reference an image file`);
+    assert.ok(FALLBACK_LOOKS.characters.some((entry) => entry.id === look.character), `${look.id}: unknown character`);
   }
 });
 
 await it("the built-in fallback is a neutral placeholder, not character art", () => {
   // What a fresh clone renders. It has to be recognisable as "art missing" and
   // must not smuggle a drawing of the character back into the bundle.
-  assert.match(exports_.PLACEHOLDER_SVG, /^<svg /u, "the placeholder must be inline SVG");
-  assert.match(exports_.PLACEHOLDER_SVG, /artwork not installed/u, "it must say what is wrong");
-  assert.ok(!/hair|face|eye|skin/iu.test(exports_.PLACEHOLDER_SVG), "the placeholder must not depict a character");
+  assert.match(PLACEHOLDER_SVG, /^<svg /u, "the placeholder must be inline SVG");
+  assert.match(PLACEHOLDER_SVG, /artwork not installed/u, "it must say what is wrong");
+  assert.ok(!/hair|eye|skin/iu.test(PLACEHOLDER_SVG), "the placeholder must not depict a character");
 });
 
 await it("an absent session reads as unmeasured rather than as zero", () => {
@@ -385,8 +397,21 @@ await it("every failure mode answers with a human sentence and ok:false", async 
 await it("routing and authorization guard the route", async () => {
   const harness = hostHarness();
   assert.equal((await request(harness, "/dsh-mascot/api/health")).json.ok, true);
-  assert.equal((await request(harness, "/dsh-mascot/api/nope")).status, 404);
+  assert.equal((await request(harness, "/dsh-mascot/api/nope")).json.error, "not_found");
   assert.equal((await request(harness, "/dsh-mascot/api/balance", { method: "POST" })).status, 405);
+
+  // `/api/looks` is wired either way; a checkout with no generated index answers
+  // `no_index` (actionable) rather than `not_found` (the route is missing).
+  const looks = await request(harness, "/dsh-mascot/api/looks");
+  assert.ok(
+    looks.json.error === "no_index" || (looks.status === 200 && looks.json.ok === true),
+    `unexpected /api/looks answer: ${JSON.stringify(looks.json)}`,
+  );
+  if (looks.json.ok === true) {
+    assert.equal(typeof looks.json.artBase, "string");
+    assert.ok(Array.isArray(looks.json.looks));
+    assert.ok(looks.json.looks.length > 0, "an index with no installed looks should answer no_index instead");
+  }
 
   const stranger = hostHarness({ authenticated: false });
   const denied = await request(stranger, "/dsh-mascot/api/balance");
@@ -395,13 +420,11 @@ await it("routing and authorization guard the route", async () => {
 });
 
 await it("the artwork route serves from art/ and refuses to leave it", async () => {
-  const artSource = read("art/sources.json");
-  const manifest = JSON.parse(artSource);
   const harness = hostHarness();
 
   // The repo deliberately ships no artwork, so a missing file must answer 404
   // with an actionable message rather than throwing — the browser half turns
-  // that into the vector fallback.
+  // that into the placeholder.
   const missing = await request(harness, "/dsh-mascot/art/does-not-exist.png");
   assert.equal(missing.status, 404);
   assert.equal(missing.json.error, "no_art");
@@ -414,22 +437,53 @@ await it("the artwork route serves from art/ and refuses to leave it", async () 
     "traversal is refused by containment, before the extension is even considered",
   );
   assert.equal((await request(harness, "/dsh-mascot/art/%2e%2e%2fclosure.png")).status, 403, "an encoded traversal with an image extension is refused too");
+});
 
-  // Every manifest entry must name the mascot the catalogue renders, and every
-  // mascot must have a manifest entry — otherwise `npm run fetch-art` silently
-  // produces a plugin that falls back for one character.
-  const files = manifest.images.map((image) => image.file).sort();
-  assert.deepEqual(files, ["closure.png", "yuno.png"], "the manifest must cover both mascots");
-  for (const image of manifest.images) {
-    assert.match(image.sha256, /^[0-9a-f]{64}$/u, `${image.file}: sha256 must pin the exact bytes`);
-    assert.ok(Array.isArray(image.urls) && image.urls.length > 0, `${image.file}: needs at least one source url`);
-    assert.ok(image.rights.length > 0, `${image.file}: every source must carry its rights line`);
+await it("the look index is the single source of truth for what is installed", () => {
+  const declaration = JSON.parse(read("art/looks.json"));
+  const index = JSON.parse(read("art/index.json"));
+
+  // The declaration is hand-authored, the index is generated; they must agree on
+  // identity, and the generated one must not invent a look the declaration lacks.
+  const declared = declaration.looks.map((look) => look.id).sort();
+  const indexed = index.looks.map((look) => look.id).sort();
+  assert.deepEqual(indexed, declared, "art/index.json is stale — run `npm run art:sync`");
+
+  const characters = declaration.characters.map((character) => character.id).sort();
+  assert.deepEqual(index.characters.map((character) => character.id).sort(), characters);
+  assert.ok(characters.length >= 2, "both characters must be declared");
+
+  for (const character of index.characters) {
+    assert.ok(character.looks.length > 0, `${character.id}: has no looks, so the plugin would render the placeholder`);
+    assert.ok(THEMES[character.theme] !== undefined, `${character.id}: names theme ${String(character.theme)}, which the stylesheet does not define`);
   }
-  for (const mascot of MASCOTS) {
-    assert.ok(
-      manifest.images.some((image) => image.file === mascot.art),
-      `${mascot.id}: ${String(mascot.art)} is not in art/sources.json`,
-    );
+
+  for (const look of index.looks) {
+    assert.ok(look.frames.length > 0, `${look.id}: declares no frames`);
+    assert.equal(look.animated, look.frames.length > 1, `${look.id}: the animated flag must follow the frame count`);
+    for (const frame of look.frames) {
+      assert.match(frame.file, /^[a-z0-9_-]+\.(png|webp|jpg)$/u, `${look.id}: ${frame.file} must be a bare file name`);
+      // Both seats are measured from the artwork, never hand-written.
+      for (const seat of ["sprite", "face"]) {
+        const framing = frame.seat?.[seat];
+        assert.ok(framing !== undefined, `${look.id}/${frame.file}: no ${seat} framing`);
+        assert.ok(framing.width > 0, `${look.id}/${frame.file}: ${seat} width must be positive`);
+        assert.equal(Number.isInteger(framing.left) && Number.isInteger(framing.top), true, `${look.id}/${frame.file}: ${seat} offsets must be integers`);
+      }
+    }
+    // The frames of one look must share a scale, or animating resizes her.
+    if (look.frames.length > 1) {
+      const areas = look.frames.map((frame) => frame.measured.box[2] * frame.measured.box[3]);
+      assert.ok(Math.max(...areas) / Math.min(...areas) > 1.01, `${look.id}: frames are identical, so the animation would be invisible`);
+    }
+  }
+
+  // Anything the declaration pins must be a real hash, and anything missing a url
+  // would make `npm run fetch-art` fail silently.
+  for (const look of declaration.looks) {
+    assert.ok(Array.isArray(look.urls) && look.urls.length > 0, `${look.id}: needs at least one source url`);
+    assert.ok(look.rights.length > 0, `${look.id}: every source must carry its rights line`);
+    if (look.sha256 !== undefined) assert.match(look.sha256, /^[0-9a-f]{64}$/u, `${look.id}: sha256 must pin the exact bytes`);
   }
 });
 

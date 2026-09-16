@@ -1,0 +1,311 @@
+{
+  "seats": {
+    "sprite": {
+      "width": 104,
+      "height": 172,
+      "fill": 0.99,
+      "headFraction": 1
+    },
+    "face": {
+      "width": 38,
+      "height": 50,
+      "fill": 0.99,
+      "headFraction": 0.46
+    }
+  },
+  "characters": [
+    {
+      "id": "closure",
+      "name": "可露希尔",
+      "latin": "Closure",
+      "role": "罗德岛 · 采购 / 工程",
+      "tagline": "罗德岛工程终端",
+      "theme": "rhodes",
+      "looks": [
+        "closure-chibi",
+        "closure-portrait"
+      ]
+    },
+    {
+      "id": "yuno",
+      "name": "千石由乃",
+      "latin": "Sengoku Yuno",
+      "role": "梦限大MewType · DJ / Manipulator",
+      "tagline": "MEWTYPE LIVE",
+      "theme": "mewtype",
+      "looks": [
+        "yuno-anime",
+        "yuno-casual",
+        "yuno-chibi"
+      ]
+    }
+  ],
+  "looks": [
+    {
+      "id": "closure-chibi",
+      "character": "closure",
+      "name": "基建小人",
+      "animated": false,
+      "frames": [
+        {
+          "file": "closure-chibi.png",
+          "seat": {
+            "sprite": {
+              "width": 123,
+              "left": 1,
+              "top": 24
+            },
+            "face": {
+              "width": 45,
+              "left": 0,
+              "top": 15
+            }
+          },
+          "measured": {
+            "width": 512,
+            "height": 640,
+            "box": [
+              42,
+              69,
+              427,
+              518
+            ]
+          }
+        }
+      ],
+      "seat": {
+        "sprite": {
+          "width": 123,
+          "left": 1,
+          "top": 24
+        },
+        "face": {
+          "width": 45,
+          "left": 0,
+          "top": 15
+        }
+      },
+      "accent": "#8197c9",
+      "rights": "《明日方舟》© 上海鹰角网络 — 官方 Q 版干员小人 (char_4228_closur)",
+      "theme": "rhodes"
+    },
+    {
+      "id": "closure-portrait",
+      "character": "closure",
+      "name": "官方立绘",
+      "animated": false,
+      "frames": [
+        {
+          "file": "closure-portrait.png",
+          "seat": {
+            "sprite": {
+              "width": 175,
+              "left": 1,
+              "top": 4
+            },
+            "face": {
+              "width": 64,
+              "left": 0,
+              "top": 11
+            }
+          },
+          "measured": {
+            "width": 1024,
+            "height": 1024,
+            "box": [
+              224,
+              38,
+              602,
+              955
+            ]
+          }
+        }
+      ],
+      "seat": {
+        "sprite": {
+          "width": 175,
+          "left": 1,
+          "top": 4
+        },
+        "face": {
+          "width": 64,
+          "left": 0,
+          "top": 11
+        }
+      },
+      "accent": "#bb7d6f",
+      "rights": "《明日方舟》© 上海鹰角网络 — 官方干员立绘 (char_007_closre)",
+      "theme": "rhodes"
+    },
+    {
+      "id": "yuno-anime",
+      "character": "yuno",
+      "name": "动画",
+      "animated": false,
+      "frames": [
+        {
+          "file": "yuno-anime.png",
+          "seat": {
+            "sprite": {
+              "width": 135,
+              "left": 17,
+              "top": 1
+            },
+            "face": {
+              "width": 73,
+              "left": 0,
+              "top": 4
+            }
+          },
+          "measured": {
+            "width": 1550,
+            "height": 2085,
+            "box": [
+              418,
+              92,
+              800,
+              1956
+            ]
+          }
+        }
+      ],
+      "seat": {
+        "sprite": {
+          "width": 135,
+          "left": 17,
+          "top": 1
+        },
+        "face": {
+          "width": 73,
+          "left": 0,
+          "top": 4
+        }
+      },
+      "accent": "#f24c7b",
+      "rights": "《BanG Dream!》/ 梦限大 MewType © Bushiroad — 官方动画立绘",
+      "theme": "mewtype"
+    },
+    {
+      "id": "yuno-casual",
+      "character": "yuno",
+      "name": "常服",
+      "animated": false,
+      "frames": [
+        {
+          "file": "yuno-casual.png",
+          "seat": {
+            "sprite": {
+              "width": 130,
+              "left": 24,
+              "top": 1
+            },
+            "face": {
+              "width": 82,
+              "left": 1,
+              "top": 0
+            }
+          },
+          "measured": {
+            "width": 1499,
+            "height": 2088,
+            "box": [
+              372,
+              86,
+              651,
+              1959
+            ]
+          }
+        }
+      ],
+      "seat": {
+        "sprite": {
+          "width": 130,
+          "left": 24,
+          "top": 1
+        },
+        "face": {
+          "width": 82,
+          "left": 1,
+          "top": 0
+        }
+      },
+      "accent": "#c35178",
+      "rights": "《BanG Dream!》/ 梦限大 MewType © Bushiroad — 官方动画常服立绘",
+      "theme": "mewtype"
+    },
+    {
+      "id": "yuno-chibi",
+      "character": "yuno",
+      "name": "Q 版",
+      "animated": true,
+      "frames": [
+        {
+          "file": "yuno-chibi-1.png",
+          "seat": {
+            "sprite": {
+              "width": 101,
+              "left": 1,
+              "top": 2
+            },
+            "face": {
+              "width": 38,
+              "left": 0,
+              "top": 11
+            }
+          },
+          "measured": {
+            "width": 236,
+            "height": 391,
+            "box": [
+              1,
+              0,
+              235,
+              391
+            ]
+          }
+        },
+        {
+          "file": "yuno-chibi-2.png",
+          "seat": {
+            "sprite": {
+              "width": 92,
+              "left": 6,
+              "top": 1
+            },
+            "face": {
+              "width": 34,
+              "left": 2,
+              "top": 10
+            }
+          },
+          "measured": {
+            "width": 215,
+            "height": 396,
+            "box": [
+              0,
+              0,
+              215,
+              396
+            ]
+          }
+        }
+      ],
+      "seat": {
+        "sprite": {
+          "width": 101,
+          "left": 1,
+          "top": 2
+        },
+        "face": {
+          "width": 38,
+          "left": 0,
+          "top": 11
+        }
+      },
+      "accent": "#e36781",
+      "rights": "《BanG Dream!》/ 梦限大 MewType © Bushiroad — 官方 Q 版形象（初代双姿势）",
+      "theme": "mewtype"
+    }
+  ],
+  "missing": []
+}

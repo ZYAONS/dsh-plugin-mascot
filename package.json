@@ -32,13 +32,16 @@
   },
   "files": [
     "lib",
-    "art/sources.json",
+    "art/looks.json",
+    "art/index.json",
     "README.md",
     "README.zh.md",
     "LICENSE"
   ],
   "scripts": {
     "fetch-art": "node scripts/fetch-art.mjs",
+    "art:sync": "node scripts/art-sync.mjs",
+    "art:watch": "node scripts/art-sync.mjs --watch",
     "check": "node --check lib/index.js && node --check lib/client.js && node scripts/check.mjs",
     "test": "node scripts/check.mjs",
     "preview": "node scripts/preview.mjs",

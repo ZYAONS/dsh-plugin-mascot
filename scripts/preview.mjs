@@ -22,7 +22,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { findChromium } from "./chrome.mjs";
@@ -35,6 +35,11 @@ mkdirSync(docs, { recursive: true });
 const official = process.argv.includes("--official");
 const artBase = official ? pathToFileURL(join(root, "art")).href : "";
 
+/** The host half's look index, replayed to the client so the real catalogue renders. */
+const lookIndex = existsSync(join(root, "art", "index.json"))
+  ? JSON.parse(readFileSync(join(root, "art", "index.json"), "utf8"))
+  : { seats: {}, characters: [], looks: [] };
+
 const chrome = findChromium();
 
 const url = (relative) => pathToFileURL(join(root, relative)).href;
@@ -46,8 +51,10 @@ const FIXTURES = {
   sessionId: "9f2c41ab-7d33-4e8a-9c10-2b6f5ae0d711",
   frames: [
     {
-      caption: "可露希尔 · 面板展开",
+      caption: "可露希尔 · 罗德岛工程终端",
       character: "closure",
+      characterName: "可露希尔",
+      look: "基建小人",
       open: true,
       balance: {
         ok: true,
@@ -59,12 +66,29 @@ const FIXTURES = {
       },
     },
     {
-      caption: "千石由乃 · 面板展开",
+      caption: "千石由乃 · 常服（粉发眼镜）",
       character: "yuno",
+      characterName: "千石由乃",
+      look: "常服",
       open: true,
       balance: { ok: false, error: "missing_credential", message: "未配置 DEEPSEEK_API_KEY，请在「设置 → 模型」中填写" },
     },
-    { caption: "收起状态", character: "closure", open: false, balance: undefined },
+    {
+      caption: "千石由乃 · Q 版（两帧动态）",
+      character: "yuno",
+      characterName: "千石由乃",
+      look: "Q 版",
+      open: true,
+      balance: {
+        ok: true,
+        isAvailable: true,
+        currency: "CNY",
+        totalBalance: "128.42",
+        toppedUpBalance: "120.00",
+        grantedBalance: "8.42",
+      },
+    },
+    { caption: "收起状态", character: "closure", characterName: "可露希尔", look: undefined, open: false, balance: undefined },
   ],
 };
 
@@ -74,9 +98,9 @@ const STYLE = [
   "#stage { display: flex; gap: 18px; align-items: flex-start; }",
   ".col { display: grid; gap: 10px; }",
   ".caption { font-size: 11px; line-height: 1.6; letter-spacing: .3px; color: rgba(255,255,255,.44);",
-  "  width: 520px; word-break: break-word; }",
+  "  width: 400px; word-break: break-word; }",
   "/* Stand-in for the DSH shell, so the overlay has somewhere to float. */",
-  ".frame { position: relative; width: 520px; height: 800px; border-radius: 14px; overflow: hidden;",
+  ".frame { position: relative; width: 400px; height: 860px; border-radius: 14px; overflow: hidden;",
   "  background: linear-gradient(180deg, #14171f, #0e1015); border: 1px solid rgba(255,255,255,.07);",
   "  box-shadow: 0 18px 40px rgba(0,0,0,.45); }",
   ".rail { position: absolute; inset: 0 auto 0 0; width: 54px; background: rgba(255,255,255,.03);",
@@ -98,6 +122,7 @@ const STYLE = [
 
 const SCRIPT = [
   "const FIXTURES = " + JSON.stringify(FIXTURES) + ";",
+  "const LOOK_INDEX = " + JSON.stringify({ ok: true, ...lookIndex }) + ";",
   "",
   "// 1. Capture the bundle the way dsh-client-modules does.",
   "const registrations = [];",
@@ -155,12 +180,19 @@ function Frame({ spec }) {
     h("div", { className: "caption" }, spec.caption));
 }
 
-// One global fetch stands in for the host route; the balance a frame sees is
-// selected immediately before that frame's panel opens.
-window.fetch = () => Promise.resolve({
-  ok: true,
-  json: () => Promise.resolve(window.__BALANCE__ ?? { ok: false, error: "none" }),
-});
+// One global fetch stands in for the host routes: the look index is answered once
+// and cached in the page, so which look a frame shows is driven through the
+// panel's own pickers rather than by swapping the fixture per frame.
+window.fetch = (input) => {
+  const url = String(input);
+  if (url.includes("/api/looks")) {
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(LOOK_INDEX) });
+  }
+  return Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve(window.__BALANCE__ ?? { ok: false, error: "none" }),
+  });
+};
 
 ReactDOM.createRoot(document.getElementById("stage")).render(
   h(React.Fragment, null, FIXTURES.frames.map((spec) => h(Frame, { key: spec.caption, spec }))),
@@ -169,7 +201,8 @@ ReactDOM.createRoot(document.getElementById("stage")).render(
 // 3. Open each panel with a real DOM click, pick the character through the
 //    panel's own switcher, then report what actually happened.
 window.PREVIEW_READY = (async () => {
-  await new Promise((resolve) => setTimeout(resolve, 150));
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 120));
+  await new Promise((resolve) => setTimeout(resolve, 200));
   const cols = [...document.querySelectorAll(".col")];
   for (let index = 0; index < cols.length; index += 1) {
     const spec = FIXTURES.frames[index];
@@ -177,11 +210,19 @@ window.PREVIEW_READY = (async () => {
     if (spec.open) {
       window.__BALANCE__ = spec.balance;
       frame.querySelector(".dsh-mascot-btn").click();
-      await new Promise((resolve) => setTimeout(resolve, 90));
-      if (spec.character !== "closure") {
-        const buttons = frame.querySelectorAll(".dsh-mascot-switch button");
-        buttons[spec.character === "yuno" ? 1 : 0].click();
-        await new Promise((resolve) => setTimeout(resolve, 90));
+      await settle();
+      // Rows appear only once the panel is open: the first is characters, the
+      // second is that character's looks.
+      const rows = frame.querySelectorAll(".dsh-mascot-row");
+      if (rows.length > 0 && spec.character !== "closure") {
+        const names = [...rows[0].querySelectorAll("button")];
+        const target = names.find((button) => button.textContent.includes(spec.characterName));
+        if (target !== undefined) { target.click(); await settle(); }
+      }
+      if (rows.length > 1 && spec.look !== undefined) {
+        const looks = [...frame.querySelectorAll(".dsh-mascot-row")][1].querySelectorAll("button");
+        const target = [...looks].find((button) => button.textContent.includes(spec.look));
+        if (target !== undefined) { target.click(); await settle(); }
       }
     }
     const chip = frame.querySelector(".dsh-mascot-chip");
@@ -191,9 +232,13 @@ window.PREVIEW_READY = (async () => {
     const spriteBox = sprite.getBoundingClientRect();
     const notes = ["chip: " + (chip === null ? "MISSING" : chip.textContent)];
     if (panel !== null && panel.getBoundingClientRect().top < box.top) notes.push("PANEL CLIPPED");
-    if (panel !== null && panel.scrollHeight > panel.clientHeight + 1) notes.push("PANEL SCROLLS");
+    if (panel !== null && panel.scrollHeight > panel.clientHeight + 1) {
+      notes.push("panel scrollable " + String(panel.scrollHeight) + ">" + String(panel.clientHeight));
+    }
     if (spriteBox.bottom > box.bottom + 0.5 || spriteBox.top < box.top) notes.push("SPRITE CLIPPED");
     if (spriteBox.right > box.right + 0.5 || spriteBox.left < box.left) notes.push("SPRITE OVERFLOWS");
+    const shown = frame.querySelectorAll(".dsh-mascot-sprite .dsh-mascot-frame");
+    if (shown.length > 1) notes.push("frames: " + String(shown.length));
     cols[index].querySelector(".caption").textContent = spec.caption + "   ·   " + notes.join("   ·   ");
   }
   await new Promise((resolve) => setTimeout(resolve, 250));
@@ -228,10 +273,10 @@ execFileSync(
     "--disable-gpu",
     "--no-sandbox",
     "--hide-scrollbars",
-    "--force-device-scale-factor=1.5",
+    "--force-device-scale-factor=1.35",
     "--virtual-time-budget=5000",
     `--screenshot=${previewPng}`,
-    "--window-size=1668,960",
+    "--window-size=1740,1210",
     pathToFileURL(previewHtml).href,
   ],
   { stdio: "pipe" },

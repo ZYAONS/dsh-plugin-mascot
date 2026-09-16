@@ -6,23 +6,21 @@ A clickable mascot for the **DeepSeek Harness** (DSH) Web GUI. It sits quietly i
 the bottom-right corner; click it and a panel opens with what the session has
 actually cost you and how well the prompt cache is doing.
 
-The mascots use **official Q-version (chibi) art** — Closure's Arknights Q-version
-operator sprite and Sengoku Yuno's official Q-version design, drawn by the
-publishers' artists rather than by this project. Because that artwork is
-copyrighted, the repository ships **no images**, only a fetch script: run
-`npm run fetch-art` once (see [Artwork](#artwork)).
-
 - **Token cache-hit rate** — cache reads over every billed input bucket
 - **Token breakdown** — uncached input / cache read / cache write / output / session total
 - **Context occupancy** — current usage against the context window, with a bar
 - **Account balance** — fetched host-side from DeepSeek; the API key never reaches the browser
-- **Two characters, switchable** — **Closure** from *Arknights* and **Sengoku Yuno** from *BanG Dream!*'s Mugendai MewType
+- **Two characters, five official looks, switchable** — Closure (*Arknights*) and Sengoku Yuno (*BanG Dream!*)
+- **One interface style per character** — a Rhodes Island engineering console and a
+  MEWTYPE live set are two designs, not a hue swap
+- **The sprite moves** — idle float, breathing, hover response, click recoil, and a
+  two-frame Q-version look that genuinely **turns around**
 
 ![preview](docs/preview.png)
 
-> That preview is `lib/client.js` running in a real Chromium — opening the panels
-> and switching characters are genuine DOM clicks. It shows the **built-in
-> placeholder**, i.e. exactly what a fresh clone looks like before
+> That preview is `lib/client.js` running in a real Chromium — opening panels,
+> switching characters and switching looks are genuine DOM clicks. It shows the
+> **built-in placeholder**, i.e. exactly what a fresh clone looks like before
 > `npm run fetch-art`. The version with the official artwork is
 > `docs/preview-official.png`, generated locally and kept out of the repository.
 
@@ -31,7 +29,9 @@ copyrighted, the repository ships **no images**, only a fetch script: run
 ## Contents
 
 - [Install](#install)
-- [Artwork](#artwork)
+- [Looks](#looks)
+- [Style](#style)
+- [Motion](#motion)
 - [Usage](#usage)
 - [Configuration](#configuration)
 - [How it works](#how-it-works)
@@ -114,44 +114,103 @@ another restart.
 
 ---
 
-## Artwork
+## Looks
 
-The mascots use **official Q-version (chibi) art** drawn by the publishers'
-artists. That artwork is owned by Hypergryph and Bushiroad, and committing it
-here would redistribute someone else's copyrighted asset — so this repository
-ships **the download manifest instead of the images**:
+The mascots use **official art drawn by the publishers' artists**, not by this
+project. That artwork is owned by Hypergryph and Bushiroad, and committing it here
+would redistribute someone else's copyrighted asset — so the repository ships
+**the declaration instead of the images**:
 
 ```bash
-npm run fetch-art              # download into art/ per art/sources.json
+npm run fetch-art              # download, cut out where needed, then re-index
 npm run fetch-art -- --force   # re-download regardless of hash
 ```
 
-| Character | Asset | Processing |
+| Character | Look | Asset | Processing |
+|---|---|---|---|
+| Closure | Chibi | Official Q-version operator sprite (512×640, transparent, drone included) | as-is |
+| Closure | Portrait | Official operator art (1024×1024, transparent) | as-is |
+| Yuno | Anime | Official anime art (1550×2085, transparent) | as-is |
+| Yuno | Casual | Official anime everyday-clothes art — the pink-haired, glasses design (1499×2088, transparent) | as-is |
+| Yuno | Q-version | Official first-generation Q-version sheet, two poses | **cut out → split into 2 frames** |
+
+`art/looks.json` is the hand-authored declaration; `art/index.json` is the
+generated index. Every entry carries source URLs and a **sha256**, verified on
+download, with a loud report when an upstream file changes.
+
+### Adding a look
+
+No code changes:
+
+1. add an entry to `looks` in `art/looks.json` (`id` / `character` / `name` / `urls` / `rights`);
+2. `npm run fetch-art`.
+
+`scripts/art-sync.mjs` measures each image's **alpha bounding box** in a real
+browser, derives the framing for both seats (the 104×172 sprite and the 38×50
+portrait), and samples an accent colour from the figure. So **the framing numbers
+and the palette are measured, not hand-tuned**. The result lands in
+`art/index.json`, which the host half reads, filters to what is actually on disk,
+and serves to the browser.
+
+### It syncs itself
+
+- `npm run fetch-art` calls `art-sync` when it finishes, so the index is never stale;
+- `npm run art:sync` re-measures on demand;
+- `npm run art:watch` watches `art/` and **re-indexes the moment you drop an image
+  in** — refresh the page and the new look is there, with no restart and no edit.
+
+### It works without the artwork
+
+A **neutral placeholder** — a dashed box with a generic "image missing" glyph —
+takes over whenever a file 404s, and the panel says to run `fetch-art`. The
+placeholder depicts no character.
+
+---
+
+## Style
+
+**One interface style per character**, and not a colour swap: the two themes differ
+in shape language, how a ratio is drawn, ambient motion, portraiture and figure type.
+
+| | Closure · Rhodes Island console | Yuno · MEWTYPE LIVE |
 |---|---|---|
-| Closure | *Arknights* official Q-version operator sprite (512×640, transparent, with her drone) | used as-is |
-| Sengoku Yuno | *BanG Dream!* Mugendai MewType official Q-version design (first generation) | cut out automatically |
+| Shape | Square (6px), instrument-like | Rounded (18px), gummy |
+| Progress | **Segmented ticks**, like a gauge | **VU meter**, glowing |
+| Ambient | A scanline sweeping through | A pulse ring plus a bouncing equaliser |
+| Portrait | Rounded rectangle | Circle with a glow ring |
+| Figures | Monospace, engineering readout | Rounded, stage energy |
+| Header tag | `罗德岛 · 工程终端` | `MEWTYPE · LIVE` |
 
-Yuno's source is a promotional sheet: two poses on a pink star with confetti.
-`scripts/cutout.mjs` cleans it in a real browser — sample the background colour
-from the edges, flood-fill inward, keep only the largest connected component
-(the figure itself), then crop to it. `fetch-art` runs it automatically; the
-steps are documented in the script.
+Themes live in `THEMES` in `lib/client.js` and are selected by the `theme` field a
+character carries in `art/looks.json` — so a new character themes itself by naming one.
 
-Every entry in `art/sources.json` carries source URLs and a **sha256**. The
-script verifies each download and reports loudly if an upstream file changed
-(it still writes the file, so a moved asset never leaves you with nothing). A
-cut-out entry records a `derivedSha256` for reference only, since PNG encoding
-can differ between Chromium builds.
+---
 
-**It works without the artwork.** The plugin ships a **neutral placeholder** — a
-dashed box with a generic "image missing" glyph — that takes over whenever the
-official file 404s. The placeholder depicts no character.
+## Motion
 
-**Swapping art**: replace the files at `art/closure.png` and `art/yuno.png`. To
-change characters, edit `art`, `sprite` and `face` on the `MASCOTS` entries in
-`lib/client.js`; both framing pairs are computed from each file's alpha bounding
-box (`width` is the rendered image width; `left` / `top` are the offsets that
-bring the figure, or just the head, into its seat).
+The sprite moves in three layers.
+
+**1. Procedural (any still image)**
+- idle: float plus a breathing scale, with a ground shadow that tightens in step
+- hover: lift, scale, and a glow in the theme accent
+- click: squash-and-stretch recoil; the panel opening adds a hop
+- ambient: the themed scanline, or a pulse ring and equaliser
+
+**2. Real multi-frame animation**
+Yuno's Q-version source is **two poses**. `scripts/cutout.mjs` runs with
+`mode: "all"`, keeps both figures, crops each to its own bounding box, and gives
+them **one shared scale** — otherwise the narrower pose would be blown up and she
+would appear to grow. The browser cross-fades between them every 5.2 s, which reads
+as her turning around. The panel marks the look with a "动态" badge.
+
+**3. Animated files**
+Any frame that is a GIF or an animated WebP simply plays — the browser handles it,
+no extra pipeline.
+
+**What is not possible here**: true Live2D or Spine skeletal animation. The games'
+animated chibi are Spine projects that need their runtime to evaluate; what is
+publicly available is other people's static exports (which is what this uses). So
+this is "still frames + procedural motion + frame cross-fade", not skeletal animation.
 
 ---
 
@@ -160,9 +219,13 @@ bring the figure, or just the head, into its seat).
 | Interaction | Result |
 |---|---|
 | Click the sprite | Toggle the panel |
-| Click either mini portrait in the panel | Switch mascot (choice is stored in localStorage) |
+| The "角色" row in the panel | Switch character |
+| The "形象" row in the panel | Switch that character's look (a "动态" badge marks a multi-frame one) |
 | Click the backdrop or press `Esc` | Close the panel |
 | Click "刷新" | Re-read the balance immediately (it also refreshes every 2 minutes while open) |
+
+The choice is stored in localStorage. With the system's "reduce motion" preference
+set, every animation is switched off.
 
 While open, the pill under the sprite shows the balance. If the lookup fails it
 reads "点我 Token / 余额" instead of pretending to know.
@@ -194,17 +257,19 @@ One package, two halves:
 ```
 dsh-plugin-mascot/
 ├── lib/
-│   ├── index.js        host half: the /dsh-mascot routes (balance + artwork)
-│   └── client.js       browser half: sprite + panel (window.__ModuleLoader__ format)
+│   ├── index.js        host half: the /dsh-mascot routes (balance, index, artwork)
+│   └── client.js       browser half: sprite, panel, two themes, motion
 ├── art/
-│   ├── sources.json    the official-artwork manifest (committed)
-│   ├── closure.png     ← npm run fetch-art, gitignored
-│   └── yuno.png        ← ditto, cut out on the way in
+│   ├── looks.json      hand-authored declaration: characters, themes, urls, hashes
+│   ├── index.json      generated by art-sync: framing, accents, frame lists
+│   ├── closure-*.png   ← npm run fetch-art, gitignored
+│   └── yuno-*.png      ← ditto; the Q-version sheet is cut out then split
 └── scripts/
-    ├── fetch-art.mjs   downloads the official artwork into art/
-    ├── cutout.mjs      flood-fills a background out in a real browser
-    ├── chrome.mjs      Chromium discovery, shared by preview and cutout
-    ├── check.mjs       self-test: manifest, bundle load, statistics, routes
+    ├── fetch-art.mjs   download → cut out → hand off to art-sync
+    ├── cutout.mjs      key a background out; split a multi-pose sheet into aligned frames
+    ├── art-sync.mjs    measure alpha boxes and accents, write index.json; --watch
+    ├── chrome.mjs      Chromium discovery, shared by preview, cutout and art-sync
+    ├── check.mjs       self-test: declaration/index agreement, bundle, routes
     ├── preview.mjs     renders docs/preview*.png from the real code in a browser
     └── verify-profile.mjs  pre-flight for a live DSH profile
 ```
@@ -231,11 +296,13 @@ rather than `session` so the panel still opens before any session is selected.
 The balance is the one figure the browser cannot reach: answering it needs the
 API key, and the key must never leave the host process. The artwork is the other
 one — the official files are not in the repository, so something has to read them
-off disk. So the host half owns one same-origin route prefix:
+off disk and decide which are installed. So the host half owns one same-origin
+route prefix:
 
 ```
 GET /dsh-mascot/api/balance   account balance, cached
 GET /dsh-mascot/api/health    route liveness, for debugging
+GET /dsh-mascot/api/looks     which looks are installed, with framing and accents
 GET /dsh-mascot/art/<file>    artwork out of the plugin's own art/ directory
 ```
 
@@ -248,7 +315,10 @@ GET /dsh-mascot/art/<file>    artwork out of the plugin's own art/ directory
   composition they fall back to accepting only a loopback `Host` header;
 - the artwork route checks path containment first (`..`, encoded separators →
   403), then the extension, and only then touches the disk. A missing file is a
-  404, which the browser half turns into the vector fallback.
+  404, which the browser half turns into the placeholder;
+- `/api/looks` re-reads `art/index.json` per request and **drops any look whose
+  files are not on disk** — so a fresh clone (index present, images absent)
+  answers with nothing and gets the placeholder rather than a broken image.
 
 ---
 
@@ -263,7 +333,8 @@ plugin does not count tokens itself.
 | Cache-hit rate | derived from the row above | `cacheReadTokens ÷ (uncachedInputTokens + cacheReadTokens + cacheWriteTokens)` |
 | Context occupancy | `useProjection("contextPressure")` | `{ contextWindow?, pressureTokens?, projectedTokens? }`, preferring `projectedTokens` |
 | Account balance | this plugin's `/dsh-mascot/api/balance` | `GET {baseUrl}/user/balance` |
-| Artwork | this plugin's `/dsh-mascot/art/<file>` | `art/` on disk, with the built-in vector art as fallback |
+| Available looks | this plugin's `/dsh-mascot/api/looks` | re-reads `art/index.json`, filtered to files on disk |
+| Artwork | this plugin's `/dsh-mascot/art/<file>` | `art/` on disk, with the built-in placeholder as fallback |
 
 Anything unmeasurable renders as `—` rather than `0`: with no session there is
 no hit rate to report, and the panel does not invent one.
@@ -274,41 +345,44 @@ no hit rate to report, and the panel does not invent one.
 
 ```bash
 npm install                # react / react-dom, devDependencies for the preview only
-npm run fetch-art          # download the official Q-version art into art/
-npm test                   # self-test (22 checks)
+npm run fetch-art          # download → cut out → re-index, in one go
+npm run art:sync           # just re-measure and rewrite art/index.json
+npm run art:watch          # watch art/ and re-index whenever a file lands
+npm test                   # self-test (24 checks)
 npm run check              # node --check on both halves plus the self-test
 npm run preview            # docs/preview.png — placeholder, committed
 npm run preview:official   # docs/preview-official.png — official art, gitignored
 npm run verify             # pre-flight the current DSH profile
 ```
 
-Running the cut-out pass on its own:
+Running the cut-out pass on its own (a multi-pose sheet becomes several frames):
 
 ```bash
-node scripts/cutout.mjs <sheet.png> <out.png>
+node scripts/cutout.mjs <sheet.png> <frame1.png> <frame2.png> --mode all
 ```
 
-To re-frame the artwork, tune `sprite` and `face` on the `MASCOTS` entries in
-`lib/client.js`, then `npm run preview:official` to look at it and restart DSH to
-see it in place. The numbers come from measuring each file's alpha bounding box,
-scaling it to the seat, and centring it.
+**Framing needs no manual numbers.** `npm run art:sync` re-measures and writes
+them into the index. To override by hand, edit the `seat` block of a frame in
+`art/index.json` and refresh the page.
 
-To change the placeholder: edit `PLACEHOLDER_SVG` in `lib/client.js`.
+To add a theme: add a key to `THEMES` in `lib/client.js`, then have a character
+name it in `art/looks.json`.
 
 ---
 
 ## Artwork and licensing
 
 - **Code**: [MIT](LICENSE)
-- **Official Q-version artwork (`art/`, not committed)**: Closure's *Arknights*
-  official Q-version operator sprite and Sengoku Yuno's official *BanG Dream!*
-  Q-version design. **The rights belong to their respective owners; this is
-  publisher-commissioned art, not fan art.** This repository does not distribute
-  those files; it ships the `art/sources.json` manifest and the
-  `npm run fetch-art` script so each user downloads them onto their own machine.
-  Fine for personal use — **get permission before redistributing or using
-  commercially.** Yuno's file passes through `scripts/cutout.mjs`, which removes
-  a background and a second pose; that is pixel processing and changes no content.
+- **Official artwork (`art/*.png`, not committed)**: Closure's *Arknights* official
+  Q-version operator sprite and operator art, and Sengoku Yuno's official
+  *BanG Dream!* anime art, everyday-clothes art and Q-version design. **The rights
+  belong to their respective owners; this is publisher-commissioned art.** This
+  repository does not distribute those files; it ships the `art/looks.json`
+  declaration and the `npm run fetch-art` script so each user downloads them onto
+  their own machine. Fine for personal use — **get permission before
+  redistributing or using commercially.** `scripts/cutout.mjs` keys a background
+  out of Yuno's Q-version sheet and splits its two poses; that is pixel
+  processing and changes no content.
 - **Built-in placeholder**: the generic "image missing" glyph in `lib/client.js`
   (a dashed box plus a picture symbol). It depicts no character and is MIT
   alongside the code.

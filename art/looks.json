@@ -1,0 +1,102 @@
+{
+  "$comment": [
+    "What the mascot can wear, and where each look comes from.",
+    "",
+    "This file is the hand-authored half; art/index.json is generated from it by",
+    "scripts/art-sync.mjs, which measures every image's alpha bounding box and",
+    "derives the framing numbers and accent colours the client needs. Adding a look",
+    "is therefore: add an entry here, run `npm run fetch-art` (or drop the file in",
+    "art/ and run `npm run art:sync`). Nothing in lib/ needs editing.",
+    "",
+    "The artwork itself is NOT in this repository: it is official game art owned by",
+    "Hypergryph and Bushiroad. See README.zh.md.",
+    "",
+    "Look fields:",
+    "  id/character/name  identity; `character` must match a characters[] entry",
+    "  file               single static image (mutually exclusive with frames)",
+    "  frames             list of images the client cross-fades through, for a look",
+    "                     that animates without an animated file format",
+    "  cutout             run scripts/cutout.mjs on the download. `true` keeps the",
+    "                     largest connected component; `\"all\"` keeps every sizeable",
+    "                     one (a sheet with two poses); `\"second\"` keeps the second",
+    "  urls               tried in order; first non-empty body wins",
+    "  sha256             pins the bytes of the SOURCE download"
+  ],
+  "characters": [
+    {
+      "id": "closure",
+      "name": "可露希尔",
+      "latin": "Closure",
+      "role": "罗德岛 · 采购 / 工程",
+      "tagline": "罗德岛工程终端",
+      "theme": "rhodes"
+    },
+    {
+      "id": "yuno",
+      "name": "千石由乃",
+      "latin": "Sengoku Yuno",
+      "role": "梦限大MewType · DJ / Manipulator",
+      "tagline": "MEWTYPE LIVE",
+      "theme": "mewtype"
+    }
+  ],
+  "looks": [
+    {
+      "id": "closure-chibi",
+      "character": "closure",
+      "name": "基建小人",
+      "file": "closure-chibi.png",
+      "rights": "《明日方舟》© 上海鹰角网络 — 官方 Q 版干员小人 (char_4228_closur)",
+      "sha256": "5f0936c02f0ceb85673417d0e9ec0bd6a0bbed3a2a80a323d53399a20bca1c08",
+      "urls": [
+        "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_4228_closur.png",
+        "https://cdn.jsdelivr.net/gh/Light-milk-tea/ArknightsChibi@main/chibi/char_4228_closur.png"
+      ]
+    },
+    {
+      "id": "closure-portrait",
+      "character": "closure",
+      "name": "官方立绘",
+      "file": "closure-portrait.png",
+      "rights": "《明日方舟》© 上海鹰角网络 — 官方干员立绘 (char_007_closre)",
+      "sha256": "9e412a0ea1845a329d2e9f8e08ef8e0d0e5800aba4d4bed4ce1d297aa191ac25",
+      "urls": [
+        "https://mzh.moegirl.org.cn/Special:FilePath/Ak%20char%20007%20closre%201.png"
+      ]
+    },
+    {
+      "id": "yuno-anime",
+      "character": "yuno",
+      "name": "动画",
+      "file": "yuno-anime.png",
+      "rights": "《BanG Dream!》/ 梦限大 MewType © Bushiroad — 官方动画立绘",
+      "sha256": "6b47146986fcdd14eea5bfae677fa079a6023c87acf95fa6e99bbe12c49b7af5",
+      "urls": [
+        "https://mzh.moegirl.org.cn/Special:FilePath/%E5%8D%83%E7%9F%B3%E7%94%B1%E4%B9%83%20%E5%8A%A8%E7%94%BB.png"
+      ]
+    },
+    {
+      "id": "yuno-casual",
+      "character": "yuno",
+      "name": "常服",
+      "file": "yuno-casual.png",
+      "rights": "《BanG Dream!》/ 梦限大 MewType © Bushiroad — 官方动画常服立绘",
+      "sha256": "c20ddcffca3187739cd5155108123099db6897bff812322060b3e7b2dc647ec1",
+      "urls": [
+        "https://mzh.moegirl.org.cn/Special:FilePath/%E5%8D%83%E7%9F%B3%E7%94%B1%E4%B9%83%20%E5%8A%A8%E7%94%BB%E5%B8%B8%E6%9C%8D.png"
+      ]
+    },
+    {
+      "id": "yuno-chibi",
+      "character": "yuno",
+      "name": "Q 版",
+      "frames": ["yuno-chibi-1.png", "yuno-chibi-2.png"],
+      "rights": "《BanG Dream!》/ 梦限大 MewType © Bushiroad — 官方 Q 版形象（初代双姿势）",
+      "cutout": "all",
+      "sha256": "aa0336ac83385f99ba68d0dc2240482a8084c6b998b65121fb288319ea4d8c5b",
+      "urls": [
+        "https://mzh.moegirl.org.cn/Special:FilePath/%E5%8D%83%E7%9F%B3%E7%94%B1%E4%B9%83%20%E5%85%83%E7%A5%96.png"
+      ]
+    }
+  ]
+}
