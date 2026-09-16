@@ -653,6 +653,15 @@ ok(
   /source|CORS|as-is|rigged/iu.test(published.status),
   `status="${published.status.slice(0, 140)}"`,
 );
+// Attribution belongs on screen, with the artwork — that is the whole reason the
+// project can show someone else's character at all.
+const credit = await cdp.evaluate("document.getElementById('preview-credit').textContent");
+ok(
+  "the character on screen is attributed to its rights holder",
+  /©/u.test(credit) && /Hypergryph|Bushiroad/u.test(credit) && /not affiliated/iu.test(credit),
+  `credit="${credit.slice(0, 160)}"`,
+);
+
 ok("the rest of the console is unaffected", published.cards > 0 && published.output > 200, `look cards=${String(published.cards)} output=${String(published.output)} chars`);
 
 // Switching character must swap the picture here too — that is the request this

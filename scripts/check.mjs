@@ -17,6 +17,7 @@
  */
 
 import assert from "node:assert/strict";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -315,6 +316,49 @@ async function request(harness, path, { method = "GET", headers = {} } = {}) {
   return { ...captured, json };
 }
 
+//#region copyright
+// The one rule that must never regress by accident. Everything else in this suite
+// is about behaviour; this is about the project remaining distributable at all, and
+// it is the check that a `git add -f` in a hurry would otherwise slip past.
+await it("no artwork belonging to anyone else is tracked by git", () => {
+  const tracked = execFileSync("git", ["ls-files"], { cwd: root, encoding: "utf8" })
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  // Images under the two directories where downloaded artwork can land. `docs/site`
+  // is deliberately not included: the console's own screenshots are renders this
+  // project produced, and they are what the README shows.
+  const artwork = tracked.filter(
+    (file) => /^(?:art|docs\/art)\//u.test(file) && /\.(?:png|jpe?g|webp|gif|avif|bmp)$/iu.test(file),
+  );
+  assert.deepEqual(
+    artwork,
+    [],
+    `official artwork must not be committed — found ${artwork.join(", ")}. See COPYRIGHT.md; ` +
+      "artwork is fetched onto each machine with `npm run fetch-art` and never redistributed.",
+  );
+
+  // The declaration and the measurements are this project's own data, so they must
+  // still be there — a check that passes because everything was deleted is useless.
+  assert.ok(tracked.includes("art/looks.json"), "the artwork declaration is part of the project");
+  assert.ok(tracked.includes("art/index.json"), "the generated index is part of the project");
+  assert.ok(tracked.includes("COPYRIGHT.md"), "the copyright notice must ship with the repository");
+});
+
+await it("the ignore rules cover every path downloaded artwork can land in", () => {
+  const ignore = readFileSync(join(root, ".gitignore"), "utf8");
+  for (const pattern of ["art/*.png", "art/*.webp", "docs/art/"]) {
+    assert.ok(ignore.includes(pattern), `.gitignore must exclude ${pattern}`);
+  }
+  // And prove it, rather than trusting the file to say the right thing: ask git
+  // whether it would ignore a file that does not exist yet.
+  for (const probe of ["art/closure-chibi.png", "docs/art/closure-chibi.png", "docs/art/anything.webp"]) {
+    const ignored = spawnSync("git", ["check-ignore", "-q", probe], { cwd: root }).status === 0;
+    assert.ok(ignored, `git would not ignore ${probe}`);
+  }
+});
+//#endregion
 await it("the host half claims one prefix route at the configured path", () => {
   const harness = hostHarness();
   assert.equal(harness.route.current.kind, "prefix");

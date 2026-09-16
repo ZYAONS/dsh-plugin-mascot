@@ -109,6 +109,17 @@ dsh plugin --profile desktop add "github:ZYAONS/dsh-plugin-mascot"
 
 ---
 
+## 版权
+
+**这个仓库里没有一张属于别人的图。** 角色版权归各自权利人所有 ——
+可露希尔 © 鹰角网络《明日方舟》，千石由乃 © Bushiroad《BanG Dream!》/ 梦限大 MewType ——
+`npm run fetch-art` 是把图下载到每台机器上，而不是随仓库分发。
+Bushiroad 的[著作物利用指引](https://bang-dream.com/bdp-guideline/)允许个人、非营利的二次创作，
+但禁止不加创作性地复制导入，所以官方图永远不进仓库，公网页面从素材原本的出处加载。
+
+完整立场见 **[COPYRIGHT.md](COPYRIGHT.md)**：哪些是 MIT、哪些不是、
+以及「一旦有素材被 git 跟踪就失败」的那条测试。
+
 ## 网页配置台
 
 在**浏览器里**决定这个插件怎么装、用哪个角色，不用先装到本机：

@@ -11,10 +11,13 @@
  * puts it on the console's own origin. Everything then rigs and animates, and the
  * page stops depending on anyone else's server.
  *
- *   npm run art:publish
+ *   npm run art:publish -- --acknowledge
  *
  * It is opt-in, and deliberately not part of any other command, because it changes
- * what the repository redistributes. Read the note it prints.
+ * what the repository can redistribute. The acknowledgement is not ceremony: it is
+ * the difference between a command someone runs and a decision someone makes.
+ * `npm test` refuses to pass if an image under `docs/art/` is ever tracked by git,
+ * so the accident this guards against has a second line of defence.
  */
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -24,6 +27,21 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = join(root, "art");
 const target = join(root, "docs", "art");
+
+if (!process.argv.includes("--acknowledge")) {
+  console.error("art:publish: refusing to run without an explicit acknowledgement.\n");
+  console.error("  This copies official game artwork into the published web folder. The");
+  console.error("  files stay on your machine unless you commit them, and committing them");
+  console.error("  means this repository redistributes artwork owned by Hypergryph and");
+  console.error("  Bushiroad, which GitHub Pages would then serve publicly.\n");
+  console.error("  Bushiroad's terms for BanG Dream! permit individual, non-commercial");
+  console.error("  derivative works that add creativity, and prohibit use that copies or");
+  console.error("  imports the content without adding any:");
+  console.error("  https://bang-dream.com/bdp-guideline/\n");
+  console.error("  See COPYRIGHT.md. Re-run with the acknowledgement to proceed:\n");
+  console.error("    npm run art:publish -- --acknowledge\n");
+  process.exit(1);
+}
 
 let index;
 try {

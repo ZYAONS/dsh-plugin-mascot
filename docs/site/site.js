@@ -277,6 +277,7 @@ function render() {
   applyTheme();
   // The preview follows the selection: switching character switches what floats in
   // the frame, which is the point of having it here at all.
+  paintCredit(state.character);
   const preview = previewRef.current;
   if (preview !== null && preview !== undefined) {
     preview.show(state.character, enabledLooks(state.character)[0]?.id).catch(() => {});
@@ -286,6 +287,31 @@ function render() {
 //#endregion
 
 //#region preview
+/**
+ * Who owns the character on screen.
+ *
+ * Shown next to the artwork rather than only in the footer: the console displays
+ * someone else's character, and the credit belongs where the reader is looking.
+ * See COPYRIGHT.md — this project ships no artwork and claims no rights in it.
+ */
+const CREDITS = {
+  closure: { work: "Arknights", owner: "Hypergryph", note: "unofficial fan project" },
+  yuno: { work: "BanG Dream! / Mugendai MewType", owner: "Bushiroad", note: "unofficial fan project" },
+};
+
+/** Paint the attribution for the selected character. */
+function paintCredit(characterId) {
+  const credit = CREDITS[characterId];
+  const node = $("preview-credit");
+  if (credit === undefined) {
+    node.textContent = "";
+    return;
+  }
+  const character = characterOf(characterId);
+  node.innerHTML =
+    `Artwork: <b>${character?.nameEn ?? characterId}</b> © <b>${credit.owner}</b> — ${credit.work}. ` +
+    `Shown from its original source; not redistributed by this project. ${credit.note}, not affiliated with or endorsed by the rights holder.`;
+}
 /** The live preview, created on boot. A ref so `render` can reach it. */
 const previewRef = { current: null };
 

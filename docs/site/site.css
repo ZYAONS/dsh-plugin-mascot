@@ -359,6 +359,12 @@ footer .legal { margin-top: 14px; max-width: 78ch; }
 
 .preview-side { display: grid; gap: 12px; align-content: start; }
 .preview-note { margin: 0; font-size: 12px; line-height: 1.7; color: var(--dim); }
+/* Attribution sits with the artwork, not only in the footer. */
+.credit {
+  margin: 0; padding-top: 10px; border-top: 1px solid var(--line);
+  font-family: var(--mono); font-size: 10.5px; line-height: 1.7; color: var(--dimmer);
+}
+.credit b { color: var(--dim); font-weight: 500; }
 .preview-note code { font-size: 11.5px; }
 .preview-status {
   margin: 10px 0 0; font-family: var(--mono); font-size: 11.5px; line-height: 1.7;

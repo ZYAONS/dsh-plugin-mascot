@@ -116,6 +116,19 @@ another restart.
 
 ---
 
+## Copyright
+
+**This repository contains no artwork belonging to anyone else.** The characters are
+© their owners — Closure © Hypergryph (*Arknights*), Sengoku Yuno © Bushiroad
+(*BanG Dream!* / Mugendai MewType) — and `npm run fetch-art` downloads the images onto
+each machine rather than shipping them. Bushiroad's terms permit individual,
+non-commercial derivative works and prohibit copying the content without adding
+creativity, which is why the artwork is never committed and the characters are shown
+from their original sources instead.
+
+Read **[COPYRIGHT.md](COPYRIGHT.md)** for the full position, including what is MIT,
+what is not, and the test that fails if artwork is ever tracked by git.
+
 ## Web console
 
 Decide how this plugin is mounted and which character it wears **in a browser**,
