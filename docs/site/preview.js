@@ -132,6 +132,7 @@ export function createPreview(host, onStatus) {
   let index;
   let catalogue;
   let skinner;
+  let skeletonCanvas;
   let raf;
   let timers = [];
   /** A supplied image — a chosen file or the test pattern — beats everything else. */
@@ -150,6 +151,10 @@ export function createPreview(host, onStatus) {
     if (skinner !== undefined) {
       skinner.canvas.remove();
       skinner = undefined;
+    }
+    if (skeletonCanvas !== undefined) {
+      skeletonCanvas.remove();
+      skeletonCanvas = undefined;
     }
   }
 
@@ -287,6 +292,233 @@ export function createPreview(host, onStatus) {
       timers.push(window.setTimeout(advance, 5200));
     }
   }
+  /**
+   * Draw the skeleton itself, for the selected look.
+   *
+   * This needs no pixels: the rig is derived from the silhouette profile and the
+   * bounding box, both of which are numbers in the catalogue. So it works for every
+   * look on the published page, including the ones whose artwork the WebGL rig is
+   * not allowed to touch — and it answers the question the artwork cannot, which is
+   * what the three bones actually are and where they were put.
+   *
+   * The figure outline and the deformation mesh are drawn from the same rest-pose
+   * measurements, and both deform with the skeleton, so what is on screen is the rig
+   * doing its work rather than an illustration of it.
+   *
+   * @param frames - one `{ box, profile }` per pose; the first is drawn.
+   * @param label - what to caption it with.
+   */
+  /**
+   * Show the skeleton for one look.
+   *
+   * Resolved from whichever source this page has, exactly as `show` does — but the
+   * skeleton needs only the bounding box and the silhouette profile, both of which
+   * are numbers. No image loads and no CORS is involved, which is why this works for
+   * every look on the published page, including the ones whose pixels WebGL refuses.
+   */
+  async function useSkeleton(characterId, lookId) {
+    const hosted = index === undefined ? [] : index.looks.filter((look) => look.character === characterId);
+    const baked = (catalogue?.looks ?? []).filter((look) => look.character === characterId);
+    const fromHost = hosted.find((look) => look.id === lookId) ?? hosted[0];
+    const fromCatalogue = baked.find((look) => look.id === lookId) ?? baked[0];
+
+    if (fromHost !== undefined) {
+      const frames = fromHost.frames
+        .map((frame) => ({ box: frame.measured?.box, profile: frame.profile }))
+        .filter((frame) => Array.isArray(frame.box) && Array.isArray(frame.profile));
+      if (frames.length > 0) {
+        skeleton(frames, fromHost.nameEn ?? fromHost.id);
+        return true;
+      }
+    }
+    if (fromCatalogue !== undefined) {
+      const frames = fromCatalogue.frames.filter((frame) => Array.isArray(frame.box) && Array.isArray(frame.profile));
+      if (frames.length > 0) {
+        skeleton(frames, fromCatalogue.nameEn ?? fromCatalogue.id);
+        return true;
+      }
+    }
+    notice("No measured silhouette is available for this look, so there is no skeleton to draw.");
+    return false;
+  }
+  function skeleton(frames, label) {
+    stop();
+    host.textContent = "";
+    const frame = frames[0];
+    const box = frame.box;
+    const bones = buildRig(frame.profile, { rows: 18, cols: 12 });
+
+    const canvas = document.createElement("canvas");
+    skeletonCanvas = canvas;
+    const width = SEAT.width;
+    const height = SEAT.height;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = `${String(width)}px`;
+    canvas.style.height = `${String(height)}px`;
+    canvas.style.display = "block";
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+
+    const style = getComputedStyle(document.documentElement);
+    const read = (name, fallback) => style.getPropertyValue(name).trim() || fallback;
+    const signal = read("--signal", "#37e0d8");
+    const dim = read("--dim", "#7c8f9b");
+    const text = read("--text", "#e4eef3");
+
+    // Fit the figure's bounding box into the seat, preserving its proportions.
+    const scale = Math.min(width / box[2], height / box[3]);
+    const offsetX = (width - box[2] * scale) / 2;
+    const offsetY = (height - box[3] * scale) / 2;
+    const toCanvas = (imageX, imageY) => ({
+      x: (imageX - box[0]) * scale + offsetX,
+      y: (imageY - box[1]) * scale + offsetY,
+    });
+    /** Normalised figure coordinates to canvas coordinates. */
+    const at = (nx, ny) => toCanvas(box[0] + nx * box[2], box[1] + ny * box[3]);
+
+    /** Apply one bone matrix to a point, in image space. */
+    const apply = (matrix, point) => ({
+      x: matrix[0] * point.x + matrix[3] * point.y + matrix[6],
+      y: matrix[1] * point.x + matrix[4] * point.y + matrix[7],
+    });
+    /** Linear blend skinning, the same sum the vertex shader performs. */
+    const skin = (matrices, weights, point) => {
+      let x = 0;
+      let y = 0;
+      for (let index = 0; index < 3; index++) {
+        const moved = apply(matrices[index], point);
+        x += weights[index] * moved.x;
+        y += weights[index] * moved.y;
+      }
+      return { x, y };
+    };
+
+    const smoothstep = (edge0, edge1, value) => {
+      const ratio = Math.min(1, Math.max(0, (value - edge0) / (edge1 - edge0)));
+      return ratio * ratio * (3 - 2 * ratio);
+    };
+
+    const started = performance.now();
+    const loop = (now) => {
+      raf = window.requestAnimationFrame(loop);
+      const time = (now - started) / 1000;
+      const matrices = poseRig(bones, box, { time, pokeAge: undefined });
+      ctx.clearRect(0, 0, width, height);
+
+      // The figure's outline, skinned by the same weights the mesh uses. Drawn in
+      // rest pose it would disagree with the mesh the moment the pose moved, which
+      // reads as a bug rather than as a reference.
+      const rows = frame.profile.length / 2;
+      const weightsAt = (normalisedY) => {
+        const head = smoothstep(bones.neck.y + RIG.band, bones.neck.y - RIG.band, normalisedY);
+        const lower = smoothstep(RIG.hip - RIG.band, RIG.hip + RIG.band, normalisedY);
+        const spine = Math.max(0, 1 - head - lower);
+        const total = head + spine + lower;
+        return [lower / total, spine / total, head / total];
+      };
+      const outlineAt = (normalisedX, normalisedY) => {
+        const rest = { x: box[0] + normalisedX * box[2], y: box[1] + normalisedY * box[3] };
+        const moved = skin(matrices, weightsAt(normalisedY), rest);
+        return toCanvas(moved.x, moved.y);
+      };
+      ctx.beginPath();
+      for (let row = 0; row < rows; row++) {
+        const point = outlineAt(frame.profile[row * 2], (row + 0.5) / rows);
+        if (row === 0) ctx.moveTo(point.x, point.y);
+        else ctx.lineTo(point.x, point.y);
+      }
+      for (let row = rows - 1; row >= 0; row--) {
+        const point = outlineAt(frame.profile[row * 2 + 1], (row + 0.5) / rows);
+        ctx.lineTo(point.x, point.y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = dim;
+      ctx.globalAlpha = 0.14;
+      ctx.fill();
+      ctx.globalAlpha = 0.38;
+      ctx.strokeStyle = dim;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // The deformation mesh, skinned, so the surface the rig drives is visible.
+      const stride = bones.cols + 1;
+      const skinnedAt = (index) => {
+        const vertex = bones.vertices[index];
+        const rest = { x: box[0] + vertex.x * box[2], y: box[1] + vertex.y * box[3] };
+        return toCanvas(skin(matrices, vertex.w, rest).x, skin(matrices, vertex.w, rest).y);
+      };
+      ctx.strokeStyle = signal;
+      ctx.globalAlpha = 0.16;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let row = 0; row <= bones.rows; row++) {
+        for (let col = 0; col <= bones.cols; col++) {
+          const point = skinnedAt(row * stride + col);
+          if (col === 0) ctx.moveTo(point.x, point.y);
+          else ctx.lineTo(point.x, point.y);
+        }
+      }
+      ctx.stroke();
+      ctx.beginPath();
+      for (let col = 0; col < stride; col++) {
+        for (let row = 0; row <= bones.rows; row++) {
+          const point = skinnedAt(row * stride + col);
+          if (row === 0) ctx.moveTo(point.x, point.y);
+          else ctx.lineTo(point.x, point.y);
+        }
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // The chain: root at the feet, spine at the hip, neck carrying the head.
+      // Each joint is its own bone's pivot carried by that bone's matrix, which is
+      // what puts the head on the end of the chain rather than beside it.
+      const jointAt = (index) => {
+        const bone = bones.bones[index].pivot;
+        const rest = { x: box[0] + bone.x * box[2], y: box[1] + bone.y * box[3] };
+        const moved = apply(matrices[index], rest);
+        return toCanvas(moved.x, moved.y);
+      };
+      const joints = [jointAt(0), jointAt(1), jointAt(2), at(bones.bones[2].pivot.x, 0)];
+      const alphas = [1, 0.72, 0.46];
+      ctx.lineCap = "round";
+      for (let index = 0; index < 3; index++) {
+        ctx.strokeStyle = signal;
+        ctx.globalAlpha = alphas[index];
+        ctx.lineWidth = 3.2 - index * 0.6;
+        ctx.beginPath();
+        ctx.moveTo(joints[index].x, joints[index].y);
+        ctx.lineTo(joints[index + 1].x, joints[index + 1].y);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      for (let index = 0; index < 3; index++) {
+        ctx.beginPath();
+        ctx.arc(joints[index].x, joints[index].y, 3.2 - index * 0.4, 0, Math.PI * 2);
+        ctx.fillStyle = text;
+        ctx.fill();
+        ctx.strokeStyle = signal;
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
+      }
+
+      ctx.font = "600 8px ui-monospace, monospace";
+      ctx.fillStyle = signal;
+      ctx.globalAlpha = 0.85;
+      const names = ["ROOT", "SPINE", "NECK"];
+      for (let index = 0; index < 3; index++) {
+        ctx.fillText(names[index], joints[index].x + 5, joints[index].y + 3);
+      }
+      ctx.globalAlpha = 1;
+    };
+    raf = window.requestAnimationFrame(loop);
+    host.append(canvas);
+    say("ok", `Showing the skeleton derived from ${label}: root at the feet, spine at the hip, neck at ${(findNeck(frame.profile).y * 100).toFixed(0)}% of the figure — found, not assumed, by the pinch in the silhouette. The mesh is skinned by those three bones, the same sum the vertex shader performs.`);
+  }
+
   /** An explanatory placeholder, so the frame is never merely blank. */
   function notice(text) {
     host.textContent = "";
@@ -533,6 +765,7 @@ export function createPreview(host, onStatus) {
     detect,
     show,
     useFile,
+    useSkeleton,
     useTestPattern,
     stop,
     /** Hand the preview the published catalogue, so it can work without a host. */

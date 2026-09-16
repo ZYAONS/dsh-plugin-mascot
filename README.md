@@ -138,9 +138,11 @@ before anything is installed on the machine:
 
 ![console](docs/site/preview.png)
 
-- **00 Live preview** — shows the mascot **animated from your own machine**, wearing
-  whichever character you selected. See below: this works when the console is served
-  by the plugin, and the published copy explains why it cannot be.
+- **00 Live preview** — shows the mascot animated, wearing whichever look you picked;
+  click a look card to put it in the frame. **Show the skeleton** draws the rig
+  itself — the three bones with their joints, the deformation mesh and the figure's
+  outline — for any look, on either copy, because it needs only the measured numbers
+  and never an image.
 - **01 Plugin** — the plugin itself on/off, and the balance lookup on/off
 - **02 Character** — Closure (Rhodes Island console) or Sengoku Yuno (MEWTYPE LIVE)
 - **03 Looks** — tick which artwork may appear; an unticked look goes into an

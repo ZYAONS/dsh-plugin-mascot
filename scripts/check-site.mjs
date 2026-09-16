@@ -633,6 +633,45 @@ if (localUrl !== undefined) {
   ok("switching character re-renders the preview in place", beforeSwitch && afterSwitch.canvas === true, `before=${String(beforeSwitch)} after=${JSON.stringify(afterSwitch)}`);
 }
 
+// ---- the skeleton view ------------------------------------------------------
+// The one control that always has something to show: it needs the bounding box and
+// the silhouette profile, both numbers in the catalogue, and no image at all. So it
+// must work on the published copy for a look whose pixels WebGL refuses.
+await visit(targetUrl, { width: 1360, height: 900 });
+await cdp.click("#preview-skeleton");
+await wait(700);
+const skeleton = await cdp.evaluate(
+  "({ canvas: document.querySelector('#preview-host canvas') !== null, webgl: (() => { const c = document.querySelector('#preview-host canvas'); return c === null ? null : c.getContext('webgl2') !== null; })(), status: document.getElementById('preview-status').textContent })",
+);
+ok(
+  "the skeleton button draws a rig without loading any artwork",
+  skeleton.canvas === true && skeleton.webgl === false,
+  `canvas=${String(skeleton.canvas)} webgl=${String(skeleton.webgl)} status="${skeleton.status.slice(0, 110)}"`,
+);
+ok(
+  "and explains that the neck was found rather than assumed",
+  /pinch in the silhouette|found, not assumed/iu.test(skeleton.status),
+  `status="${skeleton.status.slice(0, 160)}"`,
+);
+const skeletonStage = async () => cdp.evaluate("(() => { const n = document.querySelector('.preview-stage'); const r = n.getBoundingClientRect(); return { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }; })()");
+const boneA = (await cdp.send("Page.captureScreenshot", { format: "png", clip: { ...(await skeletonStage()), scale: 1 } })).data;
+await wait(800);
+const boneB = (await cdp.send("Page.captureScreenshot", { format: "png", clip: { ...(await skeletonStage()), scale: 1 } })).data;
+ok("and the skeleton is animating, not a diagram", boneA !== boneB, "the two compositor captures are byte-identical");
+
+// It must work for the look whose artwork cannot be rigged, which is the whole point.
+await visit(withQuery("theme=yuno&character=yuno&look=yuno-casual"), { width: 1360, height: 900 });
+await cdp.click("#preview-skeleton");
+await wait(700);
+const yunoSkeleton = await cdp.evaluate(
+  "({ canvas: document.querySelector('#preview-host canvas') !== null, empty: (document.querySelector('#preview-host .preview-empty')||{}).textContent || '' })",
+);
+ok(
+  "it works for a look whose artwork the WebGL rig cannot touch",
+  yunoSkeleton.canvas === true,
+  `canvas=${String(yunoSkeleton.canvas)} notice="${yunoSkeleton.empty.slice(0, 110)}"`,
+);
+
 // ---- the published copy, with no host of any kind --------------------------
 // This is the front door: a visitor with nothing installed. It now shows the
 // characters anyway, loading each look from where the artwork already lives.

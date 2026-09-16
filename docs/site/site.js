@@ -357,8 +357,10 @@ async function setupPreview() {
   preview.setCatalogue(state.catalog);
   previewRef.current = preview;
 
-  $("preview-test").addEventListener("click", async () => {
-    await preview.useTestPattern();
+  // The skeleton needs no artwork at all, so it is the one control that always has
+  // something to show — on either copy, for any look.
+  $("preview-skeleton").addEventListener("click", async () => {
+    await preview.useSkeleton(state.character, previewedLook());
     paintPreviewStatusRefresh();
   });
   $("preview-file").addEventListener("change", async (event) => {
@@ -387,8 +389,10 @@ async function setupPreview() {
     "artwork it does send headers for is deformed by the rig. Run <code>npm run art:publish</code> and " +
     "commit <code>docs/art/</code> to animate everything.";
 
-  // A deep link can ask for the built-in test pattern, which exercises the whole
-  // chain with no host and no asset — the path a headless run takes.
+  // `?preview=test` drives the synthetic figure through the WebGL path. It is not a
+  // control on the page — the page offers the skeleton, which is the useful thing —
+  // but it is the only way to exercise measure -> auto-rig -> skin -> animate with
+  // no artwork present at all, so the self-test still uses it.
   if (state.previewTest) {
     await preview.useTestPattern();
     paintPreviewStatusRefresh();
