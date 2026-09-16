@@ -431,7 +431,10 @@ async function setupPreview() {
   // The skeleton needs no artwork at all, so it is the one control that always has
   // something to show — on either copy, for any look.
   $("preview-skeleton").addEventListener("click", async () => {
-    await preview.useSkeleton(state.character, previewedLook());
+    // The neutral theme names no character, so its skeleton is a plain standing figure
+    // rather than one of the roster's outlines — the theme has just declined to say who
+    // is on screen, and drawing a specific silhouette would say it anyway.
+    await preview.useSkeleton(state.character, previewedLook(), { generic: state.autoTheme });
     paintPreviewStatusRefresh();
   });
   $("preview-file").addEventListener("change", async (event) => {
@@ -494,7 +497,7 @@ function drivePreview() {
   const key = [state.autoTheme ? "skeleton" : "art", state.character, look ?? ""].join("|");
   if (key === previewShows) return;
   previewShows = key;
-  if (state.autoTheme) preview.useSkeleton(state.character, look).catch(() => {});
+  if (state.autoTheme) preview.useSkeleton(state.character, look, { generic: true }).catch(() => {});
   else preview.show(state.character, look).catch(() => {});
 }
 

@@ -134,6 +134,17 @@ export function createPreview(host, onStatus) {
   let skinner;
   let skeletonCanvas;
   let raf;
+  /**
+   * Which request owns the frame.
+   *
+   * Every draw is async — an image has to load first — and each one clears the host
+   * and appends its own result. Without this, a request that started earlier and
+   * finished later appended on top of a newer one, leaving the previous frame visible
+   * underneath the current one. Only the newest generation may draw.
+   */
+  let generation = 0;
+  /** Whether a newer request has taken over the frame since this one started. */
+  const stale = (mine) => generation !== mine;
   let timers = [];
   /** A supplied image — a chosen file or the test pattern — beats everything else. */
   let override;
@@ -156,6 +167,10 @@ export function createPreview(host, onStatus) {
       skeletonCanvas.remove();
       skeletonCanvas = undefined;
     }
+    // Cleared here rather than in each caller: a draw path that forgets to empty the
+    // host leaves the previous frame underneath its own, which is the same ghosting
+    // the generation guard prevents, reached by a different route.
+    host.textContent = "";
   }
 
   /** Draw a still frame. */
@@ -555,6 +570,7 @@ export function createPreview(host, onStatus) {
    * every look on the published page, including the ones whose pixels WebGL refuses.
    */
   async function useSkeleton(characterId, lookId) {
+    const mine = (generation += 1);
     const hosted = index === undefined ? [] : index.looks.filter((look) => look.character === characterId);
     const baked = (catalogue?.looks ?? []).filter((look) => look.character === characterId);
     const fromHost = hosted.find((look) => look.id === lookId) ?? hosted[0];
@@ -661,9 +677,11 @@ export function createPreview(host, onStatus) {
 
   /** Render a visitor-supplied file, measured and rigged entirely in the browser. */
   async function useFile(file) {
+    const mine = (generation += 1);
     const url = URL.createObjectURL(file);
     const image = await loadImage(url);
     URL.revokeObjectURL(url);
+    if (stale(mine)) return false;
     if (image === undefined) {
       say("error", "That file could not be decoded as an image.");
       return false;
@@ -688,6 +706,7 @@ export function createPreview(host, onStatus) {
    * host and no asset.
    */
   async function useTestPattern() {
+    const mine = (generation += 1);
     const canvas = document.createElement("canvas");
     canvas.width = 220;
     canvas.height = 360;
@@ -710,6 +729,7 @@ export function createPreview(host, onStatus) {
     capsule(96, 122, 28, 6, 3);
 
     const image = await loadImage(canvas.toDataURL("image/png"));
+    if (stale(mine)) return false;
     if (image === undefined) {
       say("error", "The built-in test pattern could not be drawn.");
       return false;
@@ -741,19 +761,20 @@ export function createPreview(host, onStatus) {
    * @param lookId - the selected look, or undefined for the character's first.
    */
   async function show(characterId, lookId) {
+    const mine = (generation += 1);
     if (override !== undefined) {
       showOverride();
       return;
     }
     if (index !== undefined) {
-      await showFromHost(characterId, lookId);
+      await showFromHost(characterId, lookId, mine);
       return;
     }
-    await showFromSources(characterId, lookId);
+    await showFromSources(characterId, lookId, mine);
   }
 
   /** Render a look served by the plugin on this origin. */
-  async function showFromHost(characterId, lookId) {
+  async function showFromHost(characterId, lookId, mine) {
     const looks = index.looks.filter((look) => look.character === characterId);
     const look = looks.find((entry) => entry.id === lookId) ?? looks[0];
     stop();
@@ -764,6 +785,7 @@ export function createPreview(host, onStatus) {
     }
     const frame = look.frames[0];
     const image = await loadImage(`${origin}${index.artBase}/${frame.file}`);
+    if (stale(mine)) return;
     if (image === undefined) {
       notice(`${frame.file} did not load.`);
       return;
@@ -778,7 +800,7 @@ export function createPreview(host, onStatus) {
   }
 
   /** Render a look on the published copy, where only the sources have the pixels. */
-  async function showFromSources(characterId, lookId) {
+  async function showFromSources(characterId, lookId, mine) {
     const looks = (catalogue?.looks ?? []).filter((look) => look.character === characterId);
     const look = looks.find((entry) => entry.id === lookId) ?? looks[0];
     stop();
@@ -790,6 +812,7 @@ export function createPreview(host, onStatus) {
     const acquired = [];
     for (const frame of look.frames) {
       const got = await acquire(frame, look);
+      if (stale(mine)) return;
       if (got === undefined) {
         notice(`${look.nameEn ?? look.id} could not be loaded from its source. It may have moved, or the host may be blocking this page.`);
         say("error", `${String(look.sources?.[0] ?? look.id)} did not load.`);

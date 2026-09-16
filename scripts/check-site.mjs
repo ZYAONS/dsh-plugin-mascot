@@ -822,6 +822,70 @@ ok(
   `canvas=${String(yunoSkeleton.canvas)} status="${String(yunoSkeleton.status)}" html="${String(yunoSkeleton.html)}"`,
 );
 
+// ---- nothing is left behind -------------------------------------------------
+// Switching faster than an image loads used to leave the previous frame on screen:
+// each draw is async, and an older one that finished later appended on top of a newer
+// one. Clicking two look cards back to back is the cheapest way to provoke it, and
+// counting the rendered layers is the cheapest way to see it.
+await visit(withQuery("theme=yuno&character=yuno"), { width: 1360, height: 900 });
+const layers = async () =>
+  cdp.evaluate("document.querySelectorAll('#preview-host > canvas, #preview-host > .css-rig, #preview-host > img, #preview-host > .preview-still').length");
+
+// The cache has to be off and both clicks have to land in the same tick, or there is
+// no race to lose: with warm images the first request finishes before the second
+// starts, and the assertion passes against the very bug it is meant to catch. It was
+// written that way first, and disabling the guard did not make it fail.
+await cdp.send("Network.enable");
+await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
+// 400 KB/s: the 1.26 MB look needs seconds, the 92 KB one a fraction of one. Without
+// this the larger image happened to finish last anyway and the race never fired.
+await cdp.send("Network.emulateNetworkConditions", {
+  offline: false,
+  latency: 40,
+  downloadThroughput: 400 * 1024,
+  uploadThroughput: 400 * 1024,
+});
+await visit(withQuery("theme=yuno&character=yuno"), { width: 1360, height: 900 });
+// The large look first, then the small one: the small image wins the network and the
+// large one used to land on top of it.
+// The large look first, then the small one: the small image wins the network, and the
+// large one's older request used to resume afterwards and take the frame back.
+await cdp.evaluate("document.querySelectorAll('#looks .card')[1].click()");
+// Re-queried between the clicks, because rendering the look cards replaces them: a
+// NodeList captured once is detached after the first click, so the second click landed
+// on an element no longer in the document and did nothing. That is how the earlier
+// version of this test passed against the very bug it was written for.
+await cdp.evaluate("document.querySelectorAll('#looks .card')[2].click()");
+await wait(5000);
+const after = await layers();
+const shownSrcs = await cdp.evaluate("[...document.querySelectorAll('#preview-host img')].map((i) => decodeURIComponent(i.currentSrc || i.src))");
+ok(
+  "a fast switch leaves exactly one frame on screen",
+  after === 1,
+  `${String(after)} rendered layers in the frame`,
+);
+// The look picked last is the one that must be showing. The casual look's source is
+// "… 动画常服.png"; the anime look's is "… 动画.png", which the first assertion would
+// catch by its absence of 常服.
+ok(
+  "and it is the look that was picked last, not the one the switch left behind",
+  shownSrcs.length > 0 && shownSrcs.every((src) => src.includes("常服")),
+  `frame holds: ${shownSrcs.map((src) => src.slice(src.lastIndexOf("/") + 1)).join(", ") || "(nothing)"}`,
+);
+await cdp.send("Network.setCacheDisabled", { cacheDisabled: false });
+await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+
+// The same race through the skeleton, which is a different renderer: the skeleton
+// claims the frame synchronously, so a pending artwork load must not land on top of it.
+await cdp.click("#preview-skeleton");
+await cdp.click("#looks .card:nth-child(2)");
+await wait(2500);
+const mixed = await layers();
+ok(
+  "the skeleton and the artwork never share the frame",
+  mixed === 1,
+  `${String(mixed)} layers — index=${String(await cdp.evaluate("document.querySelectorAll('#preview-host .rig-pose').length"))}`,
+);
 // ---- the published copy, with no host of any kind --------------------------
 // This is the front door: a visitor with nothing installed. It now shows the
 // characters anyway, loading each look from where the artwork already lives.
