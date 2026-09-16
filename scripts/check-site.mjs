@@ -263,7 +263,7 @@ ok(
 async function showSkeleton() {
   const visible = await cdp.evaluate("(() => { const n = document.getElementById('preview-skeleton'); if (n === null) return false; const r = n.getBoundingClientRect(); return r.width > 0 && r.height > 0; })()");
   if (visible === true) {
-    await showSkeleton();
+    await cdp.click("#preview-skeleton");
     return "clicked";
   }
   await until(() => cdp.evaluate("document.querySelector('#preview-host canvas') !== null").catch(() => false), 8000, 150);
