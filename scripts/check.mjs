@@ -496,4 +496,81 @@ await it("the browser half falls back to the placeholder when the official file 
 });
 //#endregion
 
+//#region 5 — the bone rig
+const { buildRig, findNeck, poseRig, RIG } = exports_;
+
+/** A synthetic silhouette: a wide head, a pinched neck, then a wide body. */
+function syntheticProfile(headWidth, neckWidth, bodyWidth, neckRow) {
+  const rows = 32;
+  const profile = [];
+  for (let index = 0; index < rows; index++) {
+    const width = index < neckRow - 1 ? headWidth : index <= neckRow + 1 ? neckWidth : bodyWidth;
+    profile.push((1 - width) / 2, (1 + width) / 2);
+  }
+  return profile;
+}
+
+await it("the neck is found where the silhouette pinches, and nowhere else", () => {
+  const pinched = syntheticProfile(0.6, 0.18, 0.8, 10);
+  const found = findNeck(pinched);
+  // The synthetic neck covers rows 9..11; any of them is a correct answer (the
+  // search keeps the first minimum), so assert the band, not one exact row.
+  assert.ok(found.y >= 9 / 32 && found.y <= 12 / 32, `expected the neck inside rows 9..11, got y=${String(found.y)}`);
+  assert.equal(found.x, 0.5, "a centred pinch rigs at the centre");
+
+  // No pinch at all: a figure in a cloak must fall back rather than rig at noise.
+  const smooth = syntheticProfile(0.6, 0.6, 0.8, 10);
+  assert.equal(findNeck(smooth).y, RIG.neckFallback, "an un-pinched silhouette uses the default neck");
+
+  assert.equal(findNeck(null).y, RIG.neckFallback);
+  assert.equal(findNeck([]).y, RIG.neckFallback);
+  assert.equal(findNeck([0, 1]).y, RIG.neckFallback, "a too-short profile falls back");
+});
+
+await it("skin weights are a partition: every vertex sums to one, none negative", () => {
+  const rig = buildRig(syntheticProfile(0.6, 0.18, 0.8, 10), { rows: 12, cols: 8 });
+  assert.equal(rig.vertices.length, 13 * 9);
+  for (const vertex of rig.vertices) {
+    const sum = vertex.w[0] + vertex.w[1] + vertex.w[2];
+    assert.ok(Math.abs(sum - 1) < 1e-9, `weights summed to ${String(sum)} at y=${String(vertex.y)}`);
+    assert.ok(vertex.w.every((value) => value >= 0), `negative weight at y=${String(vertex.y)}`);
+  }
+  // Above the neck the head bone owns the vertex; below the hip the root does.
+  const top = rig.vertices.find((vertex) => vertex.y === 0);
+  const bottom = rig.vertices.find((vertex) => vertex.y === 1);
+  assert.ok(top.w[2] > 0.95, `the top of the figure should be head, got ${String(top.w[2])}`);
+  assert.ok(bottom.w[0] > 0.95, `the feet should be root, got ${String(bottom.w[0])}`);
+});
+
+await it("the pose is finite and bounded across the whole idle, including clicks", () => {
+  const rig = buildRig(syntheticProfile(0.6, 0.18, 0.8, 10));
+  const box = [0, 0, 100, 200];
+  let worst = 0;
+  for (let step = 0; step < 400; step++) {
+    const time = step * 0.05;
+    for (const pokeAge of [undefined, 0, 0.05, 0.4, 1.1, 1.59]) {
+      const matrices = poseRig(rig, box, { time, pokeAge });
+      for (const matrix of matrices) {
+        for (const value of matrix) {
+          // A single NaN bone matrix blanks the entire sprite, and `0 * sin(undefined)`
+          // is exactly how that happens.
+          assert.ok(Number.isFinite(value), `non-finite pose at t=${String(time)} age=${String(pokeAge)}`);
+          worst = Math.max(worst, Math.abs(value));
+        }
+      }
+    }
+  }
+  assert.ok(worst < 1e4, `a pose value ran away to ${String(worst)}`);
+
+  const rest = poseRig(rig, box, { time: 0, pokeAge: undefined });
+  assert.ok(Math.abs(rest[0][0] - 1) < 0.01, "the root is unrotated at rest");
+  assert.ok(Math.abs(rest[0][1]) < 0.01, "the root is unrotated at rest");
+
+  // The chain must compose: the head inherits the body's motion rather than
+  // floating independently of it.
+  const moved = poseRig(rig, box, { time: 2.4, pokeAge: undefined });
+  assert.ok(Math.abs(moved[2][6]) + Math.abs(moved[2][7]) > 0.01, "the neck transform ignores its parents");
+});
+//#endregion
+
 console.log(`\ndsh-plugin-mascot: ${String(checks)} checks passed`);

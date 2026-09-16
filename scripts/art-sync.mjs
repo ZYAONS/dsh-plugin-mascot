@@ -89,9 +89,31 @@ Promise.all(sources.map((src) => new Promise((done) => {
         }
       }
       if (x1 < 0) { done({ src, error: "fully transparent" }); return; }
+      // Coarse silhouette profile: for each of PROFILE_ROWS horizontal bands, the
+      // leftmost and rightmost opaque column, normalised to the bounding box. The
+      // client rigs a skeleton from it -- the row where the figure pinches is the
+      // neck, and that differs too much between a chibi and a full-body portrait
+      // for a fixed fraction to work.
+      const PROFILE_ROWS = 32;
+      const profile = [];
+      const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+      for (let r = 0; r < PROFILE_ROWS; r++) {
+        const ya = y0 + Math.floor((r * bh) / PROFILE_ROWS);
+        const yb = Math.min(y1, y0 + Math.floor(((r + 1) * bh) / PROFILE_ROWS) - 1);
+        let lo = -1, hi = -1;
+        for (let y = ya; y <= yb; y++) {
+          for (let x = x0; x <= x1; x++) {
+            if (px[(y * W + x) * 4 + 3] < 64) continue;
+            if (lo < 0 || x < lo) lo = x;
+            if (x > hi) hi = x;
+          }
+        }
+        profile.push(lo < 0 ? 0 : Math.round(((lo - x0) / bw) * 1000) / 1000);
+        profile.push(lo < 0 ? 0 : Math.round(((hi - x0) / bw) * 1000) / 1000);
+      }
       const dominant = buckets.reduce((best, bucket) => (bucket.weight > best.weight ? bucket : best), buckets[0]);
       const accent = dominant.weight === 0 ? null : [dominant.r / dominant.weight, dominant.g / dominant.weight, dominant.b / dominant.weight];
-      done({ src, W, H, x0, y0, w: x1 - x0 + 1, h: y1 - y0 + 1, accent });
+      done({ src, W, H, x0, y0, w: x1 - x0 + 1, h: y1 - y0 + 1, accent, profile });
     } catch (error) { done({ src, error: String(error && error.message ? error.message : error) }); }
   };
   img.onerror = () => done({ src, error: "load failed" });
@@ -238,6 +260,8 @@ export function buildIndex(options = {}) {
           face: frameSeat(boxes[index], SEATS.face, scale.face),
         },
         measured: { width: boxes[index].W, height: boxes[index].H, box: [boxes[index].x0, boxes[index].y0, boxes[index].w, boxes[index].h] },
+        // Drives the client's automatic rig; absent when an older index is read.
+        profile: boxes[index].profile ?? null,
       })),
       // The first frame doubles as the look's identity: it is what a static
       // context (a thumbnail, a switcher chip) renders.

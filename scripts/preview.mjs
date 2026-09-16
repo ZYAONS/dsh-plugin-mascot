@@ -100,7 +100,7 @@ const STYLE = [
   ".caption { font-size: 11px; line-height: 1.6; letter-spacing: .3px; color: rgba(255,255,255,.44);",
   "  width: 400px; word-break: break-word; }",
   "/* Stand-in for the DSH shell, so the overlay has somewhere to float. */",
-  ".frame { position: relative; width: 400px; height: 860px; border-radius: 14px; overflow: hidden;",
+  ".frame { position: relative; width: 400px; height: 900px; border-radius: 14px; overflow: hidden;",
   "  background: linear-gradient(180deg, #14171f, #0e1015); border: 1px solid rgba(255,255,255,.07);",
   "  box-shadow: 0 18px 40px rgba(0,0,0,.45); }",
   ".rail { position: absolute; inset: 0 auto 0 0; width: 54px; background: rgba(255,255,255,.03);",
@@ -239,9 +239,28 @@ window.PREVIEW_READY = (async () => {
     if (spriteBox.right > box.right + 0.5 || spriteBox.left < box.left) notes.push("SPRITE OVERFLOWS");
     const shown = frame.querySelectorAll(".dsh-mascot-sprite .dsh-mascot-frame");
     if (shown.length > 1) notes.push("frames: " + String(shown.length));
+    const rigged = frame.querySelector('.dsh-mascot-sprite[data-rig="1"]');
+    notes.push("rig: " + (rigged === null ? "off" : "ON"));
     cols[index].querySelector(".caption").textContent = spec.caption + "   ·   " + notes.join("   ·   ");
   }
-  await new Promise((resolve) => setTimeout(resolve, 250));
+  // Building a WebGL skinner means loading the image, compiling shaders and
+  // uploading a texture. Under software rendering that can outlast any fixed
+  // sleep, so poll for it rather than guessing a delay.
+  const deadline = Date.now() + 8000;
+  while (Date.now() < deadline) {
+    if (document.querySelector('.dsh-mascot-sprite[data-rig="1"]') !== null) break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  // Re-label the captions now that the rig has had its chance.
+  for (const col of document.querySelectorAll(".col")) {
+    const frame = col.querySelector(".frame");
+    const caption = col.querySelector(".caption");
+    if (frame === null || caption === null) continue;
+    const rigged = frame.querySelector('.dsh-mascot-sprite[data-rig="1"]') !== null;
+    const canvas = frame.querySelector(".dsh-mascot-sprite canvas");
+    caption.textContent = caption.textContent.replace(/rig: (ON|off)/u, "rig: " + (rigged ? "ON" : "off") + " (" + (canvas === null ? "no canvas" : "canvas " + canvas.width + "x" + canvas.height) + ")");
+  }
+  await new Promise((resolve) => setTimeout(resolve, 400));
 })();`;
 
 const page = `<!doctype html>
@@ -251,8 +270,16 @@ const page = `<!doctype html>
 </style>
 <script src="${url("node_modules/react/umd/react.production.min.js")}"></script>
 <script src="${url("node_modules/react-dom/umd/react-dom.production.min.js")}"></script>
+<script>
+// The harness must report its own failures: a broken bundle renders a blank page,
+// and a blank screenshot says nothing about why.
+window.__errors = [];
+window.addEventListener("error", (event) => { window.__errors.push(String(event.message)); });
+window.addEventListener("unhandledrejection", (event) => { window.__errors.push(String(event.reason)); });
+</script>
 </head><body>
 <div id="stage"></div>
+<pre id="errors" style="display:none"></pre>
 <script>
 ${SCRIPT}
 </script>
@@ -260,26 +287,67 @@ ${SCRIPT}
 <script>
 ${SCRIPT2}
 </script>
+<script>
+Promise.resolve(window.PREVIEW_READY).then(() => {
+  const rig = typeof plugin.rigStatus === "function" ? plugin.rigStatus() : null;
+  if (rig !== null) window.__errors.push("rig unavailable: " + rig);
+  document.getElementById("errors").textContent = JSON.stringify(window.__errors);
+});
+</script>
 </body></html>`;
 
 const previewHtml = join(docs, official ? "preview-official.html" : "preview.html");
 const previewPng = join(docs, official ? "preview-official.png" : "preview.png");
 writeFileSync(previewHtml, page);
 
+const CHROME_FLAGS = [
+  "--headless=new",
+  "--disable-gpu",
+  "--no-sandbox",
+  "--hide-scrollbars",
+  // The sprite is a bone-skinned WebGL mesh; headless Chromium refuses a GL
+  // context without this. It costs nothing when the renderer falls back.
+  "--enable-unsafe-swiftshader",
+  // The page is a file:// document reading images from a sibling directory, which
+  // Chromium treats as cross-origin; without this the textures are tainted and
+  // WebGL refuses them. Inside DSH both sides are the same http origin.
+  "--allow-file-access-from-files",
+];
+
+// First pass: ask the page what went wrong, if anything did. The budget has to
+// cover the harness's own polling for the WebGL rig, or the report arrives empty
+// and says nothing.
+const diagnostics = execFileSync(
+  chrome,
+  [...CHROME_FLAGS, "--virtual-time-budget=30000", "--dump-dom", pathToFileURL(previewHtml).href],
+  { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+);
+const errors = /<pre id="errors"[^>]*>([\s\S]*?)<\/pre>/u.exec(diagnostics);
+let collected = [];
+if (errors !== null && errors[1].trim().length > 0) {
+  try {
+    collected = JSON.parse(errors[1].replaceAll("&amp;", "&").replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&quot;", '"'));
+  } catch {
+    collected = ["the page's error report was not valid JSON"];
+  }
+}
+if (collected.length > 0) {
+  console.error("preview: the page reported errors:");
+  for (const message of collected) console.error(`  ${message}`);
+}
+
 execFileSync(
   chrome,
   [
-    "--headless=new",
-    "--disable-gpu",
-    "--no-sandbox",
-    "--hide-scrollbars",
+    ...CHROME_FLAGS,
     "--force-device-scale-factor=1.35",
-    "--virtual-time-budget=5000",
+    "--virtual-time-budget=30000",
     `--screenshot=${previewPng}`,
-    "--window-size=1740,1210",
+    "--window-size=1740,1250",
     pathToFileURL(previewHtml).href,
   ],
   { stdio: "pipe" },
 );
 
 console.log(`preview: wrote ${previewPng}`);
+if (collected.length > 0) process.exitCode = 1;

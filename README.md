@@ -13,8 +13,9 @@ actually cost you and how well the prompt cache is doing.
 - **Two characters, five official looks, switchable** — Closure (*Arknights*) and Sengoku Yuno (*BanG Dream!*)
 - **One interface style per character** — a Rhodes Island engineering console and a
   MEWTYPE live set are two designs, not a hue swap
-- **The sprite moves** — idle float, breathing, hover response, click recoil, and a
-  two-frame Q-version look that genuinely **turns around**
+- **The sprite is skeletally animated** — auto-rigged from its silhouette and driven by a
+  skinned mesh: breathing, weight shifts, head leading; the two-frame Q-version look
+  genuinely **turns around**
 
 ![preview](docs/preview.png)
 
@@ -188,29 +189,59 @@ character carries in `art/looks.json` — so a new character themes itself by na
 
 ## Motion
 
-The sprite moves in three layers.
+The sprite moves in three layers. The first two are real motion; the third is the
+browser playing a file.
 
-**1. Procedural (any still image)**
-- idle: float plus a breathing scale, with a ground shadow that tightens in step
-- hover: lift, scale, and a glow in the theme accent
-- click: squash-and-stretch recoil; the panel opening adds a hop
-- ambient: the themed scanline, or a pulse ring and equaliser
+### 1. Skeletal animation (on by default, switchable in the panel)
 
-**2. Real multi-frame animation**
-Yuno's Q-version source is **two poses**. `scripts/cutout.mjs` runs with
-`mode: "all"`, keeps both figures, crops each to its own bounding box, and gives
-them **one shared scale** — otherwise the narrower pose would be blown up and she
-would appear to grow. The browser cross-fades between them every 5.2 s, which reads
-as her turning around. The panel marks the look with a "动态" badge.
+A small **2D bone + skinned-mesh** renderer written for this plugin.
 
-**3. Animated files**
-Any frame that is a GIF or an animated WebP simply plays — the browser handles it,
-no extra pipeline.
+- **Automatic rigging.** `art-sync` also measures each image's **silhouette profile**
+  (32 horizontal bands of left/right extents). The client finds the **neck** from it —
+  the band where the silhouette pinches. It has to be *found* rather than assumed,
+  because a chibi's head is most of the figure while a full-body portrait's head is a
+  tenth of it, and no fixed fraction frames both.
+- **Three bones in a chain.** `root` (pivot at the feet — the whole body's sway and
+  bounce) → `spine` (pivot at the hip) → `neck` (pivot at the neck, carrying the
+  head). Children inherit their parents' transforms, so the head **follows the body**
+  instead of drifting independently.
+- **Skinning.** Vertex weights are distributed **vertically only** — three bones
+  stacked down the figure, blended across a smooth band at each joint — because that
+  is the only axis a single flat image supports without tearing.
+- **Rendering.** Linear blend skinning in WebGL2 (three weights per vertex). The
+  texture is uploaded with `UNPACK_PREMULTIPLY_ALPHA_WEBGL`, so filtering across the
+  figure's edge blends toward transparent black instead of leaving a dark fringe.
+- **Deliberately small amplitudes.** Idle sway ±1.5°, nod ±2.4°, breathing ±1.1%, bob
+  0.6%. Larger angles on a flat image read as rubber, not as breathing. A click adds a
+  **decaying oscillation** (squash-and-stretch plus a nod) timed from the click itself,
+  gone within 1.6 s.
 
-**What is not possible here**: true Live2D or Spine skeletal animation. The games'
-animated chibi are Spine projects that need their runtime to evaluate; what is
-publicly available is other people's static exports (which is what this uses). So
-this is "still frames + procedural motion + frame cross-fade", not skeletal animation.
+**What this is not**: true Live2D or Spine skeletal animation. The games' animated
+chibi are Spine projects, and *Arknights* uses a **modified Spine 3.8 format** — the
+skeletons are 404/403 on the public CDN, and the stock runtime cannot read them anyway
+(which is why the community maintains tools like Ark-Models). So there is no
+pre-authored skeleton to load; the rig has to be inferred from a still. That is the
+honest description of what this is: **it makes a static portrait breathe, shift its
+weight and lead with its head the way a standing body does.** It is not a full
+character rig, and it has no arm bones — arms overlap the torso in a single flat image,
+and driving them independently would tear the artwork.
+
+If any link fails — no WebGL2, a refused context, a shader that will not compile, an
+image tainted by cross-origin data — it renders the plain `<img>` instead. So this can
+only ever **add** motion, never remove the mascot. The preview script prints
+`rig: ON (canvas 140x232)` precisely to keep an eye on that.
+
+### 2. Multi-frame animation
+
+Yuno's Q-version source is **two poses**. `cutout.mjs` runs with `mode: "all"`, keeps
+both figures, crops each to its own bounding box, and gives them **one shared scale**
+— otherwise the narrower pose would be blown up and she would appear to grow. The
+browser cross-fades between them every 5.2 s, which reads as her turning around. It
+stands down when the bone rig is on, since two sources of motion would fight.
+
+### 3. Animated files
+
+Any frame that is a GIF or an animated WebP simply plays — the browser handles it.
 
 ---
 
@@ -222,6 +253,7 @@ this is "still frames + procedural motion + frame cross-fade", not skeletal anim
 | The "角色" row in the panel | Switch character |
 | The "形象" row in the panel | Switch that character's look (a "动态" badge marks a multi-frame one) |
 | Click the backdrop or press `Esc` | Close the panel |
+| The "动效" row in the panel | Toggle the bone rig (shows "本机不可用" when the machine cannot run it) |
 | Click "刷新" | Re-read the balance immediately (it also refreshes every 2 minutes while open) |
 
 The choice is stored in localStorage. With the system's "reduce motion" preference
@@ -258,7 +290,7 @@ One package, two halves:
 dsh-plugin-mascot/
 ├── lib/
 │   ├── index.js        host half: the /dsh-mascot routes (balance, index, artwork)
-│   └── client.js       browser half: sprite, panel, two themes, motion
+│   └── client.js       browser half: sprite, panel, two themes, skinned-mesh renderer
 ├── art/
 │   ├── looks.json      hand-authored declaration: characters, themes, urls, hashes
 │   ├── index.json      generated by art-sync: framing, accents, frame lists
@@ -348,7 +380,7 @@ npm install                # react / react-dom, devDependencies for the preview 
 npm run fetch-art          # download → cut out → re-index, in one go
 npm run art:sync           # just re-measure and rewrite art/index.json
 npm run art:watch          # watch art/ and re-index whenever a file lands
-npm test                   # self-test (24 checks)
+npm test                   # self-test (27 checks)
 npm run check              # node --check on both halves plus the self-test
 npm run preview            # docs/preview.png — placeholder, committed
 npm run preview:official   # docs/preview-official.png — official art, gitignored
