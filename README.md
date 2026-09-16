@@ -10,7 +10,7 @@ actually cost you and how well the prompt cache is doing.
 - **Token breakdown** — uncached input / cache read / cache write / output / session total
 - **Context occupancy** — current usage against the context window, with a bar
 - **Account balance** — fetched host-side from DeepSeek; the API key never reaches the browser
-- **Two characters, five official looks, switchable** — Closure (*Arknights*) and Sengoku Yuno (*BanG Dream!*)
+- **Three characters, seven official looks, switchable** — Closure and Muelsyse (*Arknights*), Sengoku Yuno (*BanG Dream!*)
 - **One interface style per character** — a Rhodes Island engineering console and a
   MEWTYPE live set are two designs, not a hue swap
 - **The sprite is skeletally animated** — auto-rigged from its silhouette and driven by a
@@ -119,7 +119,7 @@ another restart.
 ## Copyright
 
 **This repository contains no artwork belonging to anyone else.** The characters are
-© their owners — Closure © Hypergryph (*Arknights*), Sengoku Yuno © Bushiroad
+© their owners — Closure and Muelsyse © Hypergryph (*Arknights*), Sengoku Yuno © Bushiroad
 (*BanG Dream!* / Mugendai MewType) — and `npm run fetch-art` downloads the images onto
 each machine rather than shipping them. Bushiroad's terms permit individual,
 non-commercial derivative works and prohibit copying the content without adding
@@ -144,7 +144,7 @@ before anything is installed on the machine:
   outline — for any look, on either copy, because it needs only the measured numbers
   and never an image.
 - **01 Plugin** — the plugin itself on/off, and the balance lookup on/off
-- **02 Character** — Closure (Rhodes Island console) or Sengoku Yuno (MEWTYPE LIVE)
+- **02 Character** — Closure (Rhodes Island console), Sengoku Yuno (MEWTYPE LIVE) or Muelsyse (Rhine Lab ecology)
 - **03 Looks** — tick which artwork may appear; an unticked look goes into an
   allowlist, so the plugin will not even list it
 - **04 Motion** — the bone rig, and multi-frame looks
@@ -167,8 +167,9 @@ preference:
 Which of 2 and 3 applies is a fact about each host, measured once and recorded in
 `art/looks.json` as `cors`. Today: Closure's base sprite is served by
 raw.githubusercontent and jsDelivr, both of which send `Access-Control-Allow-Origin`,
-so it **rigs and animates on the published page**; the moegirl-hosted looks (Closure's
-portrait and all three of Yuno's) send no such header, so they **display but do not
+so it **rigs and animates on the published page**, as does Muelsyse's base sprite, which
+comes from the same repository; the moegirl-hosted looks (both portraits and all three
+of Yuno's) send no such header, so they **display but do not
 deform**. The page says which case it is in the status line rather than leaving you
 to guess why one of them is still.
 

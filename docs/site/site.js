@@ -47,11 +47,16 @@ const state = {
 
 
   /**
-   * The page theme. `auto` is the neutral silver; the other three are the three
-   * characters, and choosing one of those also selects its character — see
-   * `chooseTheme`. A theme and an artwork that disagree is a page contradicting
-   * itself, so the two are moved together whichever control is used.
+   * Whether the visitor chose the neutral theme.
+   *
+   * `auto` is the silver that belongs to no character, and it is the default. Every
+   * other theme is the selected character's own, which is why it is derived on each
+   * render rather than stored: choosing a character's theme also selects that
+   * character, so the two can be set from the header or from section 02 and can
+   * never end up describing different people.
    */
+  autoTheme: true,
+  /** The theme last applied; a read-out, written by `applyTheme`. */
   theme: "auto",
   /**
    * The look the frame is showing, when the visitor picked one by clicking a card.
@@ -123,7 +128,7 @@ function pageThemeOf(characterId) {
  */
 function chooseTheme(choice) {
   if (PAGE_THEME_NAMES[choice] === undefined) return;
-  state.theme = choice;
+  state.autoTheme = choice === "auto";
   if (choice !== "auto") {
     const character = state.catalog.characters.find((entry) => THEME_COLOURS[entry.theme]?.page === choice);
     if (character !== undefined) {
@@ -140,7 +145,8 @@ function chooseTheme(choice) {
 
 /** Apply the theme, and light the control that set it. */
 function applyTheme() {
-  const theme = state.theme;
+  const theme = state.autoTheme ? "auto" : pageThemeOf(state.character);
+  state.theme = theme;
   for (const button of $("theme").querySelectorAll("button")) {
     button.dataset.on = button.dataset.themeChoice === theme ? "1" : "0";
   }
@@ -163,7 +169,7 @@ function save() {
       balance: state.balance,
       mount: state.mount,
       dir: state.dir,
-      theme: state.theme,
+      autoTheme: state.autoTheme,
 
     }));
   } catch {
@@ -185,7 +191,7 @@ function load() {
     if (typeof saved.balance === "boolean") state.balance = saved.balance;
     if (saved.mount === "name" || saved.mount === "file") state.mount = saved.mount;
     if (typeof saved.dir === "string") state.dir = saved.dir;
-    if (typeof saved.theme === "string") state.theme = saved.theme;
+    if (typeof saved.autoTheme === "boolean") state.autoTheme = saved.autoTheme;
 
   } catch {
     /* unreadable state is not worth reporting; defaults are fine */
@@ -222,7 +228,7 @@ function renderCharacters() {
     const choose = () => {
       state.character = character.id;
       // The card and the header button say the same thing, so both move together.
-      state.theme = pageThemeOf(character.id);
+      state.autoTheme = false;
       // A look belongs to one character, so a choice made for the last one is not a
       // choice about this one.
       state.previewLook = undefined;
@@ -548,7 +554,11 @@ function applyQuery() {
   }
 
   const character = query.get("character");
-  if (character !== null && character !== "") state.character = character;
+  if (character !== null && character !== "") {
+    state.character = character;
+    // Applied on the next render, once the catalogue can resolve the mapping.
+    state.autoTheme = false;
+  }
   const theme = query.get("theme");
   // `?theme=` moves the character too, through the same rule the buttons use.
   if (theme !== null && theme !== "" && PAGE_THEME_NAMES[theme] !== undefined) chooseTheme(theme);

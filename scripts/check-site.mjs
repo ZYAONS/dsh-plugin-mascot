@@ -943,6 +943,33 @@ const offsets = await cdp.evaluate(
   "JSON.stringify([...document.querySelectorAll('#preview-host .css-rig .rig-pose')].map((p) => p.style.getPropertyValue('--off-x') + '/' + p.style.getPropertyValue('--off-y')))",
 );
 const parsed = JSON.parse(offsets);
+// The source of this look is a pink star scattered with confetti, and a rectangular
+// crop of it carries all of that along. The pixels cannot be read, so the background
+// cannot be keyed out; the measured silhouette can still describe the figure as a clip
+// path, which is what keeps the clutter behind her rather than beside her.
+const clipped = await cdp.evaluate(
+  "JSON.stringify([...document.querySelectorAll('#preview-host .css-rig .rig-pose')].map((p) => (p.style.clipPath || '').slice(0, 24)))",
+);
+const clipPaths = JSON.parse(clipped);
+ok(
+  "a cut-out look is clipped to its measured silhouette",
+  clipPaths.length > 0 && clipPaths.every((value) => value.startsWith("polygon(")),
+  `clip-path values: ${clipped} — without one, the source's background comes with it`,
+);
+// The clip must describe the figure, so its x range has to sit inside the image.
+const clipRange = await cdp.evaluate(`(() => {
+  const first = document.querySelector('#preview-host .css-rig .rig-pose');
+  if (first === null || first.style.clipPath === '') return null;
+  const numbers = [...first.style.clipPath.matchAll(/([0-9.]+)%/gu)].map((m) => Number(m[1]));
+  const xs = numbers.filter((_, index) => index % 2 === 0);
+  return { min: Math.min(...xs), max: Math.max(...xs), count: numbers.length / 2 };
+})()`);
+ok(
+  "and the polygon stays inside the image and covers a figure, not a whole frame",
+  clipRange !== null && clipRange.min >= -1 && clipRange.max <= 101 && clipRange.count >= 32,
+  JSON.stringify(clipRange),
+);
+
 ok(
   "each pose carries its own crop offset",
   new Set(parsed).size === parsed.length,

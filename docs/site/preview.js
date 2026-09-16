@@ -198,6 +198,42 @@ export function createPreview(host, onStatus) {
   }
 
   /**
+   * A CSS polygon around the figure, from the silhouette the index already measured.
+   *
+   * Hotlinked artwork arrives with whatever the publisher drew behind it — the
+   * Q-version's source is a pink star scattered with confetti, and a rectangular crop
+   * of it carries all of that along. The pixels cannot be read, so the background
+   * cannot be keyed out the way `cutout.mjs` does it for a local copy; but the
+   * silhouette is 32 rows of left and right extents, and that is enough to describe
+   * the figure as a clip path and leave everything outside it behind.
+   *
+   * Slightly dilated, because the head layer rotates and a clip that hugged the hair
+   * would shave it.
+   *
+   * @param frame - the frame record: `box`, `profile` and optionally `crop`.
+   * @param sourceWidth - the natural width of the image being clipped.
+   * @param sourceHeight - its natural height.
+   * @returns a `polygon(...)` string, or undefined when there is no profile.
+   */
+  function silhouetteClip(frame, sourceWidth, sourceHeight) {
+    if (!Array.isArray(frame.profile) || !Array.isArray(frame.box)) return undefined;
+    const crop = frame.crop ?? { x: 0, y: 0, width: sourceWidth, height: sourceHeight };
+    const box = frame.box;
+    const rows = frame.profile.length / 2;
+    // Two percent of the figure's width, expressed against the whole image.
+    const pad = ((box[2] * 0.02) / sourceWidth) * 100;
+    const x = (normalised) => (((crop.x + box[0] + normalised * box[2]) / sourceWidth) * 100).toFixed(2);
+    const y = (normalised) => (((crop.y + box[1] + normalised * box[3]) / sourceHeight) * 100).toFixed(2);
+    const left = [];
+    const right = [];
+    for (let row = 0; row < rows; row++) {
+      const atY = y((row + 0.5) / rows);
+      left.push(`${(Number(x(frame.profile[row * 2])) - pad).toFixed(2)}% ${atY}%`);
+      right.push(`${(Number(x(frame.profile[row * 2 + 1])) + pad).toFixed(2)}% ${atY}%`);
+    }
+    return `polygon(${[...left, ...right.reverse()].join(", ")})`;
+  }
+  /**
    * Animate a look with CSS layers, when the WebGL rig is not allowed near it.
    *
    * A cross-origin image without a CORS header cannot be uploaded as a texture, so
@@ -270,6 +306,18 @@ export function createPreview(host, onStatus) {
       layer.style.setProperty("--neck-y", `${spec.neckY.toFixed(2)}%`);
       layer.style.setProperty("--hip-x", "50%");
       layer.style.setProperty("--hip-y", `${spec.hipY.toFixed(2)}%`);
+
+      // Clipped to the figure, so whatever the publisher drew behind it stays behind.
+      //
+      // Only for a look that was cut out of its source in the first place: `cutout` is
+      // declared for artwork whose download carries a background worth removing, and a
+      // crop rectangle is the record of that. A look downloaded whole already looks
+      // however its publisher intended, and a 32-sided polygon would only add faceting
+      // to artwork that has nothing to hide.
+      if (pose.frame.crop !== null && pose.frame.crop !== undefined) {
+        const clip = silhouetteClip(pose.frame, sourceWidth, sourceHeight);
+        if (clip !== undefined) layer.style.clipPath = clip;
+      }
 
       // One root per pose, holding the body and the head: the head is its child, so
       // it inherits the sway and adds its own nod on top.
