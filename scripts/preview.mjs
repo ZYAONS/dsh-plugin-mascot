@@ -22,32 +22,20 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { findChromium } from "./chrome.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const docs = join(root, "docs");
 mkdirSync(docs, { recursive: true });
 
-/** `--official` renders against the artwork in `art/` instead of the fallback. */
+/** `--official` renders against the artwork in `art/` instead of the placeholder. */
 const official = process.argv.includes("--official");
 const artBase = official ? pathToFileURL(join(root, "art")).href : "";
 
-const CHROME_CANDIDATES = [
-  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-  "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-  "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-  "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
-  "/usr/bin/google-chrome",
-  "/usr/bin/chromium",
-  "/usr/bin/chromium-browser",
-];
-const chrome = CHROME_CANDIDATES.find((candidate) => existsSync(candidate));
-if (chrome === undefined) {
-  console.error("preview: no Chromium binary found");
-  process.exit(1);
-}
+const chrome = findChromium();
 
 const url = (relative) => pathToFileURL(join(root, relative)).href;
 

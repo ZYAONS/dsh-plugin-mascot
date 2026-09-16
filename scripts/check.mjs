@@ -125,20 +125,36 @@ await it("apply() registers into shell.overlay and declares its own session-scop
 //#region 3 — statistics
 const { deriveStats, MASCOTS } = exports_;
 
-await it("both mascots ship with inlined, well-formed SVG", () => {
+await it("both mascots are configured for official Q-version artwork", () => {
   assert.equal(MASCOTS.length, 2);
-  for (const mascot of MASCOTS) {
-    assert.ok(mascot.svg.startsWith("<svg"), `${mascot.id}: art must start with <svg`);
-    assert.ok(mascot.svg.trimEnd().endsWith("</svg>"), `${mascot.id}: art must be closed`);
-    assert.ok(mascot.svg.length > 4000, `${mascot.id}: art looks truncated`);
-    assert.match(mascot.svg, /viewBox="[^"]+"/u, `${mascot.id}: art needs a viewBox to scale`);
-    assert.ok(!mascot.svg.includes("NaN"), `${mascot.id}: art contains a NaN coordinate`);
-    assert.equal((mascot.svg.match(/<svg/gu) ?? []).length, 1, `${mascot.id}: exactly one root <svg>`);
-  }
   assert.deepEqual(
     MASCOTS.map((m) => m.id),
     ["closure", "yuno"],
   );
+  for (const mascot of MASCOTS) {
+    assert.equal(typeof mascot.art, "string", `${mascot.id}: must name its official artwork`);
+    assert.match(mascot.art, /^[a-z0-9_-]+\.(png|webp|jpg)$/u, `${mascot.id}: artwork name must be a bare file name`);
+    for (const seat of ["sprite", "face"]) {
+      const frame = mascot[seat];
+      assert.ok(frame !== undefined, `${mascot.id}: the ${seat} seat needs framing numbers`);
+      assert.equal(typeof frame.width, "number", `${mascot.id}.${seat}: width drives the rendered image size`);
+      assert.ok(frame.width > 0, `${mascot.id}.${seat}: width must be positive`);
+      assert.equal(typeof frame.left, "number");
+      assert.equal(typeof frame.top, "number");
+    }
+    assert.ok(
+      !Object.hasOwn(mascot, "svg"),
+      `${mascot.id}: the hand-drawn fallback is gone; the bundle must not carry character art`,
+    );
+  }
+});
+
+await it("the built-in fallback is a neutral placeholder, not character art", () => {
+  // What a fresh clone renders. It has to be recognisable as "art missing" and
+  // must not smuggle a drawing of the character back into the bundle.
+  assert.match(exports_.PLACEHOLDER_SVG, /^<svg /u, "the placeholder must be inline SVG");
+  assert.match(exports_.PLACEHOLDER_SVG, /artwork not installed/u, "it must say what is wrong");
+  assert.ok(!/hair|face|eye|skin/iu.test(exports_.PLACEHOLDER_SVG), "the placeholder must not depict a character");
 });
 
 await it("an absent session reads as unmeasured rather than as zero", () => {
@@ -417,18 +433,10 @@ await it("the artwork route serves from art/ and refuses to leave it", async () 
   }
 });
 
-await it("the browser half falls back to its vector art when the official file is absent", () => {
+await it("the browser half falls back to the placeholder when the official file is absent", () => {
   // The fallback is what a fresh clone shows, so it must be reachable without a
-  // network: the component renders the inlined SVG whenever `art` is unset.
-  for (const mascot of MASCOTS) {
-    assert.equal(typeof mascot.svg, "string");
-    assert.ok(mascot.svg.startsWith("<svg"), `${mascot.id}: fallback art must be real SVG`);
-    assert.equal(typeof mascot.art, "string", `${mascot.id}: must name its official artwork`);
-    assert.match(mascot.art, /^[a-z0-9_-]+\.(png|webp|jpg)$/u, `${mascot.id}: artwork name must be a bare file name`);
-    assert.ok(mascot.face !== undefined, `${mascot.id}: the panel portrait needs framing numbers`);
-    assert.equal(typeof mascot.face.width, "number");
-  }
-  assert.equal(exports_.setArtBase !== undefined, true, "the art base must be overridable for tests and preview");
+  // network: the component renders the inline SVG whenever the image errors.
+  assert.equal(typeof exports_.setArtBase, "function", "the art base must be overridable for tests and preview");
   exports_.setArtBase("file:///art");
   exports_.setArtBase("/dsh-mascot/art");
 });

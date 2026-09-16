@@ -22,17 +22,16 @@ SOFTWARE.
 
 ---
 
-The vector artwork in assets/ (closure.svg, yuno.svg) is original fan art drawn
-for this repository and is covered by the same MIT grant. It depicts characters
-owned by third parties:
+The official Q-version artwork that `npm run fetch-art` downloads into art/ is
+NOT part of this repository and is NOT covered by this licence. It is
+publisher-commissioned art owned by third parties:
 
   - Closure (可露希尔) — © Hypergryph / Studio Montagne, from "Arknights"
   - Sengoku Yuno (千石由乃) — © Bushiroad, from "BanG Dream!" / Mugendai MewType
 
-The official artwork that `npm run fetch-art` downloads into art/ is NOT part of
-this repository and is NOT covered by this licence. It remains the property of
-its respective owners; the fetch script exists precisely so that those files are
-obtained by each user rather than redistributed here.
+The fetch script exists precisely so that those files are obtained by each user
+rather than redistributed here. The placeholder glyph in lib/client.js is an
+original generic "image missing" symbol and is covered by the MIT grant above.
 
 This project is an unofficial fan work and is not affiliated with or endorsed by
 either rights holder.
