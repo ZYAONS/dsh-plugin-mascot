@@ -19,18 +19,24 @@
         <div class="brandmark"></div>
         <h1>Mascot Console<small>DSH Plugin Configurator</small></h1>
       </div>
+      <!-- Choosing a character's theme also selects that character, so the two can be
+           set from here or from section 02 but can never describe different people.
+           Auto is the neutral silver, which belongs to no character and so cannot
+           contradict one. -->
       <div class="themer">
-        <span class="lbl">Page theme<small>auto follows the character</small></span>
+        <span class="lbl">Page theme<small>a character&rsquo;s theme selects its character</small></span>
         <div class="seg" id="theme">
-          <button type="button" data-theme-choice="auto" data-on="1" title="Use whichever theme belongs to the selected character">Auto</button>
+          <button type="button" data-theme-choice="auto" data-on="1" title="Neutral silver, belonging to no character">Auto</button>
           <button type="button" data-theme-choice="closure">Closure</button>
           <button type="button" data-theme-choice="yuno">Yuno</button>
+          <button type="button" data-theme-choice="muelsyse">Muelsyse</button>
         </div>
+        <div class="themechip"><i id="theme-swatch"></i><b id="theme-name">—</b></div>
       </div>
     </div>
     <p class="tagline">
-      Decide, in a browser, whether the mascot plugin is on, whether it wears Closure
-      or Sengoku Yuno, which artwork it may show, and whether it animates or queries
+      Decide, in a browser, whether the mascot plugin is on, whether it wears Closure,
+      Sengoku Yuno or Muelsyse, which artwork it may show, and whether it animates or queries
       your balance — then paste the generated configuration into your DSH profile.
       This page never touches your machine; it only turns your choices into YAML.
     </p>
@@ -116,8 +122,9 @@
       <span class="rule"></span>
     </div>
     <p class="sec-note">
-      Each character brings a whole interface style, not a recolour: shape language,
-      progress bars, ambient motion and figure typeface all differ.
+      Each character brings its own interface style — colours, shape language, progress
+      bars, ambient motion and typeface — and picking one sets both the artwork and the
+      theme, so the two can never disagree.
     </p>
     <div class="grid two" id="characters"></div>
   </section>

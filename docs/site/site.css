@@ -20,36 +20,102 @@
 }
 
 /* ================= closure — Rhodes Island engineering console =================
- * Cool, precise, rectangular. Blue-black ground, cyan signal, hard brackets on
- * what is selected, a faint scanline grid behind everything. */
+ * Blue, on silver chrome. Cool neutral grounds and silver-white type, with a clear
+ * blue signal; hard brackets on what is selected and a faint scanline grid behind
+ * everything. The character is blue-haired and silver-clad, and the theme is built
+ * from those two facts rather than from an arbitrary accent. */
+/* ================= :root — the page's own neutral theme =================
+ * Silver: a cool grey signal on a neutral near-black. This is what shows before a
+ * character resolves, and what an unknown character falls back to — a neutral voice
+ * rather than one character's colours standing in for the page's. Each character
+ * overrides it below. */
 :root,
+[data-theme="auto"] {
+  --ink: #0b0c0e;
+  --panel: #141619;
+  --panel-2: #1b1e23;
+  --line: rgba(200, 208, 220, 0.10);
+  --line-strong: rgba(200, 208, 220, 0.26);
+  --signal: #c8ced8;
+  --signal-ink: #14171b;
+  --signal-dim: rgba(200, 206, 216, 0.13);
+  --text: #e9ecf1;
+  --dim: #8b919b;
+  --dimmer: #5b616a;
+  --ok: #c8ced8;
+  --radius: 4px;
+  --radius-sm: 3px;
+  --grid: rgba(200, 208, 220, 0.028);
+  --glow: rgba(200, 208, 220, 0.07);
+  --tape-a: #c8ced8;
+  --tape-b: #0d0f12;
+  --label-font: var(--mono);
+  --label-spacing: 0.16em;
+  --card-lift: translateY(-1px);
+}
+
+/* ================= closure — blue on silver ================= */
 [data-theme="closure"] {
-  --ink: #06090d;
-  --panel: #0c1218;
-  --panel-2: #111a22;
-  --line: rgba(140, 215, 230, 0.10);
-  --line-strong: rgba(140, 215, 230, 0.26);
-  --signal: #37e0d8;
-  --signal-ink: #03100f;
-  --signal-dim: rgba(55, 224, 216, 0.12);
-  --text: #e4eef3;
-  --dim: #7c8f9b;
-  --dimmer: #4d5c66;
-  --ok: #37e0d8;
+  --ink: #07090d;
+  --panel: #0d1118;
+  --panel-2: #141a24;
+  --line: rgba(165, 190, 220, 0.12);
+  --line-strong: rgba(180, 205, 235, 0.3);
+  --signal: #6ea8e8;
+  --signal-ink: #05090f;
+  --signal-dim: rgba(110, 168, 232, 0.13);
+  --text: #e6ecf4;
+  --dim: #8b98a8;
+  --dimmer: #5b6472;
+  --ok: #6ea8e8;
   --radius: 0px;
   --radius-sm: 0px;
-  --grid: rgba(120, 205, 215, 0.028);
-  --glow: rgba(55, 224, 216, 0.075);
-  --tape-a: #37e0d8;
-  --tape-b: #07100f;
+  --grid: rgba(170, 195, 225, 0.03);
+  --glow: rgba(110, 168, 232, 0.085);
+  --tape-a: #b9c9dc;
+  --tape-b: #0a0d12;
   --label-font: var(--mono);
   --label-spacing: 0.18em;
   --card-lift: translateY(-1px);
 }
 
+/* ================= muelsyse — Rhine Lab ecology =================
+ * Clean, scientific, water. A cool blue signal, soft corners, plain labels rather
+ * than the console's monospace or the stage's rounded face, and a thin inset ring on
+ * what is selected instead of brackets or a glow. */
+[data-theme="muelsyse"] {
+  --ink: #070d12;
+  --panel: #0d161d;
+  --panel-2: #122029;
+  --line: rgba(140, 200, 240, 0.11);
+  --line-strong: rgba(140, 200, 240, 0.28);
+  --signal: #5fb8f0;
+  --signal-ink: #04121c;
+  --signal-dim: rgba(95, 184, 240, 0.13);
+  --text: #e6f0f8;
+  --dim: #7f95a6;
+  --dimmer: #4e6373;
+  --ok: #5fb8f0;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --grid: rgba(120, 190, 230, 0.026);
+  --glow: rgba(95, 184, 240, 0.09);
+  --tape-a: #5fb8f0;
+  --tape-b: #06121a;
+  --label-font: var(--sans);
+  --label-spacing: 0.12em;
+  --card-lift: translateY(-1px);
+}
+[data-theme="muelsyse"] h1 { font-family: var(--sans); letter-spacing: 0.12em; }
+[data-theme="muelsyse"] .sec-head h2 { font-family: var(--sans); letter-spacing: 0.1em; }
+/* A thin inset ring, where the console brackets its choice and the stage lights it. */
+[data-theme="muelsyse"] .card::before, [data-theme="muelsyse"] .card::after { display: none; }
+[data-theme="muelsyse"] .card[data-on="1"] { box-shadow: 0 0 0 1px var(--signal) inset; }
+
 /* ================= yuno — MEWTYPE live set =================
- * Warm, rounded, lit. Purple-black ground, magenta signal, a glow instead of
- * brackets, softer ambient light and a rounded label face. */
+ * Pink, warm and lit — the character is pink-haired and pink-clad. Purple-black
+ * ground, magenta signal, a glow instead of brackets, softer ambient light and a
+ * rounded label face. The two themes are the two characters, not two preferences. */
 [data-theme="yuno"] {
   --ink: #0a0610;
   --panel: #150c1c;
@@ -152,7 +218,17 @@ h1 small {
   display: block; font-size: 9px; letter-spacing: 0.06em; text-transform: none;
   color: var(--dimmer); opacity: 0.7; margin-top: 2px;
 }
-.themer .seg { width: 260px; }
+.themer .seg { width: 100%; margin-bottom: 8px; }
+.themechip {
+  display: flex; align-items: center; gap: 9px; justify-content: flex-end;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 7px 12px;
+  background: var(--panel); width: 100%;
+}
+.themechip i { width: 10px; height: 10px; display: block; border-radius: var(--radius-sm); flex: none; }
+.themechip b {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--text);
+  font-weight: 600; white-space: nowrap;
+}
 
 .tagline { color: var(--dim); font-size: 13px; line-height: 1.7; margin: 14px 0 0; max-width: 62ch; }
 .meta {
@@ -204,6 +280,7 @@ section { margin-top: 42px; }
 .card[data-on="1"]::before, .card[data-on="1"]::after { opacity: 1; }
 /* The stage's way is a glow, not a bracket. */
 [data-theme="yuno"] .card::before, [data-theme="yuno"] .card::after { display: none; }
+
 [data-theme="yuno"] .card[data-on="1"] { box-shadow: 0 0 0 1px var(--signal), 0 0 26px var(--signal-dim); }
 
 .card .code {
@@ -420,7 +497,10 @@ input[type="file"]::file-selector-button:hover { border-color: var(--signal); co
   width: var(--src-w, 100%);
   height: var(--src-h, 100%);
   opacity: 0;
-  transition: opacity 1.1s ease-in-out;
+  /* Short on purpose. The two poses are different drawings — a front view and a
+     turned one — so a slow dissolve leaves the first one's head hanging beside the
+     second's for as long as it lasts. This is a turn, not a morph. */
+  transition: opacity 260ms ease-in-out;
 }
 .css-rig .rig-pose[data-shown="1"] { opacity: 1; }
 

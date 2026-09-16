@@ -22,10 +22,16 @@ const STATE_KEY = "dsh-mascot-console";
 const THEME_COLOURS = {
   rhodes: { accent: "#37e0d8", label: "CONSOLE", page: "closure" },
   mewtype: { accent: "#ff4d9d", label: "LIVE SET", page: "yuno" },
+  rhine: { accent: "#5fb8f0", label: "RHINE LAB", page: "muelsyse" },
 };
 
 /** Human names for the page themes, for the header readout. */
-const PAGE_THEME_NAMES = { closure: "Closure · Rhodes Island console", yuno: "Yuno · MEWTYPE live set" };
+const PAGE_THEME_NAMES = {
+  auto: "neutral silver",
+  closure: "blue on silver",
+  yuno: "pink neon",
+  muelsyse: "Rhine blue",
+};
 
 const state = {
   catalog: { characters: [], looks: [], version: "0.0.0", repository: REPO },
@@ -38,9 +44,15 @@ const state = {
   balance: true,
   mount: "name",
   dir: "",
-  /** "auto" follows the selected character; anything else pins one theme. */
-  theme: "auto",
 
+
+  /**
+   * The page theme. `auto` is the neutral silver; the other three are the three
+   * characters, and choosing one of those also selects its character — see
+   * `chooseTheme`. A theme and an artwork that disagree is a page contradicting
+   * itself, so the two are moved together whichever control is used.
+   */
+  theme: "auto",
   /**
    * The look the frame is showing, when the visitor picked one by clicking a card.
    * Distinct from the allowlist ticks: the ticks decide what the *plugin* may offer,
@@ -85,23 +97,58 @@ function enabledLooks(characterId) {
 }
 
 //#region render
-/** The page theme a character's own interface style maps to. */
+/**
+ * The page theme a character wears.
+ *
+ * Derived, never chosen. The theme and the artwork on screen are two statements
+ * about the same character, so a control that let them disagree was a control that
+ * let the page contradict itself — picking Yuno and getting Closure's blue, or the
+ * reverse. There is no theme state to get out of step, because there is no theme
+ * state: it is a function of the selection.
+ */
 function pageThemeOf(characterId) {
   const character = characterOf(characterId);
-  return THEME_COLOURS[character?.theme]?.page ?? "closure";
+  // An unknown character falls back to the page's own neutral theme, not to one of
+  // the other characters' — the fallback should not be a claim about who this is.
+  return THEME_COLOURS[character?.theme]?.page ?? "auto";
 }
 
-/** The theme actually applied, resolving "auto" against the selected character. */
-const activeTheme = () => (state.theme === "auto" ? pageThemeOf(state.character) : state.theme);
+/**
+ * Choose a page theme.
+ *
+ * A character's theme also selects that character, so the header buttons and the
+ * cards in section 02 are two ways of saying one thing and cannot disagree. `auto`
+ * is the neutral silver: it belongs to no character, so it claims nothing and
+ * leaves the selection alone.
+ */
+function chooseTheme(choice) {
+  if (PAGE_THEME_NAMES[choice] === undefined) return;
+  state.theme = choice;
+  if (choice !== "auto") {
+    const character = state.catalog.characters.find((entry) => THEME_COLOURS[entry.theme]?.page === choice);
+    if (character !== undefined) {
+      state.character = character.id;
+      // A look belongs to one character, so a choice made for the last one is not a
+      // choice about this one.
+      state.previewLook = undefined;
+      renderCharacters();
+      renderLooks();
+    }
+  }
+  render();
+}
 
-/** Apply the theme to the document and its readout. */
+/** Apply the theme, and light the control that set it. */
 function applyTheme() {
-  const theme = activeTheme();
+  const theme = state.theme;
+  for (const button of $("theme").querySelectorAll("button")) {
+    button.dataset.on = button.dataset.themeChoice === theme ? "1" : "0";
+  }
   document.documentElement.dataset.theme = theme;
   $("m-theme").textContent = PAGE_THEME_NAMES[theme] ?? theme;
-  for (const button of $("theme").querySelectorAll("button")) {
-    button.dataset.on = button.dataset.themeChoice === state.theme ? "1" : "0";
-  }
+  const character = characterOf(state.character);
+  $("theme-name").textContent = `${character?.nameEn ?? state.character} · ${PAGE_THEME_NAMES[theme] ?? theme}`;
+  $("theme-swatch").style.background = getComputedStyle(document.documentElement).getPropertyValue("--signal").trim();
 }
 
 /** Persist the console state so a reload keeps the visitor's choices. */
@@ -117,6 +164,7 @@ function save() {
       mount: state.mount,
       dir: state.dir,
       theme: state.theme,
+
     }));
   } catch {
     /* private mode — the choices simply do not persist */
@@ -138,6 +186,7 @@ function load() {
     if (saved.mount === "name" || saved.mount === "file") state.mount = saved.mount;
     if (typeof saved.dir === "string") state.dir = saved.dir;
     if (typeof saved.theme === "string") state.theme = saved.theme;
+
   } catch {
     /* unreadable state is not worth reporting; defaults are fine */
   }
@@ -172,9 +221,14 @@ function renderCharacters() {
     ].join("");
     const choose = () => {
       state.character = character.id;
+      // The card and the header button say the same thing, so both move together.
+      state.theme = pageThemeOf(character.id);
       // A look belongs to one character, so a choice made for the last one is not a
       // choice about this one.
       state.previewLook = undefined;
+      // And the theme follows the character, unless the visitor has asked for the
+      // neutral one — which describes no character and so cannot contradict this.
+      if (state.theme !== "auto") state.theme = pageThemeOf(character.id);
       renderCharacters();
       renderLooks();
       render();
@@ -265,9 +319,12 @@ function buildConfig() {
   lines.push("      config:");
   lines.push(`        # Default character: ${character === undefined ? state.character : (character.nameEn ?? character.name)}`);
   lines.push(`        character: ${state.character}`);
-  const preferred = enabledLooks(state.character).find((look) => (state.animated ? true : !look.animated)) ?? enabledLooks(state.character)[0];
-  lines.push(`        # Default look within that character.`);
-  lines.push(`        look: ${preferred.id}`);
+  const available = enabledLooks(state.character);
+  const preferred = available.find((look) => (state.animated ? true : !look.animated)) ?? available[0];
+  lines.push("        # Default look within that character. Empty means the plugin picks");
+  lines.push("        # its first installed one, which is what this says before the");
+  lines.push("        # catalogue has loaded.");
+  lines.push(`        look: ${preferred === undefined ? '""' : preferred.id}`);
   lines.push("        # Allowlist of looks the panel may offer. An empty list means");
   lines.push("        # every installed look.");
   lines.push("        looks:");
@@ -398,7 +455,9 @@ async function setupPreview() {
     paintPreviewStatusRefresh();
     return;
   }
-  await preview.show(state.character, undefined);
+  // The selected look, not the character's first one: the frame is meant to show
+  // what the cards above it say is on screen.
+  await preview.show(state.character, previewedLook());
   paintPreviewStatusRefresh();
 }
 
@@ -487,10 +546,12 @@ function applyQuery() {
   } catch {
     return;
   }
-  const theme = query.get("theme");
-  if (theme === "auto" || theme === "closure" || theme === "yuno") state.theme = theme;
+
   const character = query.get("character");
   if (character !== null && character !== "") state.character = character;
+  const theme = query.get("theme");
+  // `?theme=` moves the character too, through the same rule the buttons use.
+  if (theme !== null && theme !== "" && PAGE_THEME_NAMES[theme] !== undefined) chooseTheme(theme);
   const look = query.get("look");
   if (look !== null && look !== "") state.previewLook = look;
   const preview = query.get("preview");
@@ -511,6 +572,15 @@ async function main() {
   // it has: on the published copy the catalogue is where the preview finds both the
   // framing and the source URLs for every look.
   previewRef.current?.setCatalogue(state.catalog);
+
+  // Reconcile the theme with the character, now that the catalogue can answer which
+  // theme a character wears. This has to run *after* the fetch: before it, no character
+  // is known, and a reconciliation would read that as "no theme" and discard the
+  // visitor's stored choice. A stored character-theme can also disagree with the
+  // character a link names — last visit's preference against a `?character=` — which is
+  // precisely the mismatch the pairing rule exists to prevent.
+  if (state.theme !== "auto") state.theme = pageThemeOf(state.character);
+
   const characters = state.catalog.characters ?? [];
   if (characters.length > 0 && !characters.some((entry) => entry.id === state.character)) {
     state.character = characters[0].id;
@@ -528,10 +598,11 @@ async function main() {
   bindToggle("t-skeleton", (value) => { state.skeleton = value; });
   bindToggle("t-animated", (value) => { state.animated = value; });
 
+
+
   for (const button of $("theme").querySelectorAll("button")) {
     button.addEventListener("click", () => {
-      state.theme = button.dataset.themeChoice;
-      render();
+      chooseTheme(button.dataset.themeChoice);
     });
   }
 
@@ -563,10 +634,13 @@ async function main() {
 
   renderCharacters();
   renderLooks();
-  // The preview is created and probed before the first render, so the render pass
-  // drives a preview that already knows which origin it is on.
-  await setupPreview();
   render();
+  // Started, not awaited, and after the first render: setting the preview up loads
+  // artwork over the network, and the console must not wait on a decoration to become
+  // usable. It fills in when it can, and drives itself from then on.
+  setupPreview().catch(() => {
+    /* a preview that cannot start leaves the console exactly as it is */
+  });
 }
 
 main();

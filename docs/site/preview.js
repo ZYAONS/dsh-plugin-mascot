@@ -214,64 +214,74 @@ export function createPreview(host, onStatus) {
    * @param images - one loaded image per drawn pose.
    * @param frame - the frame record, carrying `box` and `profile`.
    */
-  function cssRig(images, frame) {
-    const image = images[0];
-    const sourceWidth = image.naturalWidth;
-    const sourceHeight = image.naturalHeight;
-    // A frame cut out of a larger download arrives as the *whole* download when it
-    // is hotlinked, so the crop rectangle says which part of it this frame is. The
-    // measured box and profile are in the crop's coordinates, because that is what
-    // they were measured on.
-    const crop = frame.crop ?? { x: 0, y: 0, width: sourceWidth, height: sourceHeight };
-    const box = frame.box;
-    const neck = findNeck(frame.profile);
+  function cssRig(poses, label) {
+    const first = poses[0];
+    const sourceWidth = first.image.naturalWidth;
+    const sourceHeight = first.image.naturalHeight;
 
-    // Everything below is a percentage of the source image, which is what the
-    // browser actually holds and what the transform origins and the mask line are
-    // resolved against.
-    const asSourceX = (value) => ((crop.x + value) / sourceWidth) * 100;
-    const asSourceY = (value) => ((crop.y + value) / sourceHeight) * 100;
-    const neckX = asSourceX(box[0] + neck.x * box[2]);
-    const neckY = asSourceY(box[1] + neck.y * box[3]);
-    const hipY = asSourceY(box[1] + RIG.hip * box[3]);
+    // Where each pose sits inside the file the browser holds. A frame that was cut
+    // out of a larger download has its own rectangle, and they are *not* the same —
+    // the Q-version's two poses are 250 pixels apart in a 645-wide source. Drawing
+    // every pose through the first one's window shows the first pose twice, which is
+    // what made the turn look like nothing happening.
+    const geometry = poses.map((pose) => {
+      const crop = pose.frame.crop ?? { x: 0, y: 0, width: sourceWidth, height: sourceHeight };
+      const box = pose.frame.box;
+      const neck = findNeck(pose.frame.profile);
+      const scale = SEAT.height / crop.height;
+      // Everything the rig uses is a percentage of the source image, which is what
+      // the transform origins and the mask line resolve against.
+      const asSourceX = (value) => ((crop.x + value) / sourceWidth) * 100;
+      const asSourceY = (value) => ((crop.y + value) / sourceHeight) * 100;
+      return {
+        crop,
+        scale,
+        viewWidth: crop.width * scale,
+        sourceDisplayWidth: sourceWidth * scale,
+        sourceDisplayHeight: sourceHeight * scale,
+        cut: asSourceY(box[1] + neck.y * box[3]),
+        neckX: asSourceX(box[0] + neck.x * box[2]),
+        neckY: asSourceY(box[1] + neck.y * box[3]),
+        hipY: asSourceY(box[1] + RIG.hip * box[3]),
+      };
+    });
 
-    // The visible box is the crop, scaled so its height is the seat height.
-    const scale = SEAT.height / crop.height;
-    const viewWidth = crop.width * scale;
-    const sourceDisplayWidth = sourceWidth * scale;
-    const sourceDisplayHeight = sourceHeight * scale;
+    // One box wide enough for the widest pose; each pose centres its own crop in it,
+    // so a narrower turned pose stays centred instead of drifting sideways.
+    const boxWidth = Math.max(...geometry.map((entry) => entry.viewWidth));
 
     host.textContent = "";
     const rig = document.createElement("div");
     rig.className = "css-rig";
-    rig.style.width = `${viewWidth.toFixed(1)}px`;
+    rig.style.width = `${boxWidth.toFixed(1)}px`;
     rig.style.height = `${SEAT.height}px`;
-    rig.style.setProperty("--off-x", `${(-crop.x * scale).toFixed(1)}px`);
-    rig.style.setProperty("--off-y", `${(-crop.y * scale).toFixed(1)}px`);
-    rig.style.setProperty("--src-w", `${sourceDisplayWidth.toFixed(1)}px`);
-    rig.style.setProperty("--src-h", `${sourceDisplayHeight.toFixed(1)}px`);
-    rig.style.setProperty("--cut", `${neckY.toFixed(2)}%`);
-    rig.style.setProperty("--neck-x", `${neckX.toFixed(2)}%`);
-    rig.style.setProperty("--neck-y", `${neckY.toFixed(2)}%`);
-    rig.style.setProperty("--hip-x", "50%");
-    rig.style.setProperty("--hip-y", `${hipY.toFixed(2)}%`);
 
-    for (const [position, pose] of images.entries()) {
+    for (const [position, pose] of poses.entries()) {
+      const spec = geometry[position];
       const layer = document.createElement("div");
       layer.className = "rig-pose";
       if (position === 0) layer.dataset.shown = "1";
+      layer.style.setProperty("--off-x", `${((boxWidth - spec.viewWidth) / 2 - spec.crop.x * spec.scale).toFixed(1)}px`);
+      layer.style.setProperty("--off-y", `${(-spec.crop.y * spec.scale).toFixed(1)}px`);
+      layer.style.setProperty("--src-w", `${spec.sourceDisplayWidth.toFixed(1)}px`);
+      layer.style.setProperty("--src-h", `${spec.sourceDisplayHeight.toFixed(1)}px`);
+      layer.style.setProperty("--cut", `${spec.cut.toFixed(2)}%`);
+      layer.style.setProperty("--neck-x", `${spec.neckX.toFixed(2)}%`);
+      layer.style.setProperty("--neck-y", `${spec.neckY.toFixed(2)}%`);
+      layer.style.setProperty("--hip-x", "50%");
+      layer.style.setProperty("--hip-y", `${spec.hipY.toFixed(2)}%`);
 
       // One root per pose, holding the body and the head: the head is its child, so
       // it inherits the sway and adds its own nod on top.
       const root = document.createElement("div");
       root.className = "rig-root";
       const bodyImage = document.createElement("img");
-      bodyImage.src = pose.src;
+      bodyImage.src = pose.image.src;
       bodyImage.alt = "";
       const headLayer = document.createElement("div");
       headLayer.className = "rig-head-layer";
       const headImage = document.createElement("img");
-      headImage.src = pose.src;
+      headImage.src = pose.image.src;
       headImage.alt = "";
       headLayer.append(headImage);
       root.append(bodyImage, headLayer);
@@ -280,67 +290,35 @@ export function createPreview(host, onStatus) {
     }
     host.append(rig);
 
-    if (images.length > 1) {
-      const poses = [...rig.children];
+    if (poses.length > 1) {
+      const layers = [...rig.children];
       let shown = 0;
       const advance = () => {
-        delete poses[shown].dataset.shown;
-        shown = (shown + 1) % poses.length;
-        poses[shown].dataset.shown = "1";
+        delete layers[shown].dataset.shown;
+        shown = (shown + 1) % layers.length;
+        layers[shown].dataset.shown = "1";
         timers.push(window.setTimeout(advance, 5200));
       };
       timers.push(window.setTimeout(advance, 5200));
     }
+    say("ok", `${label} is animated with the layered CSS rig: its host sends no CORS header, so its pixels cannot be skinned, but the measured silhouette still places the head and the hip.` + (poses.length > 1 ? ` Its ${String(poses.length)} drawn poses cycle.` : " Publish a local copy for the full skeleton."));
   }
   /**
    * Draw the skeleton itself, for the selected look.
    *
-   * This needs no pixels: the rig is derived from the silhouette profile and the
-   * bounding box, both of which are numbers in the catalogue. So it works for every
-   * look on the published page, including the ones whose artwork the WebGL rig is
-   * not allowed to touch — and it answers the question the artwork cannot, which is
-   * what the three bones actually are and where they were put.
+   * This needs no pixels: the rig comes from the silhouette profile and the bounding
+   * box, both of which are numbers in the catalogue. So it works for every look on
+   * the published page, including the ones whose artwork the WebGL rig is not allowed
+   * to touch — and it answers the question the artwork cannot, which is what the three
+   * bones actually are and where they were put.
    *
    * The figure outline and the deformation mesh are drawn from the same rest-pose
-   * measurements, and both deform with the skeleton, so what is on screen is the rig
+   * measurements and are skinned by the same weights, so what is on screen is the rig
    * doing its work rather than an illustration of it.
    *
    * @param frames - one `{ box, profile }` per pose; the first is drawn.
    * @param label - what to caption it with.
    */
-  /**
-   * Show the skeleton for one look.
-   *
-   * Resolved from whichever source this page has, exactly as `show` does — but the
-   * skeleton needs only the bounding box and the silhouette profile, both of which
-   * are numbers. No image loads and no CORS is involved, which is why this works for
-   * every look on the published page, including the ones whose pixels WebGL refuses.
-   */
-  async function useSkeleton(characterId, lookId) {
-    const hosted = index === undefined ? [] : index.looks.filter((look) => look.character === characterId);
-    const baked = (catalogue?.looks ?? []).filter((look) => look.character === characterId);
-    const fromHost = hosted.find((look) => look.id === lookId) ?? hosted[0];
-    const fromCatalogue = baked.find((look) => look.id === lookId) ?? baked[0];
-
-    if (fromHost !== undefined) {
-      const frames = fromHost.frames
-        .map((frame) => ({ box: frame.measured?.box, profile: frame.profile }))
-        .filter((frame) => Array.isArray(frame.box) && Array.isArray(frame.profile));
-      if (frames.length > 0) {
-        skeleton(frames, fromHost.nameEn ?? fromHost.id);
-        return true;
-      }
-    }
-    if (fromCatalogue !== undefined) {
-      const frames = fromCatalogue.frames.filter((frame) => Array.isArray(frame.box) && Array.isArray(frame.profile));
-      if (frames.length > 0) {
-        skeleton(frames, fromCatalogue.nameEn ?? fromCatalogue.id);
-        return true;
-      }
-    }
-    notice("No measured silhouette is available for this look, so there is no skeleton to draw.");
-    return false;
-  }
   function skeleton(frames, label) {
     stop();
     host.textContent = "";
@@ -363,9 +341,9 @@ export function createPreview(host, onStatus) {
 
     const style = getComputedStyle(document.documentElement);
     const read = (name, fallback) => style.getPropertyValue(name).trim() || fallback;
-    const signal = read("--signal", "#37e0d8");
-    const dim = read("--dim", "#7c8f9b");
-    const text = read("--text", "#e4eef3");
+    const signal = read("--signal", "#6ea8e8");
+    const dim = read("--dim", "#8b98a8");
+    const text = read("--text", "#e6ecf4");
 
     // Fit the figure's bounding box into the seat, preserving its proportions.
     const scale = Math.min(width / box[2], height / box[3]);
@@ -383,7 +361,7 @@ export function createPreview(host, onStatus) {
       x: matrix[0] * point.x + matrix[3] * point.y + matrix[6],
       y: matrix[1] * point.x + matrix[4] * point.y + matrix[7],
     });
-    /** Linear blend skinning, the same sum the vertex shader performs. */
+    /** Linear blend skinning: the same weighted sum the vertex shader performs. */
     const skin = (matrices, weights, point) => {
       let x = 0;
       let y = 0;
@@ -394,12 +372,12 @@ export function createPreview(host, onStatus) {
       }
       return { x, y };
     };
-
     const smoothstep = (edge0, edge1, value) => {
       const ratio = Math.min(1, Math.max(0, (value - edge0) / (edge1 - edge0)));
       return ratio * ratio * (3 - 2 * ratio);
     };
 
+    const stride = bones.cols + 1;
     const started = performance.now();
     const loop = (now) => {
       raf = window.requestAnimationFrame(loop);
@@ -407,9 +385,16 @@ export function createPreview(host, onStatus) {
       const matrices = poseRig(bones, box, { time, pokeAge: undefined });
       ctx.clearRect(0, 0, width, height);
 
-      // The figure's outline, skinned by the same weights the mesh uses. Drawn in
-      // rest pose it would disagree with the mesh the moment the pose moved, which
-      // reads as a bug rather than as a reference.
+      const skinnedAt = (index) => {
+        const vertex = bones.vertices[index];
+        const rest = { x: box[0] + vertex.x * box[2], y: box[1] + vertex.y * box[3] };
+        const moved = skin(matrices, vertex.w, rest);
+        return toCanvas(moved.x, moved.y);
+      };
+
+      // The outline, skinned by the same weights the mesh uses. Drawn in rest pose it
+      // would disagree with the mesh the moment the pose moved, which reads as a bug
+      // rather than as a reference.
       const rows = frame.profile.length / 2;
       const weightsAt = (normalisedY) => {
         const head = smoothstep(bones.neck.y + RIG.band, bones.neck.y - RIG.band, normalisedY);
@@ -444,12 +429,6 @@ export function createPreview(host, onStatus) {
       ctx.globalAlpha = 1;
 
       // The deformation mesh, skinned, so the surface the rig drives is visible.
-      const stride = bones.cols + 1;
-      const skinnedAt = (index) => {
-        const vertex = bones.vertices[index];
-        const rest = { x: box[0] + vertex.x * box[2], y: box[1] + vertex.y * box[3] };
-        return toCanvas(skin(matrices, vertex.w, rest).x, skin(matrices, vertex.w, rest).y);
-      };
       ctx.strokeStyle = signal;
       ctx.globalAlpha = 0.16;
       ctx.lineWidth = 1;
@@ -473,9 +452,9 @@ export function createPreview(host, onStatus) {
       ctx.stroke();
       ctx.globalAlpha = 1;
 
-      // The chain: root at the feet, spine at the hip, neck carrying the head.
-      // Each joint is its own bone's pivot carried by that bone's matrix, which is
-      // what puts the head on the end of the chain rather than beside it.
+      // The chain: root at the feet, spine at the hip, neck carrying the head. Each
+      // joint is its own bone's pivot carried by that bone's matrix, which is what
+      // puts the head on the end of the chain rather than beside it.
       const jointAt = (index) => {
         const bone = bones.bones[index].pivot;
         const rest = { x: box[0] + bone.x * box[2], y: box[1] + bone.y * box[3] };
@@ -517,6 +496,40 @@ export function createPreview(host, onStatus) {
     raf = window.requestAnimationFrame(loop);
     host.append(canvas);
     say("ok", `Showing the skeleton derived from ${label}: root at the feet, spine at the hip, neck at ${(findNeck(frame.profile).y * 100).toFixed(0)}% of the figure — found, not assumed, by the pinch in the silhouette. The mesh is skinned by those three bones, the same sum the vertex shader performs.`);
+  }
+
+  /**
+   * Show the skeleton for one look.
+   *
+   * Resolved from whichever source this page has, exactly as `show` does — but the
+   * skeleton needs only the bounding box and the silhouette profile, both of which
+   * are numbers. No image loads and no CORS is involved, which is why this works for
+   * every look on the published page, including the ones whose pixels WebGL refuses.
+   */
+  async function useSkeleton(characterId, lookId) {
+    const hosted = index === undefined ? [] : index.looks.filter((look) => look.character === characterId);
+    const baked = (catalogue?.looks ?? []).filter((look) => look.character === characterId);
+    const fromHost = hosted.find((look) => look.id === lookId) ?? hosted[0];
+    const fromCatalogue = baked.find((look) => look.id === lookId) ?? baked[0];
+
+    if (fromHost !== undefined) {
+      const frames = fromHost.frames
+        .map((frame) => ({ box: frame.measured?.box, profile: frame.profile }))
+        .filter((frame) => Array.isArray(frame.box) && Array.isArray(frame.profile));
+      if (frames.length > 0) {
+        skeleton(frames, fromHost.nameEn ?? fromHost.id);
+        return true;
+      }
+    }
+    if (fromCatalogue !== undefined) {
+      const frames = fromCatalogue.frames.filter((frame) => Array.isArray(frame.box) && Array.isArray(frame.profile));
+      if (frames.length > 0) {
+        skeleton(frames, fromCatalogue.nameEn ?? fromCatalogue.id);
+        return true;
+      }
+    }
+    notice("No measured silhouette is available for this look, so there is no skeleton to draw.");
+    return false;
   }
 
   /** An explanatory placeholder, so the frame is never merely blank. */
@@ -753,8 +766,13 @@ export function createPreview(host, onStatus) {
       // A frame fetched by URL is the whole download, so the crop rectangle tells the
       // rig which part of it this is. A frame read from a local file is already the
       // crop, and offsetting it again would push it out of the box.
-      cssRig(acquired.map((entry) => entry.image), { ...first.frame, crop: first.alreadyCropped ? null : first.frame.crop });
-      say("ok", `${look.nameEn ?? look.id} is animated with the layered CSS rig: its host sends no CORS header, so its pixels cannot be skinned, but the measured silhouette still places the head and the hip. Publish a local copy for the full skeleton.`);
+      cssRig(
+        acquired.map((entry) => ({
+          image: entry.image,
+          frame: { ...entry.frame, crop: entry.alreadyCropped ? null : entry.frame.crop },
+        })),
+        look.nameEn ?? look.id,
+      );
       return;
     }
     still(first.image);

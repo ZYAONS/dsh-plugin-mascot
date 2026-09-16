@@ -135,9 +135,9 @@ await it("every character names a theme the stylesheet can actually draw", () =>
     assert.ok(theme.font.length > 0, `${id}: a theme needs its own typeface for figures`);
     // The two themes must differ structurally, not just in hue, or "one style per
     // character" is a colour swap wearing a design's clothes.
-    assert.ok(["console", "stage"].includes(theme.shape), `${id}: unknown shape`);
-    assert.ok(["segmented", "vu"].includes(theme.bar), `${id}: unknown bar style`);
-    assert.ok(["scanline", "pulse"].includes(theme.decor), `${id}: unknown ambient decor`);
+    assert.ok(["console", "stage", "lab"].includes(theme.shape), `${id}: unknown shape`);
+    assert.ok(["segmented", "vu", "hairline"].includes(theme.bar), `${id}: unknown bar style`);
+    assert.ok(["scanline", "pulse", "ripple"].includes(theme.decor), `${id}: unknown ambient decor`);
     // The stylesheet selects on the shape/bar/decor attributes, so each named
     // value must actually have rules behind it.
     assert.ok(drawn.includes(`[data-shape="${theme.shape}"]`), `${id}: shape ${theme.shape} has no styling`);

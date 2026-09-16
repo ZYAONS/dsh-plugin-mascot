@@ -217,32 +217,30 @@ anything.
 `build-site` only advertises a local copy once it is actually **tracked by git**, so a
 catalogue can never promise files a deployment does not have. Build with the artwork
 present but uncommitted and the page correctly falls back to the sources.
-### Two page themes
+### Four page themes, one per character plus a neutral
 
-The console carries both characters' interface styles, switchable from the header,
-and they are not a hue swap:
+The console carries an interface style for each character, and they are not hue swaps:
 
-| | Closure | Yuno |
-|---|---|---|
-| Ground | blue-black | purple-black |
-| Signal | cyan `#37e0d8` | magenta `#ff4d9d` |
-| Corners | square | 14px rounded |
-| Selection cue | corner brackets | a glow |
-| Labels | monospace | rounded |
-| Hazard tape | cyan | magenta |
+| | Neutral (`auto`) | Closure | Yuno | Muelsyse |
+|---|---|---|---|---|
+| Ground | neutral charcoal | blue-black | purple-black | deep blue |
+| Signal | silver | blue | magenta | Rhine blue |
+| Corners | square | square | 14px rounded | 10px rounded |
+| Selection cue | brackets | corner brackets | a glow | an inset ring |
+| Labels | monospace | monospace | rounded | sans |
 
-**Auto** is the default, so picking Yuno in section 02 recolours the page — which
-makes the console a live preview of what the plugin will look like. Choosing a
-theme explicitly pins it against the character, and the lit button always says which
-of the two is in charge.
+**A character's theme selects that character.** Choosing Yuno's theme switches the
+artwork to Yuno, and choosing Yuno switches the theme to hers — whichever control you
+use, the two move together, because a page showing one character in another's colours
+is a page contradicting itself. The neutral theme is the exception that proves the
+rule: it belongs to no character, so it can be chosen without disturbing who is on
+screen, and it is the only one permitted to disagree with the artwork.
 
-Both are deep-linkable, which is also what makes them testable without driving
-clicks:
+Both are deep-linkable, and `?theme=` moves the character too:
 
 ```
-?theme=auto|closure|yuno      ?character=closure|yuno
+?theme=auto|closure|yuno|muelsyse      ?character=closure|yuno|muelsyse
 ```
-
 ### Language
 
 The console is **English**; the plugin's own panel is Chinese. The split is

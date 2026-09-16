@@ -45,6 +45,16 @@
       "tagline": "MEWTYPE LIVE",
       "taglineEn": "MEWTYPE live set",
       "theme": "mewtype"
+    },
+    {
+      "id": "muelsyse",
+      "name": "缪尔赛思",
+      "latin": "Muelsyse",
+      "role": "莱茵生命 · 生态科",
+      "roleEn": "Rhine Lab · Ecology",
+      "tagline": "莱茵生命 · 生态终端",
+      "taglineEn": "Rhine Lab ecology terminal",
+      "theme": "rhine"
     }
   ],
   "looks": [
@@ -115,6 +125,31 @@
       "sha256": "aa0336ac83385f99ba68d0dc2240482a8084c6b998b65121fb288319ea4d8c5b",
       "urls": [
         "https://mzh.moegirl.org.cn/Special:FilePath/%E5%8D%83%E7%9F%B3%E7%94%B1%E4%B9%83%20%E5%85%83%E7%A5%96.png"
+      ],
+      "cors": false
+    },
+    {
+      "id": "muelsyse-chibi",
+      "character": "muelsyse",
+      "name": "基建小人",
+      "nameEn": "Base sprite",
+      "file": "muelsyse-chibi.png",
+      "rights": "《明日方舟》© 上海鹰角网络 — 官方 Q 版干员小人 (char_249_mlyss)",
+      "urls": [
+        "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_249_mlyss.png",
+        "https://cdn.jsdelivr.net/gh/Light-milk-tea/ArknightsChibi@main/chibi/char_249_mlyss.png"
+      ],
+      "cors": true
+    },
+    {
+      "id": "muelsyse-portrait",
+      "character": "muelsyse",
+      "name": "官方立绘",
+      "nameEn": "Operator portrait",
+      "file": "muelsyse-portrait.png",
+      "rights": "《明日方舟》© 上海鹰角网络 — 官方干员立绘 (char_249_muesys)",
+      "urls": [
+        "https://storage.moegirl.org.cn/moegirl/commons/c/cf/Ak_char_249_muesys_1.png"
       ],
       "cors": false
     }

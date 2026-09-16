@@ -18,7 +18,7 @@
  * phantom failure.
  */
 
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -134,24 +134,75 @@ for (const asset of ["site/site.css", "site/site.js", "site/preview.js", "site/r
 ok("site.js is loaded as a module", /<script type="module" src="site\/site\.js">/u.test(html));
 //#endregion
 
+// The browser this suite drives, resolved once: several static checks ask it to
+// render the page, and they run before the interactive section does.
+const chrome = findChromium();
+/** Flags for a one-shot headless render, for the checks that need a second look. */
+const renderFlags = [
+  "--headless=new",
+  "--disable-gpu",
+  "--no-sandbox",
+  "--hide-scrollbars",
+  "--allow-file-access-from-files",
+  "--enable-unsafe-swiftshader",
+];
+
 //#region themes
 const css = readFileSync(join(root, "docs", "site", "site.css"), "utf8");
+const PAGE_THEME_NAMES_FOUND = (() => {
+  const block = /const PAGE_THEME_NAMES = \{([\s\S]*?)\n\};/u.exec(readFileSync(join(root, "docs", "site", "site.js"), "utf8"));
+  const names = block === null ? [] : [...block[1].matchAll(/^\s{2}([a-z]+):/gmu)].map((match) => match[1]);
+  return { ok: names.length >= 4, detail: `PAGE_THEME_NAMES declares ${names.join(", ") || "nothing"}` };
+})();
+// Plain substring, not a regex on the selector: a theme's selector may be a list
+// (`:root, [data-theme="auto"]`), and the block is whatever the first brace after
+// the name opens.
 const tokensOf = (selector) => {
-  const block = new RegExp(`${selector}\\s*\\{([\\s\\S]*?)\\n\\}`, "u").exec(css);
-  if (block === null) return {};
+  const at = css.indexOf(selector);
+  if (at < 0) return {};
+  const open = css.indexOf("{", at);
+  const close = css.indexOf("\n}", open);
+  if (open < 0 || close < 0) return {};
   const tokens = {};
-  for (const match of block[1].matchAll(/(--[a-z-]+):\s*([^;]+);/gu)) tokens[match[1]] = match[2].trim();
+  for (const match of css.slice(open + 1, close).matchAll(/(--[a-z-]+):\s*([^;]+);/gu)) tokens[match[1]] = match[2].trim();
   return tokens;
 };
-const closureTheme = { ...tokensOf(":root"), ...tokensOf('\\[data-theme="closure"\\]') };
-const yunoTheme = tokensOf('\\[data-theme="yuno"\\]');
-for (const token of ["--signal", "--ink", "--panel", "--radius", "--tape-a", "--label-font"]) {
-  const a = closureTheme[token];
-  const b = yunoTheme[token];
+// The neutral base is its own rule now. It used to share one with Closure's, which
+// made the page's default a character's palette — and a fallback that names a
+// character is a claim about who is on screen.
+// Named in full, because an earlier :root block holds the shared font tokens and a
+// bare ":root" would read that one instead of the theme's.
+const neutralTheme = tokensOf(':root,\n[data-theme="auto"]');
+const closureTheme = tokensOf('[data-theme="closure"]');
+const yunoTheme = tokensOf('[data-theme="yuno"]');
+const muelsyseTheme = tokensOf('[data-theme="muelsyse"]');
+const named = { neutral: neutralTheme, closure: closureTheme, yuno: yunoTheme, muelsyse: muelsyseTheme };
+
+// Silver is defined by being near-neutral: the channels of the signal must sit close
+// together, which is what separates chrome from a hue.
+const silver = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/u.exec(neutralTheme["--signal"] ?? "");
+const spread = silver === null ? 999 : Math.max(Number.parseInt(silver[1], 16), Number.parseInt(silver[2], 16), Number.parseInt(silver[3], 16)) - Math.min(Number.parseInt(silver[1], 16), Number.parseInt(silver[2], 16), Number.parseInt(silver[3], 16));
+ok(
+  "the neutral theme is silver, not a hue",
+  silver !== null && spread <= 24,
+  `--signal=${String(neutralTheme["--signal"])} has a channel spread of ${String(spread)}; silver stays under 24`,
+);
+ok(
+  "and the neutral theme is no longer part of Closure's rule",
+  neutralTheme["--ink"] !== undefined && neutralTheme["--ink"] !== closureTheme["--ink"],
+  `both are ${String(closureTheme["--ink"])}, so :root is still grouped with the character`,
+);
+
+for (const token of ["--signal", "--ink", "--panel", "--radius", "--tape-a"]) {
+  const values = Object.entries(named).map(([name, theme]) => [name, theme[token]]);
+  const missing = values.filter(([, value]) => value === undefined).map(([name]) => name);
+  const distinct = new Set(values.map(([, value]) => value)).size;
   ok(
-    `theme token ${token} differs between the two themes`,
-    a !== undefined && b !== undefined && a !== b,
-    a === b ? `both are ${String(a)} — that is a hue swap, not a theme` : `closure=${String(a)} yuno=${String(b)}`,
+    `theme token ${token} is set, and differs, across all four themes`,
+    missing.length === 0 && distinct === 4,
+    missing.length > 0
+      ? `missing from ${missing.join(", ")}`
+      : `${String(distinct)} distinct value(s): ${values.map(([name, value]) => `${name}=${String(value)}`).join(" ")}`,
   );
 }
 ok(
@@ -159,7 +210,41 @@ ok(
   /\[data-theme="yuno"\]\s+\.card::before/u.test(css) && /\[data-theme="yuno"\]\s+\.card\[data-on="1"\]\s*\{\s*box-shadow/u.test(css),
   "the selection cue is not overridden",
 );
-//#endregion
+
+// Closure's palette has to come from the character, not from taste: she is blue-haired
+// and silver-clad, so the signal is blue on cool neutral chrome rather than the teal
+// this started as.
+const closureSignal = closureTheme["--signal"];
+const rgb = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/u.exec(closureSignal ?? "");
+ok(
+  "the Closure theme is blue-dominant",
+  rgb !== null && Number.parseInt(rgb[3], 16) > Number.parseInt(rgb[1], 16) + 40,
+  `--signal=${String(closureSignal)} is not blue-dominant`,
+);
+const yunoSignal = yunoTheme["--signal"];
+const yunoRgb = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/u.exec(yunoSignal ?? "");
+ok(
+  "and the Yuno theme is pink-dominant",
+  yunoRgb !== null && Number.parseInt(yunoRgb[1], 16) > Number.parseInt(yunoRgb[2], 16) + 40,
+  `--signal=${String(yunoSignal)} is not pink-dominant`,
+);
+
+// Muelsyse is white-haired with a blue-and-water palette, so her signal is blue —
+// but a different blue from Closure's, which the distinctness loop above enforces.
+const mueSignal = muelsyseTheme["--signal"];
+const mueRgb = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/u.exec(mueSignal ?? "");
+ok(
+  "the Muelsyse theme is blue-dominant and lighter than Closure's",
+  mueRgb !== null
+    && Number.parseInt(mueRgb[3], 16) > Number.parseInt(mueRgb[1], 16) + 40
+    && Number.parseInt(mueRgb[3], 16) > Number.parseInt(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/u.exec(closureTheme["--signal"] ?? "#000000")?.[3] ?? "0", 16),
+  `--signal=${String(mueSignal)} against Closure's ${String(closureTheme["--signal"])}`,
+);
+
+// The pairing rule is asserted in the interaction section, where the theme buttons and
+// the character cards can be clicked for real. A `--dump-dom` render cannot see it:
+// the console's boot awaits remote artwork, so the dump lands before the theme is
+// applied and every attribute reads as undefined.//#endregion
 //#endregion
 
 //#region browser
@@ -361,7 +446,6 @@ const pageSuite = (expected) => `(async () => {
   return facts;
 })()`;
 
-const chrome = findChromium();
 console.log(`check-site: ${overHttp ? targetUrl : "docs/index.html (file:)"} in ${chrome}\n`);
 
 const browser = await launch(chrome);
@@ -381,8 +465,16 @@ await cdp.send("Runtime.enable");
 await cdp.send("Log.enable");
 await cdp.send("Page.enable");
 
-/** Navigate and wait until the console has drawn its catalogued cards. */
-async function visit(url, viewport) {
+/**
+ * Navigate and wait until the console has drawn its catalogued cards.
+ *
+ * `fresh` clears what the console remembers first. The suite is a sequence of
+ * interactions on one profile, so a section that unticked a look or picked a theme
+ * leaves that behind — and a fixture that means to check one thing would be checking
+ * it against another section's leftovers.
+ */
+async function visit(url, viewport, { fresh = false } = {}) {
+  if (fresh) await cdp.evaluate("try { localStorage.clear(); return true; } catch { return false; }").catch(() => {});
   await cdp.send("Emulation.setDeviceMetricsOverride", { width: viewport.width, height: viewport.height, deviceScaleFactor: 1, mobile: viewport.mobile ?? false });
   await cdp.send("Page.navigate", { url });
   // Poll for the terminal state rather than sleeping: the catalogue arrives over
@@ -391,13 +483,32 @@ async function visit(url, viewport) {
   // render, so waiting for it to merely exist returns while the page is still
   // starting. Waiting for real content is the difference between a terminal state
   // and a hopeful sleep.
+  // The URL is checked as well as the content: during a navigation the previous
+  // document still answers the content question, so content alone can report a page
+  // that is already being torn down — and the next evaluate then finds no body.
   const ready = await until(
-    () => cdp.evaluate("document.querySelectorAll('.card').length > 0 && (document.getElementById('output')||{}).textContent.trim().length > 60").catch(() => false),
+    () => cdp.evaluate(
+      `location.href === ${JSON.stringify(url)}`
+      + " && document.readyState === 'complete'"
+      + " && document.body !== null"
+      + " && document.querySelectorAll('.card').length > 0"
+      + " && (document.getElementById('output')||{}).textContent.trim().length > 60",
+    ).catch(() => false),
     20000,
     120,
   );
   if (ready === undefined) throw new Error(`the console never rendered for ${url}`);
-  await wait(300);
+  // The preview draws on its own schedule — it waits on an image from another host —
+  // and the frame it fills changes the page's height. Clicking before it settles
+  // dispatches at coordinates the layout has already moved out from under, and the
+  // click lands on nothing while looking like a broken handler. So: wait for pixels.
+  const painted = await until(
+    () => cdp.evaluate("document.querySelector('#preview-host canvas, #preview-host .css-rig, #preview-host img, #preview-host .preview-empty') !== null").catch(() => false),
+    20000,
+    120,
+  );
+  if (painted === undefined) throw new Error(`the preview never painted for ${url}`);
+  await wait(400);
 }
 
 const expected = { characters: catalog.characters.length, looks: catalog.looks.length };
@@ -439,29 +550,64 @@ ok(
 // ---- real interaction ------------------------------------------------------
 // Clicked through Input.dispatchMouseEvent: a handler that is bound but never
 // reached, or a control covered by an overlay, shows up here and nowhere else.
-await cdp.click("#theme button[data-theme-choice='yuno']");
-await wait(250);
-const afterThemeClick = await cdp.evaluate(
-  "({ theme: document.documentElement.dataset.theme, lit: (document.querySelector(\"#theme button[data-on='1']\")||{dataset:{}}).dataset.themeChoice, ink: getComputedStyle(document.body).backgroundColor })",
+// The theme is no longer a control — selecting a character is the only thing that
+// sets it — so what this checks is that the two move together, in one click.
+const beforeCharacterClick = await cdp.evaluate(
+  "({ theme: document.documentElement.dataset.theme, ink: getComputedStyle(document.body).backgroundColor, chip: document.getElementById('theme-name').textContent })",
 );
-ok("clicking the Yuno theme button switches the document theme", afterThemeClick.theme === "yuno", `data-theme=${String(afterThemeClick.theme)}`);
-ok("the clicked button is the lit one", afterThemeClick.lit === "yuno", `lit=${String(afterThemeClick.lit)}`);
-ok("the switch repainted the page", afterThemeClick.ink !== desktop.stylesheet, `was ${desktop.stylesheet}, now ${String(afterThemeClick.ink)}`);
+// The fallback must be the neutral theme, not one of the characters'.
+const neutralReachable = /return THEME_COLOURS\[character\?\.theme\]\?\.page \?\? "auto"/u.test(readFileSync(join(root, "docs", "site", "site.js"), "utf8"));
+ok(
+  "an unrecognised character falls back to the neutral theme",
+  neutralReachable,
+  "the fallback names a character, so an unknown one would wear their colours",
+);
 
-await cdp.click("#theme button[data-theme-choice='closure']");
-await wait(250);
-const afterClosureClick = await cdp.evaluate("document.documentElement.dataset.theme");
-ok("clicking the Closure theme button switches back", afterClosureClick === "closure", `data-theme=${String(afterClosureClick)}`);
+ok("the console opens on the neutral theme", beforeCharacterClick.theme === "auto", `data-theme=${String(beforeCharacterClick.theme)}`);
+ok("and names it", /neutral/iu.test(beforeCharacterClick.chip), `chip="${beforeCharacterClick.chip}"`);
 
-// Selecting a character must drive both the panel and the preview.
+// The pairing rule, clicked for real. Two controls can set these — the theme switcher
+// and the character cards — and they must never end up describing different people.
+// Both directions are exercised, because a rule that only holds one way is not a rule.
+for (const choice of ["muelsyse", "yuno", "closure"]) {
+  await cdp.click(`#theme button[data-theme-choice='${choice}']`);
+  await wait(700);
+  const linked = await cdp.evaluate(
+    "({ theme: document.documentElement.dataset.theme, firstLook: (document.querySelector('#looks .card .code')||{}).textContent || '', character: (/character: ([a-z]+)/u.exec(document.getElementById('output').textContent)||[])[1] || '' })",
+  );
+  ok(
+    `choosing the ${choice} theme also selects ${choice}`,
+    linked.theme === choice && linked.character === choice && linked.firstLook.startsWith(choice),
+    `theme=${linked.theme} character=${linked.character} look=${linked.firstLook}`,
+  );
+}
+
+// The neutral theme belongs to nobody, so it can be chosen without disturbing who is
+// on screen. It is the one theme that cannot contradict the artwork, which is why it is
+// the only one allowed to disagree with the character.
+await cdp.click("#theme button[data-theme-choice='auto']");
+await wait(400);
+const neutral = await cdp.evaluate(
+  "({ theme: document.documentElement.dataset.theme, character: (/character: ([a-z]+)/u.exec(document.getElementById('output').textContent)||[])[1] || '' })",
+);
+ok(
+  "the neutral theme leaves the character where it is",
+  neutral.theme === "auto" && neutral.character === "closure",
+  `theme=${neutral.theme} character=${neutral.character}`,
+);
+
+// Selecting a character must drive the panel, the preview and the theme at once.
 await cdp.click("#characters .card:nth-child(2)");
-await wait(500);
+await wait(700);
 const afterCharacterClick = await cdp.evaluate(
-  "(() => { const y = document.querySelector(\".dsh-yaml\") ; return { lookCards: document.querySelectorAll('#looks .card').length, firstLookId: (document.querySelector('#looks .card .code')||{}).textContent || '', output: document.getElementById('output').textContent, previewCanvas: document.querySelector('#preview-host canvas') !== null }; })()",
+  "({ theme: document.documentElement.dataset.theme, ink: getComputedStyle(document.body).backgroundColor, chip: document.getElementById('theme-name').textContent, lookCards: document.querySelectorAll('#looks .card').length, firstLookId: (document.querySelector('#looks .card .code')||{}).textContent || '', output: document.getElementById('output').textContent, previewCanvas: document.querySelector('#preview-host canvas, #preview-host .css-rig, #preview-host img') !== null })",
 );
-ok("selecting a character swaps the look cards", afterCharacterClick.lookCards > 0 && /yuno/u.test(afterCharacterClick.firstLookId), `first look card = "${afterCharacterClick.firstLookId}"`);
-ok("the generated config follows the character", /character: yuno/u.test(afterCharacterClick.output), afterCharacterClick.output.split("\n").filter((l) => l.includes("character:")).join(" | "));
-ok("the preview survived the switch", afterCharacterClick.previewCanvas === true, "the canvas is gone");
+ok("selecting Yuno changes the theme in the same click", afterCharacterClick.theme === "yuno", `data-theme=${String(afterCharacterClick.theme)}`);
+ok("the artwork and the theme agree on which character it is", /Yuno/iu.test(afterCharacterClick.chip), `chip="${afterCharacterClick.chip}"`);
+ok("the switch repainted the page", afterCharacterClick.ink !== beforeCharacterClick.ink, `was ${beforeCharacterClick.ink}, now ${String(afterCharacterClick.ink)}`);
+ok("the panel follows the character too", afterCharacterClick.lookCards > 0 && /^yuno-/u.test(afterCharacterClick.firstLookId), `first look card = "${afterCharacterClick.firstLookId}"`);
+ok("and so does the generated config", /character: yuno/u.test(afterCharacterClick.output), afterCharacterClick.output.split("\n").filter((line) => line.includes("character:")).join(" | "));
+ok("and the preview survives the change", afterCharacterClick.previewCanvas === true, "nothing is drawn after the switch");
 
 // Toggling a look off must remove it from the allowlist, not merely grey the card.
 const beforeToggle = await cdp.evaluate("document.getElementById('output').textContent");
@@ -545,7 +691,7 @@ if (shot) {
   // which survives navigation in this profile, so a screenshot taken without
   // pinning the character would silently record whatever was clicked last.
   for (const [name, query] of [
-    ["preview.png", "theme=closure&character=closure"],
+    ["preview.png", "theme=auto&character=closure"],
     ["preview-yuno.png", "theme=yuno&character=yuno"],
   ]) {
     await visit(`${staticUrl}?${query}`, { width: 1180, height: 2100 });
@@ -637,7 +783,7 @@ if (localUrl !== undefined) {
 // The one control that always has something to show: it needs the bounding box and
 // the silhouette profile, both numbers in the catalogue, and no image at all. So it
 // must work on the published copy for a look whose pixels WebGL refuses.
-await visit(targetUrl, { width: 1360, height: 900 });
+await visit(withQuery("theme=closure&character=closure"), { width: 1360, height: 900 }, { fresh: true });
 await cdp.click("#preview-skeleton");
 await wait(700);
 const skeleton = await cdp.evaluate(
@@ -660,7 +806,7 @@ const boneB = (await cdp.send("Page.captureScreenshot", { format: "png", clip: {
 ok("and the skeleton is animating, not a diagram", boneA !== boneB, "the two compositor captures are byte-identical");
 
 // It must work for the look whose artwork cannot be rigged, which is the whole point.
-await visit(withQuery("theme=yuno&character=yuno&look=yuno-casual"), { width: 1360, height: 900 });
+await visit(withQuery("theme=yuno&character=yuno&look=yuno-casual"), { width: 1360, height: 900 }, { fresh: true });
 await cdp.click("#preview-skeleton");
 await wait(700);
 const yunoSkeleton = await cdp.evaluate(
@@ -669,7 +815,7 @@ const yunoSkeleton = await cdp.evaluate(
 ok(
   "it works for a look whose artwork the WebGL rig cannot touch",
   yunoSkeleton.canvas === true,
-  `canvas=${String(yunoSkeleton.canvas)} notice="${yunoSkeleton.empty.slice(0, 110)}"`,
+  `canvas=${String(yunoSkeleton.canvas)} status="${String(yunoSkeleton.status)}" html="${String(yunoSkeleton.html)}"`,
 );
 
 // ---- the published copy, with no host of any kind --------------------------
@@ -678,7 +824,7 @@ ok(
 // Pinned, because localStorage survives navigation in this profile: without it the
 // "before" state is whatever the previous section clicked last, and a switch test
 // that starts on the destination proves nothing.
-await visit(withQuery("character=closure&theme=closure"), { width: 1360, height: 900 });
+await visit(withQuery("character=closure"), { width: 1360, height: 900 });
 const published = await cdp.evaluate(
   "({ canvas: document.querySelector('#preview-host canvas') !== null, stills: document.querySelectorAll('#preview-host img').length, notice: (document.querySelector('#preview-host .preview-empty')||{}).textContent || '', cards: document.querySelectorAll('#looks .card').length, output: document.getElementById('output').textContent.length, status: document.getElementById('preview-status').textContent })",
 );
@@ -735,10 +881,10 @@ ok(
 // Pinned through the deep link rather than by clicking: the look cards are allowlist
 // toggles, so clicking one that is already ticked would remove it from the very set
 // the frame resolves against, and the frame would fall back to another look.
-await visit(withQuery("theme=yuno&character=yuno&look=yuno-chibi"), { width: 1360, height: 900 });
+await visit(withQuery("theme=yuno&character=yuno&look=yuno-chibi"), { width: 1360, height: 900 }, { fresh: true });
 await wait(1600);
 const qVersion = await cdp.evaluate(
-  "({ rig: document.querySelector('#preview-host .css-rig') !== null, poses: document.querySelectorAll('#preview-host .css-rig .rig-pose').length, heads: document.querySelectorAll('#preview-host .rig-head-layer').length, cut: (document.querySelector('.css-rig')||{style:{}}).style.getPropertyValue('--cut'), status: document.getElementById('preview-status').textContent })",
+  "({ rig: document.querySelector('#preview-host .css-rig') !== null, poses: document.querySelectorAll('#preview-host .css-rig .rig-pose').length, heads: document.querySelectorAll('#preview-host .rig-head-layer').length, cut: (document.querySelector('.css-rig .rig-pose')||{style:{}}).style.getPropertyValue('--cut'), status: document.getElementById('preview-status').textContent })",
 );
 ok(
   "the two-pose Q-version renders as a layered rig",
@@ -754,6 +900,54 @@ const qA = await shootStage();
 await wait(800);
 const qB = await shootStage();
 ok("and the Q-version is moving", qA !== qB, "the two compositor captures are byte-identical");
+
+// The assertion the suite was missing. Every pose used to be drawn through the first
+// pose's crop window, and because the second pose's figure sits outside that window,
+// both poses rendered *the same picture* — the character never turned. Every other
+// check still passed, because the head nod alone made consecutive captures differ.
+// So: freeze the rig, show each pose in turn, and require two different pictures.
+const posesDiffer = await (async () => {
+  // Freeze both the pose animation and the fade, so what is compared is the drawing
+  // and not the pose it happens to be in.
+  await cdp.evaluate(`(() => {
+    const style = document.createElement("style");
+    style.id = "freeze";
+    style.textContent = ".css-rig, .css-rig .rig-root, .css-rig .rig-head-layer { animation: none !important; } .css-rig .rig-pose { transition: none !important; }";
+    document.head.append(style);
+    return true;
+  })()`);
+  const shots = [];
+  const count = await cdp.evaluate("document.querySelectorAll('#preview-host .css-rig .rig-pose').length");
+  for (let index = 0; index < count; index++) {
+    await cdp.evaluate(`(() => {
+      const poses = [...document.querySelectorAll('#preview-host .css-rig .rig-pose')];
+      poses.forEach((pose, position) => {
+        if (position === ${String(index)}) pose.dataset.shown = "1";
+        else delete pose.dataset.shown;
+      });
+      return true;
+    })()`);
+    await wait(150);
+    shots.push(await shootStage());
+  }
+  await cdp.evaluate("document.getElementById('freeze')?.remove()");
+  return shots;
+})();
+ok(
+  `each of the ${String(posesDiffer.length)} drawn poses renders a different picture`,
+  new Set(posesDiffer).size === posesDiffer.length,
+  `${String(posesDiffer.length)} poses produced ${String(new Set(posesDiffer).size)} distinct image(s) — a pose drawn through another pose's crop window shows the wrong figure`,
+);
+// And the geometry that makes them differ must actually be per-pose.
+const offsets = await cdp.evaluate(
+  "JSON.stringify([...document.querySelectorAll('#preview-host .css-rig .rig-pose')].map((p) => p.style.getPropertyValue('--off-x') + '/' + p.style.getPropertyValue('--off-y')))",
+);
+const parsed = JSON.parse(offsets);
+ok(
+  "each pose carries its own crop offset",
+  new Set(parsed).size === parsed.length,
+  `offsets=${offsets} — shared offsets are what drew the second pose through the first one's window`,
+);
 
 // And Yuno must actually be on screen, not an empty frame.
 const drawn = await cdp.evaluate(
