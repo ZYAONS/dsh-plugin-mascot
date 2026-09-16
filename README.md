@@ -133,20 +133,46 @@ before anything is installed on the machine:
 - **05 Output** — a ready-to-paste `cordis.patch.yml`, with copy and download
 - **06 Install** — five steps, including fetching the artwork and restarting
 
+### Two page themes
+
+The console carries both characters' interface styles, switchable from the header,
+and they are not a hue swap:
+
+| | Closure | Yuno |
+|---|---|---|
+| Ground | blue-black | purple-black |
+| Signal | cyan `#37e0d8` | magenta `#ff4d9d` |
+| Corners | square | 14px rounded |
+| Selection cue | corner brackets | a glow |
+| Labels | monospace | rounded |
+| Hazard tape | cyan | magenta |
+
+**Follow the character** is the default, so picking Yuno in section 02 recolours the
+page — which makes the console a live preview of what the plugin will look like.
+Choosing a theme explicitly pins it.
+
+Both are deep-linkable, which is also what makes them testable without driving
+clicks:
+
+```
+?theme=auto|closure|yuno      ?character=closure|yuno
+```
+
 The page is **purely static**, hosted on GitHub Pages. It runs no server code and
 **does not read or modify anything on your machine** — it turns your choices into a
 YAML string. State lives in your browser's localStorage.
 
 The palette and typography borrow from tactical-UI design generally (near-black
-ground, one signal colour, square corners, hairline rules, uppercase Latin labels
-over Chinese ones). **No game asset, logo or typeface is used.**
+ground, one signal colour, hairline rules, uppercase Latin labels over Chinese
+ones). **No game asset, logo or typeface is used.**
 
 Its catalogue comes from `docs/site/catalog.json`, which `scripts/build-site.mjs`
 generates from `art/looks.json` — the same declaration the plugin reads, so the two
 cannot drift. `scripts/check-site.mjs` drives the page in a real browser and asserts
-that the catalogue loads, the controls render, and that **every id in the YAML it
-produces actually exists** (one typo there would make the plugin silently fall back
-to its first look).
+that the catalogue loads, the controls render, that the two themes differ in
+substance (six tokens compared, not just the accent), and that **every id in the
+YAML it produces actually exists** (one typo there would make the plugin silently
+fall back to its first look).
 
 ---
 

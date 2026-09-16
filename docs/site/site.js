@@ -15,9 +15,12 @@ const STATE_KEY = "dsh-mascot-console";
 
 /** Which per-character interface style each theme maps to, for the card art. */
 const THEME_COLOURS = {
-  rhodes: { accent: "#37e0d8", label: "CONSOLE" },
-  mewtype: { accent: "#ff4d9d", label: "LIVE SET" },
+  rhodes: { accent: "#37e0d8", label: "CONSOLE", page: "closure" },
+  mewtype: { accent: "#ff4d9d", label: "LIVE SET", page: "yuno" },
 };
+
+/** Human names for the page themes, for the header readout. */
+const PAGE_THEME_NAMES = { closure: "可露希尔 · 罗德岛工程终端", yuno: "千石由乃 · MEWTYPE LIVE" };
 
 const state = {
   catalog: { characters: [], looks: [], version: "0.0.0", repository: REPO },
@@ -30,6 +33,8 @@ const state = {
   balance: true,
   mount: "name",
   dir: "",
+  /** "auto" follows the selected character; anything else pins one theme. */
+  theme: "auto",
 };
 
 const $ = (id) => document.getElementById(id);
@@ -56,6 +61,25 @@ function enabledLooks(characterId) {
 }
 
 //#region render
+/** The page theme a character's own interface style maps to. */
+function pageThemeOf(characterId) {
+  const character = characterOf(characterId);
+  return THEME_COLOURS[character?.theme]?.page ?? "closure";
+}
+
+/** The theme actually applied, resolving "auto" against the selected character. */
+const activeTheme = () => (state.theme === "auto" ? pageThemeOf(state.character) : state.theme);
+
+/** Apply the theme to the document and its readout. */
+function applyTheme() {
+  const theme = activeTheme();
+  document.documentElement.dataset.theme = theme;
+  $("m-theme").textContent = PAGE_THEME_NAMES[theme] ?? theme;
+  for (const button of $("theme").querySelectorAll("button")) {
+    button.dataset.on = button.dataset.themeChoice === state.theme ? "1" : "0";
+  }
+}
+
 /** Persist the console state so a reload keeps the visitor's choices. */
 function save() {
   try {
@@ -68,6 +92,7 @@ function save() {
       balance: state.balance,
       mount: state.mount,
       dir: state.dir,
+      theme: state.theme,
     }));
   } catch {
     /* private mode — the choices simply do not persist */
@@ -88,6 +113,7 @@ function load() {
     if (typeof saved.balance === "boolean") state.balance = saved.balance;
     if (saved.mount === "name" || saved.mount === "file") state.mount = saved.mount;
     if (typeof saved.dir === "string") state.dir = saved.dir;
+    if (typeof saved.theme === "string") state.theme = saved.theme;
   } catch {
     /* unreadable state is not worth reporting; defaults are fine */
   }
@@ -231,6 +257,9 @@ function render() {
   $("sec-look").classList.toggle("hidden", !state.plugin);
   $("sec-character").classList.toggle("hidden", !state.plugin);
   $("output").textContent = buildConfig();
+  // Applied last, and on every render, because "auto" resolves against the
+  // character and the character can change in the same pass.
+  applyTheme();
   save();
 }
 //#endregion
@@ -295,9 +324,34 @@ function flash(button, label) {
 }
 //#endregion
 
+/**
+ * Read a deep link.
+ *
+ * `?theme=` and `?character=` let a link point at a specific configuration —
+ * "show me the Yuno version" is a URL — and they are also what makes the two
+ * themes testable without driving clicks: a headless render of the page with a
+ * query string is enough to assert which theme came out.
+ *
+ * A query parameter outranks stored state, because a link that says what it wants
+ * should not be silently overridden by a previous visit.
+ */
+function applyQuery() {
+  let query;
+  try {
+    query = new URLSearchParams(window.location.search);
+  } catch {
+    return;
+  }
+  const theme = query.get("theme");
+  if (theme === "auto" || theme === "closure" || theme === "yuno") state.theme = theme;
+  const character = query.get("character");
+  if (character !== null && character !== "") state.character = character;
+}
+
 /** Boot: fetch the catalogue, wire the controls, draw. */
 async function main() {
   load();
+  applyQuery();
   try {
     const response = await fetch("site/catalog.json", { cache: "no-cache" });
     if (response.ok) state.catalog = await response.json();
@@ -320,6 +374,13 @@ async function main() {
   bindToggle("t-balance", (value) => { state.balance = value; });
   bindToggle("t-skeleton", (value) => { state.skeleton = value; });
   bindToggle("t-animated", (value) => { state.animated = value; });
+
+  for (const button of $("theme").querySelectorAll("button")) {
+    button.addEventListener("click", () => {
+      state.theme = button.dataset.themeChoice;
+      render();
+    });
+  }
 
   for (const button of $("mount").querySelectorAll("button")) {
     button.addEventListener("click", () => {

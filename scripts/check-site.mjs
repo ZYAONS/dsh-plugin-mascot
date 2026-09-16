@@ -104,15 +104,71 @@ if (yaml === undefined || yaml.trim().length === 0) {
   else bad(`allowlist mixes characters: ${wrongCharacter.join(", ")}`);
 }
 
+// ---- the two page themes ---------------------------------------------------
+// Rendered through the deep link rather than by driving clicks: a headless
+// dump-dom pass per theme is deterministic, where scripted clicks would depend on
+// the harness's own timing.
+const themeOf = (query) => {
+  const dom = execFileSync(chrome, [...flags, "--dump-dom", `${pathToFileURL(index).href}${query}`], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const match = /<html[^>]*data-theme="([a-z]+)"/u.exec(dom);
+  return { theme: match === null ? undefined : match[1], dom };
+};
+
+const autoClosure = themeOf("?theme=auto&character=closure");
+if (autoClosure.theme === "closure") ok("theme=auto with Closure selected resolves to the Closure theme");
+else bad(`theme=auto with Closure selected gave "${String(autoClosure.theme)}"`);
+
+const autoYuno = themeOf("?theme=auto&character=yuno");
+if (autoYuno.theme === "yuno") ok("theme=auto with Yuno selected resolves to the Yuno theme");
+else bad(`theme=auto with Yuno selected gave "${String(autoYuno.theme)}"`);
+
+const pinned = themeOf("?theme=yuno&character=closure");
+if (pinned.theme === "yuno") ok("a pinned theme outranks the selected character");
+else bad(`pinning the Yuno theme with Closure selected gave "${String(pinned.theme)}"`);
+
+if (autoClosure.theme !== autoYuno.theme) ok("the two characters resolve to two different themes");
+else bad("both characters resolve to the same theme");
+
+// The themes must differ in substance, not just in one colour: check the tokens
+// each one sets on the root.
+const css = readFileSync(join(root, "docs", "site", "site.css"), "utf8");
+const tokensOf = (selector) => {
+  const block = new RegExp(`${selector}\\s*\\{([\\s\\S]*?)\\n\\}`, "u").exec(css);
+  if (block === null) return {};
+  const tokens = {};
+  for (const match of block[1].matchAll(/(--[a-z-]+):\s*([^;]+);/gu)) tokens[match[1]] = match[2].trim();
+  return tokens;
+};
+const closureTheme = { ...tokensOf(":root"), ...tokensOf('\\[data-theme="closure"\\]') };
+const yunoTheme = tokensOf('\\[data-theme="yuno"\\]');
+for (const token of ["--signal", "--ink", "--panel", "--radius", "--tape-a", "--label-font"]) {
+  if (closureTheme[token] === undefined || yunoTheme[token] === undefined) {
+    bad(`theme token ${token} is not defined for both themes`);
+  } else if (closureTheme[token] === yunoTheme[token]) {
+    bad(`theme token ${token} is identical in both themes — that is a hue swap, not a theme`);
+  } else {
+    ok(`theme token ${token} differs (${closureTheme[token]} vs ${yunoTheme[token]})`);
+  }
+}
+// The stage theme drops the console's corner brackets for a glow; if the rule is
+// missing, the two themes would share their selection cue.
+if (/\[data-theme="yuno"\]\s+\.card::before/u.test(css) && /\[data-theme="yuno"\]\s+\.card\[data-on="1"\]\s*\{\s*box-shadow/u.test(css)) {
+  ok("the Yuno theme replaces the corner brackets with a glow");
+} else {
+  bad("the Yuno theme does not override the selection cue");
+}
+
 // ---- optional screenshot ---------------------------------------------------
 if (shot) {
-  const png = join(root, "docs", "site", "preview.png");
-  execFileSync(
-    chrome,
-    [...flags, "--force-device-scale-factor=1.4", `--screenshot=${png}`, "--window-size=1180,2000", pathToFileURL(index).href],
-    { stdio: "pipe" },
-  );
-  console.log(`  ok  wrote ${png} (${String(readFileSync(png).length)} bytes)`);
+  for (const [name, query] of [["preview.png", "?theme=closure"], ["preview-yuno.png", "?theme=yuno"]]) {
+    const png = join(root, "docs", "site", name);
+    execFileSync(
+      chrome,
+      [...flags, "--force-device-scale-factor=1.4", `--screenshot=${png}`, "--window-size=1180,2000", `${pathToFileURL(index).href}${query}`],
+      { stdio: "pipe" },
+    );
+    console.log(`  ok  wrote ${png} (${String(readFileSync(png).length)} bytes)`);
+  }
 }
 
 console.log(failures === 0 ? "\ncheck-site: the console behaves as advertised" : `\ncheck-site: ${String(failures)} problem(s)`);
