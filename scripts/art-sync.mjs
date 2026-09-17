@@ -351,7 +351,11 @@ Promise.all(sources.map((src) => new Promise((done) => {
           Math.round(height * 1000) / 1000,
         ]);
       }
-      if (eyeBoxes !== null) {
+      // Only when nothing better was available. The order is measured > anatomy > pixels,
+      // and a later step must never overwrite an earlier one — the pixel search succeeded
+      // on a look that had already been measured and replaced a correct box with a wrong
+      // one.
+      if (measured === null && eyeBoxes !== null) {
         // Normalised to the **body**, not the overall box: the eye positions the rig
         // predicts are fractions of the body height, so this has to be the same
         // denominator or the two cannot be compared.

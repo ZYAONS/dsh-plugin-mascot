@@ -85,6 +85,26 @@
       "tagline": "罗德岛",
       "taglineEn": "Rhodes Island",
       "theme": "yuyuan"
+    },
+    {
+      "id": "dusk",
+      "name": "夕",
+      "latin": "Dusk",
+      "role": "明日方舟 · 岁相",
+      "roleEn": "Arknights · Sui",
+      "tagline": "笔墨山水",
+      "taglineEn": "Ink and landscape",
+      "theme": "dusk"
+    },
+    {
+      "id": "makoto",
+      "name": "结城理",
+      "latin": "Makoto Yuki",
+      "role": "明日方舟 × P3R · 联动干员",
+      "roleEn": "Arknights × P3R · Collab",
+      "tagline": "女神异闻录3 Reload",
+      "taglineEn": "Persona 3 Reload",
+      "theme": "makoto"
     }
   ],
   "looks": [
@@ -258,6 +278,57 @@
         "https://mzh.moegirl.org.cn/Special:FilePath/%E6%98%8E%E6%97%A5%E6%96%B9%E8%88%9F%E7%AB%8B%E7%BB%98%20%E4%BA%88%E6%84%BF%E5%AE%89%E6%B4%81%E8%8E%89%E5%A8%9C%202.png"
       ],
       "cors": false
+    },
+    {
+      "id": "dusk-chibi",
+      "character": "dusk",
+      "name": "基建小人",
+      "nameEn": "Base chibi",
+      "file": "dusk-chibi.png",
+      "rights": "《明日方舟》© 上海鹰角网络 — 官方 Q 版干员小人 (char_2015_dusk)",
+      "urls": [
+        "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_2015_dusk.png"
+      ],
+      "cors": true,
+      "blink": true
+    },
+    {
+      "id": "dusk-portrait",
+      "character": "dusk",
+      "name": "官方立绘",
+      "nameEn": "Operator portrait",
+      "file": "dusk-portrait.png",
+      "rights": "《明日方舟》© 上海鹰角网络 — 官方干员立绘",
+      "urls": [
+        "https://mzh.moegirl.org.cn/Special:FilePath/Ak%20char%202015%20dusk%201-1.png"
+      ],
+      "cors": false
+    },
+    {
+      "id": "makoto-chibi",
+      "character": "makoto",
+      "name": "基建小人",
+      "nameEn": "Base chibi",
+      "file": "makoto-chibi.png",
+      "rights": "《明日方舟》×《女神异闻录3 Reload》© 鹰角网络 / ATLUS — 联动干员 Q 版小人 (char_4217_makoto)",
+      "urls": [
+        "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_4217_makoto.png"
+      ],
+      "cors": true,
+      "blink": true
+    },
+    {
+      "id": "makoto-p3r",
+      "character": "makoto",
+      "name": "联动形象",
+      "nameEn": "P3R",
+      "file": "makoto-p3r.png",
+      "rights": "《明日方舟》×《女神异闻录3 Reload》© 鹰角网络 / ATLUS — 联动造型 Q 版小人",
+      "urls": [
+        "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_4217_makoto_p3r-1.png"
+      ],
+      "cors": true,
+      "blink": true
     }
   ]
 }

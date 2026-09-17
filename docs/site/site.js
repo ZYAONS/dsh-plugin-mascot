@@ -29,6 +29,8 @@ const THEME_COLOURS = {
   sakiko: { accent: "#8b7cf8", label: "AVE MUJICA", page: "sakiko" },
   miuyin: { accent: "#3fa9f5", label: "OPERATOR", page: "miuyin" },
   yuyuan: { accent: "#4fd6e8", label: "OPERATOR", page: "yuyuan" },
+  dusk: { accent: "#5b6fd8", label: "SUI", page: "dusk" },
+  makoto: { accent: "#2f6fe0", label: "P3R", page: "makoto" },
 };
 
 /** Human names for the page themes, for the header readout. */
@@ -40,6 +42,8 @@ const PAGE_THEME_NAMES = {
   sakiko: "紫蓝舞台",
   miuyin: "晴空蓝",
   yuyuan: "水蓝",
+  dusk: "水墨",
+  makoto: "P3R 蓝",
 };
 
 const state = {
@@ -550,6 +554,8 @@ const CREDITS = {
   sakiko: { work: "BanG Dream! Ave Mujica", owner: "Bushiroad" },
   miuyin: { work: "明日方舟（Arknights）", owner: "鹰角网络 Hypergryph" },
   yuyuan: { work: "明日方舟（Arknights）", owner: "鹰角网络 Hypergryph" },
+  dusk: { work: "明日方舟（Arknights）", owner: "鹰角网络 Hypergryph" },
+  makoto: { work: "明日方舟 × 女神异闻录3 Reload", owner: "鹰角网络 Hypergryph / ATLUS" },
 };
 
 /** Paint the attribution for the selected character. */

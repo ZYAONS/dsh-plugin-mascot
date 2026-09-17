@@ -635,3 +635,40 @@ input[type="file"]::file-selector-button:hover { border-color: var(--signal); co
 .preview-say[data-on="1"] { opacity: 1; transform: translateY(0); }
 /* 没出声（或只有官方句名）时用虚线，免得看起来像坏了 */
 .preview-say[data-silent="1"] { border-style: dashed; }
+
+/* ================= 夕（水墨）与结城理（P3R） ================= */
+[data-theme="dusk"] {
+  --ink: #08090f; --panel: #14162a; --panel-2: #1b1e36;
+  --line: rgba(150, 160, 230, 0.11); --line-strong: rgba(150, 160, 230, 0.28);
+  --signal: #5b6fd8; --signal-ink: #0a0c1c; --signal-dim: rgba(91, 111, 216, 0.15);
+  --text: #e8e9f8; --dim: #8b90ad; --dimmer: #5c6079; --ok: #5b6fd8;
+  --radius: 12px; --radius-sm: 8px;
+  --grid: rgba(140, 150, 220, 0.026); --glow: rgba(91, 111, 216, 0.1);
+  --tape-a: #5b6fd8; --tape-b: #0a0b14;
+  --label-font: "Songti SC", "SimSun", serif; --label-spacing: 0.14em; --card-lift: translateY(-1px);
+}
+[data-theme="dusk"] .card::before, [data-theme="dusk"] .card::after { display: none; }
+[data-theme="dusk"] .card[data-on="1"] { box-shadow: 0 0 22px var(--signal-dim); }
+[data-theme="dusk"] h1, [data-theme="dusk"] .sec-head h2 { font-family: "Songti SC", "SimSun", Georgia, serif; }
+
+[data-theme="makoto"] {
+  --ink: #05070d; --panel: #0b1628; --panel-2: #10203a;
+  --line: rgba(110, 160, 240, 0.12); --line-strong: rgba(110, 160, 240, 0.3);
+  --signal: #2f6fe0; --signal-ink: #040a15; --signal-dim: rgba(47, 111, 224, 0.16);
+  --text: #e6eefc; --dim: #7f8faa; --dimmer: #4e5b73; --ok: #2f6fe0;
+  --radius: 2px; --radius-sm: 2px;
+  --grid: rgba(100, 150, 230, 0.028); --glow: rgba(47, 111, 224, 0.11);
+  --tape-a: #2f6fe0; --tape-b: #05080f;
+  --label-font: var(--sans); --label-spacing: 0.18em; --card-lift: none;
+}
+/* P3R 的四角刻线：硬边、直角 */
+[data-theme="makoto"] .card { border-radius: 0; }
+[data-theme="makoto"] .card::before {
+  content: ""; position: absolute; left: -1px; top: -1px; width: 12px; height: 12px;
+  border-left: 2px solid var(--signal); border-top: 2px solid var(--signal); display: block;
+}
+[data-theme="makoto"] .card::after {
+  content: ""; position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px;
+  border-right: 2px solid var(--signal); border-bottom: 2px solid var(--signal); display: block;
+}
+[data-theme="makoto"] .card[data-on="1"] { box-shadow: 0 0 0 1px var(--signal) inset; }
