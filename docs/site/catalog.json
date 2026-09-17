@@ -74,22 +74,25 @@
     }
   },
   "songs": {
-    "sakiko": {
-      "title": "KiLLKiSS",
-      "band": "Ave Mujica",
-      "kind": "OP",
-      "work": "TV 动画《BanG Dream! Ave Mujica》",
-      "src": "https://bestdori.com/assets/jp/sound/bgm659_rip/bgm659.mp3",
-      "source": "Bestdori · 游戏资源 assets/jp/sound/bgm659_rip/bgm659.mp3"
-    },
     "yuno": {
       "title": "真夜中遊園地",
       "band": "夢限大みゅーたいぷ",
       "kind": "ED",
       "work": "《BanG Dream! YUME∞MITA》",
-      "src": null,
-      "source": null,
-      "reason": "Bestdori 曲库里没有这个乐团，Bushiroad Music 官网不托管音频，YouTube 官方 MV 无法下载"
+      "src": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/eb/8c/18/eb8c1846-54b7-ccf0-4cd9-e97abe6b01a0/mzaf_17279731756265555305.plus.aac.p.m4a",
+      "previewSeconds": 30,
+      "source": "Apple Music 官方试听 · 真夜中遊園地 (TV Size)",
+      "reason": null
+    },
+    "sakiko": {
+      "title": "KiLLKiSS",
+      "band": "Ave Mujica",
+      "kind": "OP",
+      "work": "TV 动画《BanG Dream! Ave Mujica》",
+      "src": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/8c/fb/70/8cfb706e-01a9-5eb6-b154-c25c34b657db/mzaf_8473314610296989148.plus.aac.p.m4a",
+      "previewSeconds": 30,
+      "source": "Apple Music 官方试听 · KiLLKiSS",
+      "reason": null
     }
   },
   "version": "0.1.0",

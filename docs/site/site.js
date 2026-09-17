@@ -718,7 +718,9 @@ function paintSiren() {
     node.dataset.on = "1";
     cover.style.display = "none";
     $("siren-album").textContent = `${song.kind}　${song.title}`;
-    $("siren-meta").textContent = `${song.band} · ${song.work}`;
+    // 说清是试听而不是整首：Apple 的官方试听是 30 秒，不写清楚会让人以为放错了。
+    const length = song.previewSeconds === undefined ? "" : `官方试听 ${String(song.previewSeconds)} 秒 · `;
+    $("siren-meta").textContent = `${song.band} · ${song.work} · ${length}${String(song.source ?? "").split("·").pop()?.trim() ?? ""}`;
     node.removeAttribute("href");
     // No source means no button: better than a button that cannot play.
     play.dataset.on = song.src == null ? "0" : "1";
