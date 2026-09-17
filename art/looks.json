@@ -172,6 +172,18 @@
       "cors": true
     },
     {
+      "id": "muelsyse-alt",
+      "character": "muelsyse",
+      "name": "Q版·礼服",
+      "nameEn": "Chibi · formal",
+      "file": "muelsyse-alt.png",
+      "rights": "《明日方舟》© 上海鹰角网络 — 官方 Q 版干员小人（礼服）",
+      "urls": [
+        "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_249_mlyss_boc-8.png"
+      ],
+      "cors": true
+    },
+    {
       "id": "muelsyse-portrait",
       "character": "muelsyse",
       "name": "官方立绘",

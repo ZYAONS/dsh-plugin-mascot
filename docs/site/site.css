@@ -425,6 +425,7 @@ footer .legal { margin-top: 14px; max-width: 78ch; }
 @media (max-width: 720px) { .preview { grid-template-columns: 1fr; } }
 
 .preview-stage {
+  position: relative; /* 气泡的定位基准 */
   position: relative; height: 240px; border: 1px solid var(--line);
   border-radius: var(--radius); display: flex; align-items: flex-end; justify-content: center;
   padding-bottom: 34px;
@@ -620,3 +621,16 @@ input[type="file"]::file-selector-button:hover { border-color: var(--signal); co
 [data-theme="yuyuan"] .card::before, [data-theme="yuyuan"] .card::after { display: none; }
 [data-theme="yuyuan"] .card[data-on="1"] { box-shadow: 0 0 0 1px var(--signal) inset; }
 [data-theme="sakiko"] h1, [data-theme="sakiko"] .sec-head h2 { font-family: var(--mono); }
+
+/* 点击台词的气泡。没有日语语音时它是唯一的反馈，所以不能只在出声时才显示；
+   没出声时用虚线边框，免得看起来像坏了。 */
+.preview-say {
+  position: absolute; left: 50%; bottom: 16px; transform: translate(-50%, 6px);
+  max-width: 86%; margin: 0; padding: 7px 13px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
+  background: var(--panel); color: var(--text);
+  font-size: 13px; line-height: 1.5; text-align: center;
+  opacity: 0; transition: opacity .22s ease, transform .22s ease; pointer-events: none;
+}
+.preview-say[data-on="1"] { opacity: 1; transform: translate(-50%, 0); }
+.preview-say[data-silent="1"] { border-style: dashed; }

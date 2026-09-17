@@ -190,12 +190,14 @@ const rigModule = [
   "",
   region(client, "blink"),
   "",
+  region(client, "voice"),
+  "",
   "/** Why the last rig attempt was abandoned, or null when it never was. */",
   "function rigStatus() {",
   "  return lastRigError ?? null;",
   "}",
   "",
-  "export { RIG, findNeck, buildRig, createSkinner, poseRig, blinkAmount, createBlink, rigStatus };",
+  "export { RIG, findNeck, buildRig, createSkinner, poseRig, blinkAmount, createBlink, speakLine, voiceStatus, VOICE_LINES, rigStatus };",
   "",
 ].join("\n");
 const rigTarget = join(root, "docs", "site", "rig.js");

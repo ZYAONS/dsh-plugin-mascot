@@ -15,7 +15,7 @@
  * Everything here reads. Nothing is written, and nothing is uploaded.
  */
 
-import { buildRig, createBlink, createSkinner, findNeck, poseRig, RIG, rigStatus } from "./rig.js";
+import { buildRig, createBlink, createSkinner, findNeck, poseRig, speakLine, voiceStatus, VOICE_LINES, RIG, rigStatus } from "./rig.js";
 
 /** The dock seat the plugin renders into, in CSS pixels. Mirrors `.dsh-mascot-frames`. */
 const SEAT = { width: 104, height: 172 };
@@ -143,6 +143,49 @@ export function createPreview(host, onStatus) {
    * underneath the current one. Only the newest generation may draw.
    */
   let generation = 0;
+
+  /**
+   * When the figure was last clicked, and the line that click produced.
+   *
+   * Both live here rather than in the DOM because the pose has to see the first one and the
+   * bubble is rebuilt on every render.
+   */
+  let pokeAt;
+  let said;
+  /**
+   * Which character is showing, so a click knows whose line to speak.
+   *
+   * Declared here, assigned in `show`: the CSS rig has no idea which character it is
+   * drawing, and the click handler needs to. Missing this declaration is not a subtle
+   * failure — every `show` throws a ReferenceError in module scope, nothing is ever
+   * appended to the frame, and the page looks like it simply never loaded.
+   */
+  let current = null;
+
+  /** Say the current character's line, show it, and start the wobble. */
+  function greetByClick(characterId) {
+    pokeAt = performance.now();
+    const spoken = speakLine(characterId);
+    said = spoken;
+    const bubble = document.getElementById("preview-say");
+    if (bubble !== null) {
+      bubble.textContent = spoken.ja;
+      bubble.dataset.on = "1";
+      bubble.dataset.silent = spoken.spoke ? "0" : "1";
+      // The translation rides along as the title, so hovering explains a line the
+      // visitor may not read.
+      bubble.title = spoken.reason === null ? spoken.zh : `${spoken.zh} — ${spoken.reason}`;
+      window.setTimeout(() => { bubble.dataset.on = "0"; }, 2600);
+    }
+  }
+
+  /** Seconds since the last click, or undefined once the impulse has rung out. */
+  function pokeAgeAt(now) {
+    if (pokeAt === undefined) return undefined;
+    const age = (now - pokeAt) / 1000;
+    if (age > 1.6) { pokeAt = undefined; return undefined; }
+    return age;
+  }
   /** Whether a newer request has taken over the frame since this one started. */
   const stale = (mine) => generation !== mine;
   let timers = [];
@@ -386,6 +429,7 @@ export function createPreview(host, onStatus) {
     };
     greet();
     host.addEventListener("pointerenter", greet);
+    host.addEventListener("pointerdown", () => greetByClick(current));
     timers.push(window.setTimeout(() => { delete rig.dataset.greet; }, 3400));
 
     if (poses.length > 1) {
@@ -480,7 +524,7 @@ export function createPreview(host, onStatus) {
     const loop = (now) => {
       raf = window.requestAnimationFrame(loop);
       const time = (now - started) / 1000;
-      const matrices = poseRig(bones, box, { time, pokeAge: undefined });
+      const matrices = poseRig(bones, box, { time, pokeAge: pokeAgeAt(performance.now()) });
       ctx.clearRect(0, 0, width, height);
 
       const skinnedAt = (index) => {
@@ -707,10 +751,12 @@ export function createPreview(host, onStatus) {
     const loop = (now) => {
       raf = window.requestAnimationFrame(loop);
       const elapsed = (now - started) / 1000;
-      skinner.draw(poseRig(bones, box, { time: elapsed, pokeAge: undefined }));
+      skinner.draw(poseRig(bones, box, { time: elapsed, pokeAge: pokeAgeAt(now) }));
       blink?.(elapsed);
     };
     raf = window.requestAnimationFrame(loop);
+    // The same click pokes it and speaks it, on both render paths.
+    host.addEventListener("pointerdown", () => greetByClick(current));
     return true;
   }
 
@@ -838,6 +884,9 @@ export function createPreview(host, onStatus) {
    */
   async function show(characterId, lookId) {
     const mine = (generation += 1);
+    // Remembered here rather than passed down: the CSS rig has no idea which character it
+    // is drawing, and a click needs to know whose line to speak.
+    current = characterId;
     if (override !== undefined) {
       showOverride();
       return;
