@@ -650,6 +650,17 @@ await it("the greeting moves the figure, and the idle does not stand still", () 
     `the idle is indistinguishable 1.4s apart (distance ${distance(idle, later).toFixed(4)})`,
   );
 
+  // Two seconds apart must still differ. Every layer used to be a 2.0 s sine, which made
+  // the eight-second idle four copies of the same two seconds — the actual reason it read
+  // as mechanical. This is the assertion that would have caught that.
+  const twoApart = distance(at({ time: 1.0 }), at({ time: 3.0 }));
+  assert.ok(twoApart > 0.2, `the idle repeats every two seconds (distance ${twoApart.toFixed(4)})`);
+
+  // And eight seconds apart must be the same pose again, or a mascot left on screen all
+  // day would slowly drift away from where it belongs.
+  const loop = distance(at({ time: 1.0 }), at({ time: 9.0 }));
+  assert.ok(loop < 0.001, `the idle does not close its loop (distance ${loop.toFixed(6)})`);
+
   // And the greeting has to end: 1.8s in it is back to standing, or the mascot would
   // be permanently mid-bow.
   const after = at({ time: 1.0, pokeAge: undefined, greetAge: 1.9 });

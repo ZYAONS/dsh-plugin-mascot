@@ -345,22 +345,25 @@ function poseRig(rig, box, state) {
 	// The degrees are not a straight copy: the game rigs 297 bones and this rigs
 	// three, so an angle does not mean the same thing in both. The period does,
 	// and so does the order of magnitude.
-	const BEAT = (Math.PI * 2) / 2.0;
-	// Three layers, none of them larger than the measured amounts: the beat the
-	// game uses, a weight shift an order of magnitude slower, and nothing else.
-	const sway = Math.sin(t * BEAT) * 0.6 * rad;
-	const spineAngle = Math.sin(t * BEAT + 0.7) * 0.5 * rad;
-	const nod = Math.sin(t * BEAT + 1.4) * 0.9 * rad + Math.sin(t * BEAT * 2.6) * 0.2 * rad;
-	// Second harmonic: a pure sine is mechanical, and breathing in is faster
-	// than breathing out.
-	const breathe = 1 + Math.sin(t * BEAT) * 0.006 + Math.sin(t * BEAT * 2) * 0.0016;
-	const bounce = Math.sin(t * BEAT + Math.PI / 2) * box[3] * 0.004;
-	// Shifting weight from foot to foot, on a period three times slower than the
-	// beat. A body that only rises and falls reads as a deep breath held
-	// perfectly still; this is the layer that makes it read as standing.
-	const SHIFT = (Math.PI * 2) / 6.4;
-	const shift = Math.sin(t * SHIFT) * box[2] * 0.008;
-	const shiftLean = Math.sin(t * SHIFT + 0.4) * 0.35 * rad;
+	// One loop, and every layer rides a whole number of cycles inside it — 4 for
+	// the breath (the 2.00 s beat the model was sampled at), 1 for the weight
+	// shift, 3 for a secondary ripple between them. Whole numbers keep the loop
+	// seamless; different numbers keep the layers from moving together, which is
+	// what stops a long idle from looking like a short one on repeat.
+	const LOOP = 8.0;
+	const cycles = (count, phase) => Math.sin((Math.PI * 2 * count * t) / LOOP + (phase ?? 0));
+	const sway = (cycles(1) * 0.6 + cycles(3, 0.5) * 0.15) * rad;
+	const spineAngle = cycles(4, 0.7) * 0.5 * rad;
+	const nod = (cycles(4, 1.4) * 0.9 + cycles(5, 0.3) * 0.2) * rad;
+	// Second harmonic on the breath: a pure sine is mechanical, and breathing in
+	// is faster than breathing out.
+	const breathe = 1 + cycles(4) * 0.006 + cycles(8) * 0.0016;
+	const bounce = cycles(4, Math.PI / 2) * box[3] * 0.004;
+	// Shifting weight from foot to foot, once across the whole loop. A body that
+	// only rises and falls reads as a deep breath held perfectly still; this is
+	// the layer that makes it read as standing.
+	const shift = cycles(1, 0.9) * box[2] * 0.008;
+	const shiftLean = cycles(1, 1.3) * 0.35 * rad;
 
 	// The greeting: a raised head, one nod, back to standing. Anchored to when it
 	// started, so it plays the same wherever in the idle it happens.
