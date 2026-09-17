@@ -1,6 +1,11 @@
 {
   "source": "Arknights Spine 3.8.99 · 4228_closur",
   "unit": "figure height, origin at the feet",
+  "arms": {
+    "halfWidth": 0.055,
+    "y": 0.5744,
+    "hand": 0.4169
+  },
   "eyes": {
     "y": 0.7293,
     "separation": 0.1419,

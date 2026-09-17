@@ -240,9 +240,34 @@ const centre = (pattern) => {
 const leftEye = centre(/^F_L_Eyelash/u);
 const rightEye = centre(/^F_R_Eyelash/u);
 
+/** 肩关节：手臂第一段的世界坐标。 */
+const shoulder = (pattern) => {
+  const found = [...world].find(([name]) => pattern.test(name));
+  if (found === undefined) return null;
+  const [, point] = found;
+  return {
+    x: Number(((point.x - rootBone.x) / stature).toFixed(4)),
+    y: Number(((point.y - rootBone.y) / stature).toFixed(4)),
+  };
+};
+const leftShoulder = shoulder(/^F_L_Arm_II$/u);
+const rightShoulder = shoulder(/^F_R_Arm_II$/u);
+
 const anatomy = {
   source: `Arknights Spine ${data.version} · ${MODEL.id}`,
   unit: "figure height, origin at the feet",
+  // Shoulders, from the game's own arm chain. The model stands slightly off-its-axis
+  // — its eyes sit 0.06 of a stature to one side of its root — so the raw shoulder
+  // positions read as lopsided. They are not: a shoulder is a shoulder. Symmetric
+  // about the eye midpoint, which is the one landmark checked against real artwork.
+  arms: leftShoulder === null || rightShoulder === null
+    ? null
+    : {
+      halfWidth: Number(((rightShoulder.x - leftShoulder.x) / 2).toFixed(4)),
+      y: Number(((leftShoulder.y + rightShoulder.y) / 2).toFixed(4)),
+      // Where the hand hangs, so the weight can fade out above the hip.
+      hand: Number(((world.get("F_L_Hand_I").y - rootBone.y) / stature).toFixed(4)),
+    },
   eyes: {
     y: Number((((leftEye.y + rightEye.y) / 2 - rootBone.y) / stature).toFixed(4)),
     separation: Number(((rightEye.x - leftEye.x) / stature).toFixed(4)),

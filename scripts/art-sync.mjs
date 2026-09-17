@@ -462,6 +462,13 @@ function sharedScale(boxes, seat) {
  * @returns the index object, and the list of looks that are not installed yet.
  */
 export function buildIndex(options = {}) {
+  // Read first. The frame records are built in the middle of this function, so anything
+  // they need has to exist before that — a definition next to the return statement is
+  // already too late, and the failure is a temporal dead zone error, not a missing field.
+  const anatomyPath = resolve("art/anatomy.json");
+  const anatomyForIndex = existsSync(anatomyPath) ? JSON.parse(readFileSync(anatomyPath, "utf8")) : null;
+  const frameArms = anatomyForIndex === null ? null : (anatomyForIndex.arms ?? null);
+
   const declaration = JSON.parse(readFileSync(join(artDir, "looks.json"), "utf8"));
   const chromium = options.chromium ?? findChromium();
 
@@ -524,6 +531,8 @@ export function buildIndex(options = {}) {
         // Eye boxes as [x, y, w, h] fractions of the body, plus the skin tone sampled
         // just below them. Both were computed all along and simply never published.
         eyes: boxes[index].eyes ?? null,
+        // Shoulders in stature units, so the rig can put its arm bones where the game does.
+        arms: frameArms,
         // "pixels" when the artwork was measured, "anatomy" when the official
         // proportions were used. Worth publishing: it says how much to trust the box.
         eyesFrom: boxes[index].eyesFrom ?? null,
@@ -549,6 +558,7 @@ export function buildIndex(options = {}) {
     .filter((character) => character.looks.length > 0);
 
   return {
+    anatomy: anatomyForIndex,
     // No timestamp: index.json is committed next to looks.json, and a field that
     // changes on every run would make it churn in git for no information.
     seats: SEATS,

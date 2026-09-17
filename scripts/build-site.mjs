@@ -91,6 +91,7 @@ function frameOf(look, frame) {
     // official rig, and these are where that anatomy lands on this particular artwork.
     body: frame.body ?? null,
     eyes: frame.eyes ?? null,
+    arms: frame.arms ?? null,
     skin: frame.skin ?? null,
     eyesFrom: frame.eyesFrom ?? null,
     // Where this frame sits inside the file the console will actually download.

@@ -212,6 +212,11 @@
               0.062
             ]
           ],
+          "arms": {
+            "halfWidth": 0.055,
+            "y": 0.5744,
+            "hand": 0.4169
+          },
           "skin": null,
           "eyesFrom": "anatomy",
           "crop": null,
@@ -337,6 +342,11 @@
               0.062
             ]
           ],
+          "arms": {
+            "halfWidth": 0.055,
+            "y": 0.5744,
+            "hand": 0.4169
+          },
           "skin": null,
           "eyesFrom": "anatomy",
           "crop": null,
@@ -462,6 +472,11 @@
               0.062
             ]
           ],
+          "arms": {
+            "halfWidth": 0.055,
+            "y": 0.5744,
+            "hand": 0.4169
+          },
           "skin": null,
           "eyesFrom": "anatomy",
           "crop": {
@@ -578,6 +593,11 @@
               0.062
             ]
           ],
+          "arms": {
+            "halfWidth": 0.055,
+            "y": 0.5744,
+            "hand": 0.4169
+          },
           "skin": null,
           "eyesFrom": "anatomy",
           "crop": {
@@ -708,6 +728,11 @@
               0.062
             ]
           ],
+          "arms": {
+            "halfWidth": 0.055,
+            "y": 0.5744,
+            "hand": 0.4169
+          },
           "skin": null,
           "eyesFrom": "anatomy",
           "crop": null,
@@ -833,6 +858,11 @@
               0.062
             ]
           ],
+          "arms": {
+            "halfWidth": 0.055,
+            "y": 0.5744,
+            "hand": 0.4169
+          },
           "skin": null,
           "eyesFrom": "anatomy",
           "crop": null,
@@ -959,6 +989,11 @@
               0.062
             ]
           ],
+          "arms": {
+            "halfWidth": 0.055,
+            "y": 0.5744,
+            "hand": 0.4169
+          },
           "skin": null,
           "eyesFrom": "anatomy",
           "crop": null,
@@ -1084,6 +1119,11 @@
               0.062
             ]
           ],
+          "arms": {
+            "halfWidth": 0.055,
+            "y": 0.5744,
+            "hand": 0.4169
+          },
           "skin": null,
           "eyesFrom": "anatomy",
           "crop": null,
@@ -1209,6 +1249,11 @@
               0.062
             ]
           ],
+          "arms": {
+            "halfWidth": 0.055,
+            "y": 0.5744,
+            "hand": 0.4169
+          },
           "skin": null,
           "eyesFrom": "anatomy",
           "crop": null,
@@ -1334,6 +1379,11 @@
               0.062
             ]
           ],
+          "arms": {
+            "halfWidth": 0.055,
+            "y": 0.5744,
+            "hand": 0.4169
+          },
           "skin": null,
           "eyesFrom": "anatomy",
           "crop": null,
@@ -1459,6 +1509,11 @@
               0.062
             ]
           ],
+          "arms": {
+            "halfWidth": 0.055,
+            "y": 0.5744,
+            "hand": 0.4169
+          },
           "skin": null,
           "eyesFrom": "anatomy",
           "crop": null,
@@ -1584,6 +1639,11 @@
               0.062
             ]
           ],
+          "arms": {
+            "halfWidth": 0.055,
+            "y": 0.5744,
+            "hand": 0.4169
+          },
           "skin": null,
           "eyesFrom": "anatomy",
           "crop": null,
