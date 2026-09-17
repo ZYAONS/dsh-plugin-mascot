@@ -107,9 +107,13 @@ function frameOf(look, frame) {
 /** 塞壬唱片的角色映射；文件不在时为空表，页面自然不显示唱片区。 */
 const sirenPath = join(root, "art", "siren.json");
 const siren = existsSync(sirenPath) ? (JSON.parse(readFileSync(sirenPath, "utf8")).records ?? {}) : {};
+/** 动画主题曲，给塞壬唱片没覆盖的角色。 */
+const songsPath = join(root, "art", "songs.json");
+const songs = existsSync(songsPath) ? (JSON.parse(readFileSync(songsPath, "utf8")).songs ?? {}) : {};
 
 const catalog = {
   siren,
+  songs,
   version: manifest.version,
   repository: "https://github.com/ZYAONS/dsh-plugin-mascot",
   characters: declaration.characters.map((character) => ({

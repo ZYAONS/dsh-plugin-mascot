@@ -696,24 +696,45 @@ let sirenAudio;
 function paintSiren() {
   const node = $("preview-siren");
   const record = state.catalog.siren?.[state.character];
-  if (record === undefined || record === null || record.cover == null) {
-    node.dataset.on = "0";
-    node.removeAttribute("href");
+  const song = state.catalog.songs?.[state.character];
+  const cover = $("siren-cover");
+  const play = $("siren-play");
+
+  if (record !== undefined && record !== null && record.cover != null) {
+    node.dataset.on = "1";
+    cover.style.display = "";
+    cover.src = record.cover;
+    cover.alt = String(record.album);
+    $("siren-album").textContent = String(record.album).trim();
+    $("siren-meta").textContent = `塞壬唱片-MSR · ${String(record.tracks)} 首 · ${record.event}`;
+    node.href = "https://monster-siren.hypergryph.com/";
+    play.dataset.on = "1";
     return;
   }
-  node.dataset.on = "1";
-  $("siren-cover").src = record.cover;
-  $("siren-cover").alt = record.album;
-  $("siren-album").textContent = String(record.album).trim();
-  $("siren-meta").textContent = `塞壬唱片-MSR · ${String(record.tracks)} 首 · ${record.event}`;
-  node.href = "https://monster-siren.hypergryph.com/";
+
+  if (song !== undefined && song !== null) {
+    // No cover art for these: the album jacket belongs to a CD release this console has no
+    // licence to display, so the row shows the song instead of dressing it up.
+    node.dataset.on = "1";
+    cover.style.display = "none";
+    $("siren-album").textContent = `${song.kind}　${song.title}`;
+    $("siren-meta").textContent = `${song.band} · ${song.work}`;
+    node.removeAttribute("href");
+    // No source means no button: better than a button that cannot play.
+    play.dataset.on = song.src == null ? "0" : "1";
+    play.textContent = song.src == null ? "无官方音源" : "试听";
+    return;
+  }
+
+  node.dataset.on = "0";
+  node.removeAttribute("href");
 }
 
 /** Play the record's first track, or stop it if it is already playing. */
 function playSiren() {
   const node = $("preview-siren");
   const record = state.catalog.siren?.[state.character];
-  const src = record?.track?.src;
+  const src = record?.track?.src ?? state.catalog.songs?.[state.character]?.src;
   if (typeof src !== "string" || src === "") return;
   if (sirenAudio !== undefined) {
     sirenAudio.pause();
@@ -886,6 +907,8 @@ async function main() {
   $("siren-play").addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
+    // Saying a source does not exist should not look like pressing play and hearing nothing.
+    if ($("siren-play").dataset.on === "0") return;
     playSiren();
   });
 

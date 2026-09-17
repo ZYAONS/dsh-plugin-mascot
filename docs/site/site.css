@@ -691,3 +691,6 @@ input[type="file"]::file-selector-button:hover { border-color: var(--signal); co
   border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--signal);
 }
 .siren[data-playing="1"] .siren-play { background: var(--signal); color: var(--signal-ink); }
+
+/* 没有官方音源时的提示：不是按钮，只是说明 */
+.siren-play[data-on="0"] { border-style: dashed; color: var(--dim); cursor: default; }

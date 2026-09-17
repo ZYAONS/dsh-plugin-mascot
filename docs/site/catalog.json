@@ -73,6 +73,25 @@
       "event": "明日方舟 × 女神异闻录3 Reload 联动专辑"
     }
   },
+  "songs": {
+    "sakiko": {
+      "title": "KiLLKiSS",
+      "band": "Ave Mujica",
+      "kind": "OP",
+      "work": "TV 动画《BanG Dream! Ave Mujica》",
+      "src": "https://bestdori.com/assets/jp/sound/bgm659_rip/bgm659.mp3",
+      "source": "Bestdori · 游戏资源 assets/jp/sound/bgm659_rip/bgm659.mp3"
+    },
+    "yuno": {
+      "title": "真夜中遊園地",
+      "band": "夢限大みゅーたいぷ",
+      "kind": "ED",
+      "work": "《BanG Dream! YUME∞MITA》",
+      "src": null,
+      "source": null,
+      "reason": "Bestdori 曲库里没有这个乐团，Bushiroad Music 官网不托管音频，YouTube 官方 MV 无法下载"
+    }
+  },
   "version": "0.1.0",
   "repository": "https://github.com/ZYAONS/dsh-plugin-mascot",
   "characters": [
