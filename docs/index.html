@@ -93,6 +93,16 @@
         </div>
         <p class="preview-note" id="preview-note"></p>
         <p class="credit" id="preview-credit"></p>
+        <!-- 塞壬唱片：该角色的活动专辑。封面与音源都热链官方 CDN。 -->
+        <a class="siren" id="preview-siren" data-on="0" target="_blank" rel="noopener">
+          <!-- no-referrer：官方 CDN 有防盗链，带 Referer 的请求会被拒，而 node 取得到是因为它不发 Referer。 -->
+          <img class="siren-cover" id="siren-cover" alt="" referrerpolicy="no-referrer">
+          <span class="siren-body">
+            <b id="siren-album">—</b>
+            <em id="siren-meta"></em>
+          </span>
+          <span class="siren-play" id="siren-play">试听</span>
+        </a>
       </div>
     </div>
   </section>

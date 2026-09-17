@@ -672,3 +672,22 @@ input[type="file"]::file-selector-button:hover { border-color: var(--signal); co
   border-right: 2px solid var(--signal); border-bottom: 2px solid var(--signal); display: block;
 }
 [data-theme="makoto"] .card[data-on="1"] { box-shadow: 0 0 0 1px var(--signal) inset; }
+
+/* 塞壬唱片：封面 + 专辑名 + 试听。封面与音源都在官方 CDN 上，这里只做引用。 */
+.siren {
+  display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 8px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
+  text-decoration: none; color: inherit; transition: border-color .18s ease, transform .18s ease;
+}
+.siren[data-on="0"] { display: none; }
+.siren:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+.siren-cover { width: 44px; height: 44px; border-radius: calc(var(--radius) - 2px); object-fit: cover; flex: none; }
+.siren-body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.siren-body b { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.siren-body em { font-style: normal; font-size: 11px; color: var(--dim); margin-top: 2px; }
+.siren-play {
+  flex: none; font-size: 11px; letter-spacing: .06em; padding: 4px 9px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--signal);
+}
+.siren[data-playing="1"] .siren-play { background: var(--signal); color: var(--signal-ink); }

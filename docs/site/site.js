@@ -406,6 +406,7 @@ function render() {
   // Offered only by the neutral theme: a character's theme is a statement about who is
   // on screen, and "or preview an image of your own" is a different statement.
   $("preview-tools").classList.toggle("hidden", !state.autoTheme);
+  paintSiren();
   drivePreview();
   save();
 }
@@ -682,6 +683,58 @@ function drivePreview() {
   else preview.show(state.character, look).catch(() => {});
 }
 
+/** One audio element, reused: a second record stops the first. */
+let sirenAudio;
+
+/**
+ * Show the selected character's Siren Records album, if it has one.
+ *
+ * The mapping is by the event the character came from — Siren releases by event, not by
+ * character, so there is nothing to match on a name. Covers and audio are hotlinked from
+ * the official CDN; the console only knows their cids.
+ */
+function paintSiren() {
+  const node = $("preview-siren");
+  const record = state.catalog.siren?.[state.character];
+  if (record === undefined || record === null || record.cover == null) {
+    node.dataset.on = "0";
+    node.removeAttribute("href");
+    return;
+  }
+  node.dataset.on = "1";
+  $("siren-cover").src = record.cover;
+  $("siren-cover").alt = record.album;
+  $("siren-album").textContent = String(record.album).trim();
+  $("siren-meta").textContent = `塞壬唱片-MSR · ${String(record.tracks)} 首 · ${record.event}`;
+  node.href = "https://monster-siren.hypergryph.com/";
+}
+
+/** Play the record's first track, or stop it if it is already playing. */
+function playSiren() {
+  const node = $("preview-siren");
+  const record = state.catalog.siren?.[state.character];
+  const src = record?.track?.src;
+  if (typeof src !== "string" || src === "") return;
+  if (sirenAudio !== undefined) {
+    sirenAudio.pause();
+    sirenAudio = undefined;
+    node.dataset.playing = "0";
+    return;
+  }
+  sirenAudio = new Audio(src);
+  // Same reason as the cover: the CDN refuses requests that carry a Referer.
+  sirenAudio.referrerPolicy = "no-referrer";
+  node.dataset.playing = "1";
+  sirenAudio.addEventListener("ended", () => {
+    node.dataset.playing = "0";
+    sirenAudio = undefined;
+  });
+  sirenAudio.play().catch(() => {
+    node.dataset.playing = "0";
+    sirenAudio = undefined;
+  });
+}
+
 /** Re-read the connection badge after a connect or file pick changed it. */
 function paintPreviewStatusRefresh() {
   const node = $("preview-status");
@@ -828,6 +881,13 @@ async function main() {
     });
   }
   applyLanguage(readStoredLanguage());
+
+  // 试听：点按钮出声，点别处进官网 —— 所以按钮要吃掉点击，不让它冒泡到链接。
+  $("siren-play").addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    playSiren();
+  });
 
   bindToggle("t-plugin", (value) => { state.plugin = value; });
   bindToggle("t-balance", (value) => { state.balance = value; });

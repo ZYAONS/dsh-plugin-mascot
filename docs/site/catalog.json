@@ -1,4 +1,78 @@
 {
+  "siren": {
+    "closure": {
+      "album": "相变临界OST",
+      "albumCid": "4507",
+      "cover": "https://web.hycdn.cn/siren/pic/20260501/41a1c9bddfb88bc10ab7f131aa956dc2.jpg",
+      "tracks": 7,
+      "track": {
+        "name": "永恒之春",
+        "cid": "697688",
+        "src": "https://res01.hycdn.cn/ef9b98e306a0ffd2f9aa8839f13e6e0c/6AAC4B05/siren/audio/20260503/e835b769aa9df41eba1e0b620e2139d9.wav"
+      },
+      "event": "七周年上岛，对应 2026-05-01 的七周年活动专辑"
+    },
+    "muelsyse": {
+      "album": "孤星OST",
+      "albumCid": "2450",
+      "cover": "https://web.hycdn.cn/siren/pic/20230508/8f7be68ffa9dea9da961df0997466617.jpg",
+      "tracks": 10,
+      "track": {
+        "name": "绿意游曳",
+        "cid": "697629",
+        "src": "https://res01.hycdn.cn/a520b4c7e647ec69fc353c9b92a29d7e/6AAC4B06/siren/audio/20230508/10c8ee064eebd19c3b9488da9fce8ad9.wav"
+      },
+      "event": "登场活动「孤星」（Lone Trail）"
+    },
+    "miuyin": {
+      "album": "丛林症结OST",
+      "albumCid": "8929",
+      "cover": "https://web.hycdn.cn/siren/pic/20260710/11026c048f3b5d112363f5361556bb2c.jpg",
+      "tracks": 1,
+      "track": {
+        "name": "灵魂洄游",
+        "cid": "125021",
+        "src": "https://res01.hycdn.cn/d30a7752025124f3ba5d97af9e2aba5a/6AAC4B06/siren/audio/20260710/8d96e7dde9b105d1cf8bab3eb154fb25.wav"
+      },
+      "event": "登场活动「丛林症结」（SideStory）"
+    },
+    "yuyuan": {
+      "album": " 直到大地变成一颗酸橙OST",
+      "albumCid": "8928",
+      "cover": "https://web.hycdn.cn/siren/pic/20260803/e5da71a705c8280720562f2bf8e03cf6.png",
+      "tracks": 9,
+      "track": {
+        "name": "毛茸茸大决战！",
+        "cid": "779442",
+        "src": "https://res01.hycdn.cn/5bbe15403b5873729566ee3920fb2bc7/6AAC4B06/siren/audio/20260803/af43865b49798447e64ae7e9a03dde3a.wav"
+      },
+      "event": "夏季限定干员，对应 2026 夏日活动专辑"
+    },
+    "dusk": {
+      "album": "画中人OST",
+      "albumCid": "1026",
+      "cover": "https://web.hycdn.cn/siren/pic/20221229/4e2a6fe78218e937b64d0d2e2c41d68b.jpg",
+      "tracks": 5,
+      "track": {
+        "name": "山水烬尽",
+        "cid": "880350",
+        "src": "https://res01.hycdn.cn/376c9a38ab5a095e2ee04b780e41a0da/6AAC4B06/siren/audio/20221229/5b9d8c0a7fc8118487b723c451502d5e.wav"
+      },
+      "event": "登场活动「画中人」（Who is Real）"
+    },
+    "makoto": {
+      "album": "月行水上",
+      "albumCid": "7760",
+      "cover": "https://web.hycdn.cn/siren/pic/20260903/b4bb15f9fff96de637233ebd69855b4e.png",
+      "tracks": 1,
+      "track": {
+        "name": "凡常恩典",
+        "cid": "953936",
+        "src": "https://res01.hycdn.cn/0f3908fffd0093ef11c34f3c4a6e1a04/6AAC4B07/siren/audio/20260903/bc5500b0b6789982955cd4eab37b8738.wav"
+      },
+      "event": "明日方舟 × 女神异闻录3 Reload 联动专辑"
+    }
+  },
   "version": "0.1.0",
   "repository": "https://github.com/ZYAONS/dsh-plugin-mascot",
   "characters": [

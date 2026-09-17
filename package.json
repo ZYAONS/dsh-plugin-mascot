@@ -53,7 +53,8 @@
     "preview:official": "node scripts/preview.mjs --official",
     "verify": "node scripts/verify-profile.mjs",
     "measure:motion": "node scripts/measure-motion.mjs",
-    "motion:literal": "node scripts/motion-literal.mjs"
+    "motion:literal": "node scripts/motion-literal.mjs",
+    "siren:sync": "node scripts/siren-sync.mjs"
   },
   "dsh": {
     "client": {

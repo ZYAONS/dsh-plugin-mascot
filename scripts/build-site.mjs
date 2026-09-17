@@ -104,7 +104,12 @@ function frameOf(look, frame) {
   };
 }
 
+/** 塞壬唱片的角色映射；文件不在时为空表，页面自然不显示唱片区。 */
+const sirenPath = join(root, "art", "siren.json");
+const siren = existsSync(sirenPath) ? (JSON.parse(readFileSync(sirenPath, "utf8")).records ?? {}) : {};
+
 const catalog = {
+  siren,
   version: manifest.version,
   repository: "https://github.com/ZYAONS/dsh-plugin-mascot",
   characters: declaration.characters.map((character) => ({
