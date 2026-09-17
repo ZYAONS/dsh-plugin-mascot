@@ -212,7 +212,7 @@ h1 small {
 [data-theme="yuno"] h1 small { letter-spacing: 0.32em; }
 
 /* the theme switcher */
-.themer { flex: none; }
+.themer { flex: 0 1 auto; max-width: 100%; min-width: 0; }
 .themer .lbl {
   display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em;
   color: var(--dimmer); text-transform: uppercase; margin-bottom: 6px; text-align: right;

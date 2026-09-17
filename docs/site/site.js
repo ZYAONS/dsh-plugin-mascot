@@ -26,6 +26,9 @@ const THEME_COLOURS = {
   rhodes: { accent: "#37e0d8", label: "CONSOLE", page: "closure" },
   mewtype: { accent: "#ff4d9d", label: "LIVE SET", page: "yuno" },
   rhine: { accent: "#a3dd7a", label: "RHINE LAB", page: "muelsyse" },
+  sakiko: { accent: "#8b7cf8", label: "AVE MUJICA", page: "sakiko" },
+  miuyin: { accent: "#3fa9f5", label: "OPERATOR", page: "miuyin" },
+  yuyuan: { accent: "#4fd6e8", label: "OPERATOR", page: "yuyuan" },
 };
 
 /** Human names for the page themes, for the header readout. */
@@ -34,6 +37,9 @@ const PAGE_THEME_NAMES = {
   closure: "银上之蓝",
   yuno: "霓虹粉",
   muelsyse: "莱茵绿",
+  sakiko: "紫蓝舞台",
+  miuyin: "晴空蓝",
+  yuyuan: "水蓝",
 };
 
 const state = {
@@ -535,6 +541,9 @@ const CREDITS = {
   closure: { work: "明日方舟（Arknights）", owner: "鹰角网络 Hypergryph" },
   yuno: { work: "BanG Dream! ／ 梦限大 MewType", owner: "Bushiroad" },
   muelsyse: { work: "明日方舟（Arknights）", owner: "鹰角网络 Hypergryph" },
+  sakiko: { work: "BanG Dream! Ave Mujica", owner: "Bushiroad" },
+  miuyin: { work: "明日方舟（Arknights）", owner: "鹰角网络 Hypergryph" },
+  yuyuan: { work: "明日方舟（Arknights）", owner: "鹰角网络 Hypergryph" },
 };
 
 /** Paint the attribution for the selected character. */
