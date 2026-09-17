@@ -169,12 +169,16 @@ export function createPreview(host, onStatus) {
     said = spoken;
     const bubble = document.getElementById("preview-say");
     if (bubble !== null) {
-      bubble.textContent = spoken.ja;
+      // The official wording when it is known, the line's name when it is not, and the
+      // written line only when there is no recording at all. Showing a sentence the
+      // voice is not saying is worse than showing nothing.
+      const said = spoken.ja !== "" ? spoken.ja : (spoken.label !== "" ? `（官方语音：${spoken.label}）` : spoken.ja);
+      bubble.textContent = said;
       bubble.dataset.on = "1";
-      bubble.dataset.silent = spoken.spoke ? "0" : "1";
-      // The translation rides along as the title, so hovering explains a line the
-      // visitor may not read.
-      bubble.title = spoken.reason === null ? spoken.zh : `${spoken.zh} — ${spoken.reason}`;
+      // Dashed when there is no wording to show, so a label is not mistaken for a line.
+      bubble.dataset.silent = spoken.ja === "" ? "1" : (spoken.spoke ? "0" : "1");
+      const explanation = [spoken.zh, spoken.label !== "" ? `官方语音：${spoken.label}` : "", spoken.reason ?? ""].filter((part) => part !== "").join(" — ");
+      bubble.title = explanation;
       window.setTimeout(() => { bubble.dataset.on = "0"; }, 2600);
     }
   }
