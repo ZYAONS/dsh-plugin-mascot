@@ -386,7 +386,7 @@ export function createPreview(host, onStatus) {
     };
     greet();
     host.addEventListener("pointerenter", greet);
-    timers.push(window.setTimeout(() => { delete rig.dataset.greet; }, 1800));
+    timers.push(window.setTimeout(() => { delete rig.dataset.greet; }, 3400));
 
     if (poses.length > 1) {
       const layers = [...rig.children];

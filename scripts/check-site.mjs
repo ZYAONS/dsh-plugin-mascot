@@ -934,7 +934,8 @@ ok(
   typeof greeting === "number" && greeting >= 1,
   greeting === null ? "no CSS rig on screen, so nothing to greet" : `greeted ${String(greeting)} time(s)`,
 );
-await wait(2200);
+// The gesture is the official Interact now: 3.4 s, not the 1.8 the invented one ran for.
+await wait(3900);
 const settled = await cdp.evaluate(
   "(() => { const n = document.querySelector('#preview-host .css-rig'); return n === null ? null : n.dataset.greet === '1'; })()",
 );

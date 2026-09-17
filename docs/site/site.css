@@ -541,9 +541,9 @@ input[type="file"]::file-selector-button:hover { border-color: var(--signal); co
   30% { transform: rotate(-6deg); }
   60% { transform: rotate(4.5deg); }
 }
-.css-rig[data-greet="1"] { animation: css-rig-greet-rise 1.8s ease-in-out; }
-.css-rig[data-greet="1"] .rig-root { animation: css-rig-greet-lean 1.8s ease-in-out; }
-.css-rig[data-greet="1"] .rig-head-layer { animation: css-rig-greet-nod 1.8s ease-in-out; }
+.css-rig[data-greet="1"] { animation: css-rig-greet-rise 3.4s ease-in-out; }
+.css-rig[data-greet="1"] .rig-root { animation: css-rig-greet-lean 3.4s ease-in-out; }
+.css-rig[data-greet="1"] .rig-head-layer { animation: css-rig-greet-nod 3.4s ease-in-out; }
 @media (prefers-reduced-motion: reduce) {
   .css-rig[data-greet="1"], .css-rig[data-greet="1"] .rig-root, .css-rig[data-greet="1"] .rig-head-layer { animation: none; }
 }

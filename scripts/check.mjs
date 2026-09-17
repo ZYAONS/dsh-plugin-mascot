@@ -663,7 +663,8 @@ await it("the greeting moves the figure, and the idle does not stand still", () 
 
   // And the greeting has to end: 1.8s in it is back to standing, or the mascot would
   // be permanently mid-bow.
-  const after = at({ time: 1.0, pokeAge: undefined, greetAge: 1.9 });
+  // The official Interact runs 3.37 s, so 1.9 is still the middle of the gesture.
+  const after = at({ time: 1.0, pokeAge: undefined, greetAge: 3.5 });
   assert.ok(
     distance(idle, after) < 0.01,
     `the greeting is still displacing the head after it should have finished (${distance(idle, after).toFixed(4)})`,
