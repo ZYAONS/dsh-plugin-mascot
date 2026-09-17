@@ -922,7 +922,9 @@ ok("and every translated key was restored", (await cdp.evaluate("[...document.qu
 // Written as: did the attribute actually appear, and did it actually go away again.
 // A keyframe that is never applied fails silently, and so does one that never clears —
 // a mascot frozen mid-bow.
-await visit(withQuery("theme=yuno&character=yuno&look=yuno-casual"), { width: 1360, height: 900 });
+// The CSS rig only runs for a look whose host sends no CORS header, and only the chibi
+// looks animate now — so the chibi is what has a layered rig to greet with.
+await visit(withQuery("theme=yuno&character=yuno&look=yuno-chibi"), { width: 1360, height: 900 });
 // The count, not the flag. The flag is only set for the 1.8 s the gesture lasts, so
 // sampling it as soon as the preview is ready is a race — and the race was lost the
 // moment the blink made the page take slightly longer to settle.

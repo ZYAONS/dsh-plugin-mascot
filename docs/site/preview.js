@@ -15,7 +15,7 @@
  * Everything here reads. Nothing is written, and nothing is uploaded.
  */
 
-import { RIG, buildRig, createBlink, createSkinner, findNeck, poseRig, rigStatus, setVoiceUrls, speakLine, voiceStatus } from "./rig.js";
+import { RIG, buildRig, createSkinner, findNeck, poseRig, rigStatus, setVoiceUrls, speakLine, voiceStatus } from "./rig.js";
 
 /** The dock seat the plugin renders into, in CSS pixels. Mirrors `.dsh-mascot-frames`. */
 const SEAT = { width: 104, height: 172 };
@@ -404,26 +404,6 @@ export function createPreview(host, onStatus) {
     }
     host.append(rig);
 
-    // The CSS rig draws the same figure, so it blinks on the same schedule.
-    const cssBlink = createBlink(host, {
-      width: poses[0].image.naturalWidth,
-      height: poses[0].image.naturalHeight,
-      body: face?.body ?? null,
-      // Only the chibi looks blink. Their eyes are large enough for a lid to read as an
-      // eyelid; over a portrait it is a smudge, and the placement work is wasted.
-      eyes: face?.blink === true ? (face.eyes ?? null) : null,
-      colour: Array.isArray(face?.skin) ? `rgb(${face.skin.join(",")})` : undefined,
-    });
-    if (cssBlink !== undefined) {
-      const blinkStarted = performance.now();
-      const blinkLoop = (now) => {
-        if (!host.contains(rig)) return;
-        cssBlink((now - blinkStarted) / 1000);
-        timers.push(window.requestAnimationFrame(blinkLoop));
-      };
-      timers.push(window.requestAnimationFrame(blinkLoop));
-    }
-
     // The same two moments the WebGL rig uses: once when it appears, once whenever the
     // pointer comes back to it. A flag rather than a timer, because CSS owns the
     // timeline here — removing it after the animation is all that is needed.
@@ -743,16 +723,6 @@ export function createPreview(host, onStatus) {
     skinner = built;
     host.textContent = "";
     host.append(skinner.canvas);
-    // Lids over the eyes. `face` carries the body box and the eye boxes; without them
-    // there is simply nothing to blink, which is better than blinking in the wrong place.
-    const blink = createBlink(host, {
-      width: image.naturalWidth,
-      height: image.naturalHeight,
-      body: face?.body ?? null,
-      // Only chibi looks blink; createBlink returns undefined without eye boxes.
-      eyes: face?.blink === true ? (face.eyes ?? null) : null,
-      colour: Array.isArray(face?.skin) ? `rgb(${face.skin.join(",")})` : undefined,
-    });
     skinner.canvas.style.width = `${String(SEAT.width)}px`;
     skinner.canvas.style.height = `${String(SEAT.height)}px`;
     skinner.canvas.style.display = "block";
@@ -763,7 +733,6 @@ export function createPreview(host, onStatus) {
       raf = window.requestAnimationFrame(loop);
       const elapsed = (now - started) / 1000;
       skinner.draw(poseRig(bones, box, { time: elapsed, pokeAge: pokeAgeAt(now) }));
-      blink?.(elapsed);
     };
     raf = window.requestAnimationFrame(loop);
     // The same click pokes it and speaks it, on both render paths.
@@ -971,8 +940,15 @@ export function createPreview(host, onStatus) {
     // the badge before anything exists to look at, which reads as "not connected" on
     // a page that is showing the character perfectly well.
     const boxes = acquired.every((entry) => Array.isArray(entry.frame.box) && Array.isArray(entry.frame.profile));
+    // Declared static art: a picture, not a puppet. Checked before the rig so a portrait
+    // is never handed to the skeleton even though it happens to have a measured profile.
+    if (first.frame.still === true) {
+      still(first.image);
+      say("ok", `正在显示 ${look.name ?? look.nameEn ?? look.id}（静态立绘）。`);
+      return;
+    }
     if (first.riggable && boxes) {
-      rig(first.image, first.frame.profile, first.frame.box, { body: first.frame.body, eyes: first.frame.eyes, skin: first.frame.skin, blink: first.frame.blink });
+      rig(first.image, first.frame.profile, first.frame.box, { body: first.frame.body, eyes: first.frame.eyes, skin: first.frame.skin });
       say("ok", `正在显示 ${look.name ?? look.nameEn ?? look.id}，由插件同一套骨架绑定驱动。`);
       return;
     }
@@ -990,8 +966,7 @@ export function createPreview(host, onStatus) {
         })),
         look.nameEn ?? look.id,
         // The eye boxes and skin tone travel with the frames: the CSS rig draws the same
-        // figure as the WebGL one, so it blinks the same way.
-        { body: first.frame.body, eyes: first.frame.eyes, skin: first.frame.skin, blink: first.frame.blink },
+        { body: first.frame.body, eyes: first.frame.eyes, skin: first.frame.skin },
       );
       return;
     }

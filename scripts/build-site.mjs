@@ -91,8 +91,8 @@ function frameOf(look, frame) {
     // official rig, and these are where that anatomy lands on this particular artwork.
     body: frame.body ?? null,
     eyes: frame.eyes ?? null,
-    // Whether this look blinks. Declared per look rather than guessed from its id.
-    blink: frame.blink === true,
+    // Shown as a picture rather than rigged.
+    still: frame.still === true,
     arms: frame.arms ?? null,
     skin: frame.skin ?? null,
     eyesFrom: frame.eyesFrom ?? null,
@@ -190,7 +190,6 @@ const rigModule = [
   "",
   region(client, "pose"),
   "",
-  region(client, "blink"),
   "",
   region(client, "voice"),
   "",
@@ -199,7 +198,7 @@ const rigModule = [
   "  return lastRigError ?? null;",
   "}",
   "",
-  "export { RIG, findNeck, buildRig, createSkinner, poseRig, blinkAmount, createBlink, speakLine, setVoiceUrls, voiceStatus, rigStatus };",
+  "export { RIG, findNeck, buildRig, createSkinner, poseRig, speakLine, setVoiceUrls, voiceStatus, rigStatus };",
   "",
 ].join("\n");
 const rigTarget = join(root, "docs", "site", "rig.js");
