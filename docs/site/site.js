@@ -153,6 +153,7 @@ function chooseTheme(choice) {
       // A look belongs to one character, so a choice made for the last one is not a
       // choice about this one.
       state.previewLook = undefined;
+      state.previewLookPinned = false;
       renderCharacters();
       renderLooks();
     }
@@ -254,6 +255,9 @@ function renderCharacters() {
     ].join("");
     const choose = () => {
       state.character = character.id;
+      // The pin belongs to the character that was pinned: keeping it would hold the
+      // frame on a look the new character does not have.
+      state.previewLookPinned = false;
       // The card and the header button say the same thing, so both move together.
       state.autoTheme = false;
       // A look belongs to one character, so a choice made for the last one is not a
@@ -300,7 +304,9 @@ function renderLooks() {
       if (lookOn(look.id)) state.off.add(look.id);
       else state.off.delete(look.id);
       state.previewLook = look.id;
-      state.previewLookPinned = false;
+      // Pinned, so the frame keeps showing what was just clicked even if the same click
+      // unticked it. Without this the card appears to do nothing at all.
+      state.previewLookPinned = true;
       renderLooks();
       render();
     };

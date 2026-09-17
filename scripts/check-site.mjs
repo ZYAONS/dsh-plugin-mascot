@@ -859,6 +859,33 @@ ok(
   `canvas=${String(yunoSkeleton.canvas)} status="${String(yunoSkeleton.status)}" html="${String(yunoSkeleton.html)}"`,
 );
 
+// ---- 点卡片必须换画面 -----------------------------------------------------------
+// The reported symptom was "the image will not change". A card used to toggle the
+// allowlist and preview at once, so clicking a look that was already ticked unticked it
+// — and the frame, which only ever showed ticked looks, stayed exactly where it was.
+await visit(withQuery("theme=sakiko&character=sakiko"), { width: 1360, height: 900 });
+const shownSrc = async () =>
+  cdp.evaluate("(() => { const n = document.querySelector('#preview-host img'); return n === null ? '' : decodeURIComponent(n.currentSrc || n.src).split('/').pop(); })()");
+const sakikoFirst = await shownSrc();
+await cdp.click("#looks .card:nth-child(2)");
+await wait(4500);
+const sakikoSecond = await shownSrc();
+ok(
+  "clicking a look card changes the frame",
+  sakikoFirst.length > 0 && sakikoSecond.length > 0 && sakikoFirst !== sakikoSecond,
+  `still showing "${sakikoSecond}" (was "${sakikoFirst}")`,
+);
+// And the frame is emptied while the next one loads, rather than leaving the last one up.
+await cdp.click("#looks .card:nth-child(1)");
+await wait(120);
+const during = await cdp.evaluate("document.querySelectorAll('#preview-host > *').length");
+ok(
+  "and nothing stale is left behind while the next one loads",
+  during <= 1,
+  `${String(during)} frames in the host mid-switch`,
+);
+await wait(4500);
+
 // ---- 语言 ---------------------------------------------------------------------
 // Chinese is what the markup ships; English is applied from a map. Both directions are
 // checked, because a one-way switch that cannot be undone is the usual failure.
