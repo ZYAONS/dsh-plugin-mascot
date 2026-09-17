@@ -596,13 +596,13 @@ input[type="file"]::file-selector-button:hover { border-color: var(--signal); co
   --label-font: var(--mono); --label-spacing: 0.16em; --card-lift: translateY(-1px);
 }
 [data-theme="miuyin"] {
-  --ink: #070f16; --panel: #0d1a24; --panel-2: #122430;
-  --line: rgba(120, 190, 245, 0.11); --line-strong: rgba(120, 190, 245, 0.28);
-  --signal: #3fa9f5; --signal-ink: #04121c; --signal-dim: rgba(63, 169, 245, 0.15);
-  --text: #e4f0fb; --dim: #7c93a6; --dimmer: #4d6373; --ok: #3fa9f5;
+  --ink: #04120b; --panel: #0a1f14; --panel-2: #0e2a1b;
+  --line: rgba(110, 190, 150, 0.12); --line-strong: rgba(110, 190, 150, 0.3);
+  --signal: #1f7a4d; --signal-ink: #03130a; --signal-dim: rgba(31, 122, 77, 0.18);
+  --text: #e3f5ea; --dim: #7ba38c; --dimmer: #4d6f5c; --ok: #1f7a4d;
   --radius: 14px; --radius-sm: 9px;
-  --grid: rgba(110, 180, 235, 0.026); --glow: rgba(63, 169, 245, 0.1);
-  --tape-a: #3fa9f5; --tape-b: #06121a;
+  --grid: rgba(100, 190, 150, 0.026); --glow: rgba(31, 122, 77, 0.12);
+  --tape-a: #1f7a4d; --tape-b: #04100a;
   --label-font: var(--round, var(--sans)); --label-spacing: 0.1em; --card-lift: translateY(-2px);
 }
 [data-theme="yuyuan"] {
@@ -638,13 +638,13 @@ input[type="file"]::file-selector-button:hover { border-color: var(--signal); co
 
 /* ================= 夕（水墨）与结城理（P3R） ================= */
 [data-theme="dusk"] {
-  --ink: #08090f; --panel: #14162a; --panel-2: #1b1e36;
-  --line: rgba(150, 160, 230, 0.11); --line-strong: rgba(150, 160, 230, 0.28);
-  --signal: #5b6fd8; --signal-ink: #0a0c1c; --signal-dim: rgba(91, 111, 216, 0.15);
-  --text: #e8e9f8; --dim: #8b90ad; --dimmer: #5c6079; --ok: #5b6fd8;
+  --ink: #05100f; --panel: #0c1f1e; --panel-2: #102a28;
+  --line: rgba(120, 210, 205, 0.12); --line-strong: rgba(120, 210, 205, 0.3);
+  --signal: #2bb3ae; --signal-ink: #04100f; --signal-dim: rgba(43, 179, 174, 0.15);
+  --text: #e2f5f3; --dim: #7ea5a2; --dimmer: #4d6f6c; --ok: #2bb3ae;
   --radius: 12px; --radius-sm: 8px;
-  --grid: rgba(140, 150, 220, 0.026); --glow: rgba(91, 111, 216, 0.1);
-  --tape-a: #5b6fd8; --tape-b: #0a0b14;
+  --grid: rgba(110, 200, 195, 0.026); --glow: rgba(43, 179, 174, 0.1);
+  --tape-a: #2bb3ae; --tape-b: #04100f;
   --label-font: "Songti SC", "SimSun", serif; --label-spacing: 0.14em; --card-lift: translateY(-1px);
 }
 [data-theme="dusk"] .card::before, [data-theme="dusk"] .card::after { display: none; }

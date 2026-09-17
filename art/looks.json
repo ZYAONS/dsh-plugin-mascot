@@ -308,6 +308,18 @@
       "still": true
     },
     {
+      "id": "makoto-portrait",
+      "character": "makoto",
+      "name": "官方立绘",
+      "nameEn": "Official art",
+      "file": "makoto-portrait.png",
+      "rights": "《明日方舟》×《女神异闻录3 Reload》© 鹰角网络 / ATLUS — 联动干员立绘",
+      "urls": [],
+      "local": true,
+      "cors": false,
+      "still": true
+    },
+    {
       "id": "makoto-chibi",
       "character": "makoto",
       "name": "基建小人",
@@ -330,18 +342,6 @@
         "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_4217_makoto_p3r-1.png"
       ],
       "cors": true
-    },
-    {
-      "id": "makoto-portrait",
-      "character": "makoto",
-      "name": "官方立绘",
-      "nameEn": "Official art",
-      "file": "makoto-portrait.png",
-      "rights": "《明日方舟》×《女神异闻录3 Reload》© 鹰角网络 / ATLUS — 联动干员立绘",
-      "urls": [],
-      "local": true,
-      "cors": false,
-      "still": true
     }
   ]
 }
