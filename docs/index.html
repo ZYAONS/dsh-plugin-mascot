@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-lang="zh">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -17,12 +17,17 @@
     <div class="head-top">
       <div class="brandline">
         <div class="brandmark"></div>
-        <h1>看板娘配置台<small>DSH PLUGIN CONFIGURATOR</small></h1>
+        <h1><span data-i18n="brand.title">看板娘配置台</span><small data-i18n="brand.sub">DSH PLUGIN CONFIGURATOR</small></h1>
       </div>
-      <!-- 选某个角色的主题会同时选中那个角色，所以从这里或从 02 区设置都行，
-           两者不可能指向不同的人。Auto 是不属于任何角色的中性银。 -->
       <div class="themer">
-        <span class="lbl">页面主题<small>选角色的主题即选中该角色</small></span>
+        <!-- 语言与主题是两件不同的事：主题说的是"谁在场上"，语言说的是"这一页怎么说话"。
+             所以语言只在这里切换，不参与角色与主题的绑定规则。 -->
+        <span class="lbl" data-i18n="lang.label">语言<small data-i18n="lang.hint">界面文字，与角色无关</small></span>
+        <div class="seg" id="lang">
+          <button type="button" data-lang-choice="zh" data-on="1">中文</button>
+          <button type="button" data-lang-choice="en">English</button>
+        </div>
+        <span class="lbl" data-i18n="theme.label" style="margin-top:12px">页面主题<small data-i18n="theme.hint">选角色的主题即选中该角色</small></span>
         <div class="seg" id="theme">
           <button type="button" data-theme-choice="auto" data-on="1" title="中性银，不属于任何角色">Auto</button>
           <button type="button" data-theme-choice="closure">可露希尔</button>
@@ -32,17 +37,17 @@
         <div class="themechip"><i id="theme-swatch"></i><b id="theme-name">—</b></div>
       </div>
     </div>
-    <p class="tagline">
+    <p class="tagline" data-i18n="tagline">
       在浏览器里决定这个插件开不开、让可露希尔／千石由乃／缪尔赛思中的哪一位出场、
       能显示哪几套形象、要不要动效与余额查询 —— 然后把生成的配置贴进 DSH 的 profile。
       这个页面不碰你的机器，它只是把你的选择写成一段 YAML。
     </p>
     <div class="meta">
-      <span>插件 <b id="m-version">—</b></span>
-      <span>角色 <b id="m-characters">—</b></span>
-      <span>形象 <b id="m-looks">—</b></span>
-      <span>主题 <b id="m-theme">—</b></span>
-      <span>托管 <b>GitHub Pages</b></span>
+      <span><span data-i18n="meta.plugin">插件</span> <b id="m-version">—</b></span>
+      <span><span data-i18n="meta.characters">角色</span> <b id="m-characters">—</b></span>
+      <span><span data-i18n="meta.looks">形象</span> <b id="m-looks">—</b></span>
+      <span><span data-i18n="meta.theme">主题</span> <b id="m-theme">—</b></span>
+      <span><span data-i18n="meta.hosted">托管</span> <b>GitHub Pages</b></span>
     </div>
   </header>
 
@@ -50,11 +55,11 @@
   <section id="sec-preview">
     <div class="sec-head">
       <span class="idx">00</span>
-      <h2>实时预览<span>你自己的素材</span></h2>
+      <h2><span data-i18n="preview.title">实时预览</span><span data-i18n="preview.sub">你自己的素材</span></h2>
       <span class="rule"></span>
-      <span class="status" id="s-preview"><i></i>未连接</span>
+      <span class="status" id="s-preview"><i></i><span data-i18n="preview.status">未连接</span></span>
     </div>
-    <p class="sec-note">
+    <p class="sec-note" data-i18n="preview.note">
       立绘是官方游戏素材，所以这里不发布它 —— 这个页面不发布，仓库里也没有。
       预览从它唯一存在的地方读取：你自己机器上正在运行的 DSH，
       它同时也在 <code>/dsh-mascot/console/</code> 托管<em>这一页</em>。
@@ -68,14 +73,14 @@
         <div class="preview-floor"></div>
       </div>
       <div class="preview-side">
-        <p class="preview-status" id="preview-status">正在这个来源上寻找插件……</p>
+        <p class="preview-status" id="preview-status" data-i18n="preview.boot">正在这个来源上寻找插件……</p>
         <!-- 这两项属于中性主题（它展示骨架而不是角色），选了角色主题就隐藏。 -->
         <div id="preview-tools">
           <div class="actions">
-            <button class="btn" id="preview-skeleton">展示骨骼</button>
+            <button class="btn" id="preview-skeleton" data-i18n="preview.showSkeleton">展示骨骼</button>
           </div>
           <label class="field">
-            <span>……或者预览你自己的图片</span>
+            <span data-i18n="preview.orFile">……或者预览你自己的图片</span>
             <input id="preview-file" type="file" accept="image/*">
           </label>
         </div>
@@ -89,23 +94,23 @@
   <section>
     <div class="sec-head">
       <span class="idx">01</span>
-      <h2>插件<span>开或关</span></h2>
+      <h2><span data-i18n="plugin.title">插件</span><span data-i18n="plugin.sub">开或关</span></h2>
       <span class="rule"></span>
-      <span class="status" id="s-plugin"><i></i>已启用</span>
+      <span class="status" id="s-plugin"><i></i><span data-i18n="plugin.on">已启用</span></span>
     </div>
     <div class="grid two">
       <div class="toggle" id="t-plugin" data-on="1" role="switch" tabindex="0">
         <span class="track"></span>
         <span class="body">
-          <b>启用看板娘插件</b>
-          <em>关掉之后生成的配置里不会插入这一行 —— 已经装好的，把那一行删掉即可。</em>
+          <b data-i18n="plugin.enable.title">启用看板娘插件</b>
+          <em data-i18n="plugin.enable.desc">关掉之后生成的配置里不会插入这一行 —— 已经装好的，把那一行删掉即可。</em>
         </span>
       </div>
       <div class="toggle" id="t-balance" data-on="1" role="switch" tabindex="0">
         <span class="track"></span>
         <span class="body">
-          <b>余额查询</b>
-          <em>在面板里显示账户余额。关掉之后浏览器完全不联系服务商。</em>
+          <b data-i18n="plugin.balance.title">余额查询</b>
+          <em data-i18n="plugin.balance.desc">在面板里显示账户余额。关掉之后浏览器完全不联系服务商。</em>
         </span>
       </div>
     </div>
@@ -115,10 +120,10 @@
   <section id="sec-character">
     <div class="sec-head">
       <span class="idx">02</span>
-      <h2>角色<span>谁来出场</span></h2>
+      <h2><span data-i18n="character.title">角色</span><span data-i18n="character.sub">谁来出场</span></h2>
       <span class="rule"></span>
     </div>
-    <p class="sec-note">
+    <p class="sec-note" data-i18n="character.note">
       每位角色带一整套界面风格 —— 配色、形状、进度条、环境动效、数字字体都不同。
       选角色会同时定下立绘和主题，两者不可能对不上。
     </p>
@@ -129,10 +134,10 @@
   <section id="sec-look">
     <div class="sec-head">
       <span class="idx">03</span>
-      <h2>形象<span>允许出现哪几套</span></h2>
+      <h2><span data-i18n="looks.title">形象</span><span data-i18n="looks.sub">允许出现哪几套</span></h2>
       <span class="rule"></span>
     </div>
-    <p class="sec-note">
+    <p class="sec-note" data-i18n="looks.note">
       没勾上的形象会被写进配置的 allowlist，插件连列都不会列出来。
       素材本身不在仓库里 —— 在插件目录跑 <code>npm run fetch-art</code> 才会下载到你机器上。
     </p>
@@ -143,22 +148,22 @@
   <section>
     <div class="sec-head">
       <span class="idx">04</span>
-      <h2>动效<span>怎么动</span></h2>
+      <h2><span data-i18n="motion.title">动效</span><span data-i18n="motion.sub">怎么动</span></h2>
       <span class="rule"></span>
     </div>
     <div class="grid two">
       <div class="toggle" id="t-skeleton" data-on="1" role="switch" tabindex="0">
         <span class="track"></span>
         <span class="body">
-          <b>骨骼动效</b>
-          <em>按轮廓自动绑三根骨头，用蒙皮网格做呼吸与重心偏移。没有 WebGL2 的机器会退回静态图。</em>
+          <b data-i18n="motion.skeleton.title">骨骼动效</b>
+          <em data-i18n="motion.skeleton.desc">按轮廓自动绑三根骨头，用蒙皮网格做呼吸与重心偏移。没有 WebGL2 的机器会退回静态图。</em>
         </span>
       </div>
       <div class="toggle" id="t-animated" data-on="1" role="switch" tabindex="0">
         <span class="track"></span>
         <span class="body">
-          <b>多帧形象</b>
-          <em>让多于一张的形象（比如会转身的 Q 版）轮流切换。关掉只保留每套的第一帧。</em>
+          <b data-i18n="motion.animated.title">多帧形象</b>
+          <em data-i18n="motion.animated.desc">让多于一张的形象（比如会转身的 Q 版）轮流切换。关掉只保留每套的第一帧。</em>
         </span>
       </div>
     </div>
@@ -168,31 +173,31 @@
   <section>
     <div class="sec-head">
       <span class="idx">05</span>
-      <h2>输出<span>它写出的配置</span></h2>
+      <h2><span data-i18n="output.title">输出</span><span data-i18n="output.sub">它写出的配置</span></h2>
       <span class="rule"></span>
     </div>
 
     <div class="field">
-      <span>挂载方式</span>
+      <span data-i18n="output.mount">挂载方式</span>
       <div class="seg" id="mount">
-        <button type="button" data-mount="name" data-on="1">包名</button>
-        <button type="button" data-mount="file">绝对路径（file:）</button>
+        <button type="button" data-mount="name" data-on="1" data-i18n="output.mountName">包名</button>
+        <button type="button" data-mount="file" data-i18n="output.mountFile">绝对路径（file:）</button>
       </div>
     </div>
 
     <label class="field" id="dir-field">
-      <span>插件所在目录</span>
+      <span data-i18n="output.dir">插件所在目录</span>
       <input id="dir" type="text" spellcheck="false" placeholder="C:\Users\you\Desktop\kexier\dsh-plugin-mascot">
     </label>
 
     <div class="out">
-      <pre id="output">正在生成……</pre>
+      <pre id="output" data-i18n="output.generating">正在生成……</pre>
     </div>
 
     <div class="actions">
-      <button class="btn primary" id="copy">复制配置</button>
-      <button class="btn" id="download-config">下载 cordis.patch.yml</button>
-      <a class="btn" id="download-repo" href="#" target="_blank" rel="noopener">下载插件</a>
+      <button class="btn primary" id="copy" data-i18n="output.copy">复制配置</button>
+      <button class="btn" id="download-config" data-i18n="output.downloadConfig">下载 cordis.patch.yml</button>
+      <a class="btn" id="download-repo" href="#" target="_blank" rel="noopener" data-i18n="output.downloadRepo">下载插件</a>
     </div>
   </section>
 
@@ -200,37 +205,33 @@
   <section>
     <div class="sec-head">
       <span class="idx">06</span>
-      <h2>安装<span>从零开始</span></h2>
+      <h2><span data-i18n="install.title">安装</span><span data-i18n="install.sub">从零开始</span></h2>
       <span class="rule"></span>
     </div>
     <ol class="steps">
-      <li><b>拿到插件。</b>下载上面的压缩包解压，或者 <code>git clone</code> 仓库。</li>
-      <li><b>装进 profile。</b>用 DSH 自带的 CLI：<code>dsh plugin --profile desktop add &lt;目录&gt;</code>。
-        也可以跳过这步，直接用绝对路径挂载 —— 本插件零运行时依赖。</li>
-      <li><b>写入 patch。</b>把上面生成的 YAML 贴进
-        <code>~/.dsh/profiles/desktop/cordis.patch.yml</code>。
-        不要动 <code>cordis.yml</code>：它每次启动都会被改写成 <code>[]</code>。</li>
-      <li><b>下载素材。</b>在插件目录跑 <code>npm run fetch-art</code>。官方立绘不在仓库里，
-        这一步才会把它下载到你的机器上。</li>
-      <li><b>重启 DSH Desktop。</b>桌面端每次启动只组合一次 patch 层，刷新网页没用。</li>
+      <li data-i18n="install.1"><b>拿到插件。</b>下载上面的压缩包解压，或者 <code>git clone</code> 仓库。</li>
+      <li data-i18n="install.2"><b>装进 profile。</b>用 DSH 自带的 CLI：<code>dsh plugin --profile desktop add &lt;目录&gt;</code>。也可以跳过这步，直接用绝对路径挂载 —— 本插件零运行时依赖。</li>
+      <li data-i18n="install.3"><b>写入 patch。</b>把上面生成的 YAML 贴进 <code>~/.dsh/profiles/desktop/cordis.patch.yml</code>。不要动 <code>cordis.yml</code>：它每次启动都会被改写成 <code>[]</code>。</li>
+      <li data-i18n="install.4"><b>下载素材。</b>在插件目录跑 <code>npm run fetch-art</code>。官方立绘不在仓库里，这一步才会把它下载到你的机器上。</li>
+      <li data-i18n="install.5"><b>重启 DSH Desktop。</b>桌面端每次启动只组合一次 patch 层，刷新网页没用。</li>
     </ol>
   </section>
 
   <footer>
     <div class="tape thin"></div>
     <p style="margin-top:18px">
-      代码 <a href="https://github.com/ZYAONS/dsh-plugin-mascot" target="_blank" rel="noopener">MIT</a> ·
-      仓库 <a id="f-repo" href="#" target="_blank" rel="noopener">ZYAONS/dsh-plugin-mascot</a> ·
+      <span data-i18n="footer.code">代码</span> <a href="https://github.com/ZYAONS/dsh-plugin-mascot" target="_blank" rel="noopener">MIT</a> ·
+      <span data-i18n="footer.repo">仓库</span> <a id="f-repo" href="#" target="_blank" rel="noopener">ZYAONS/dsh-plugin-mascot</a> ·
       <a id="f-readme" href="#" target="_blank" rel="noopener">README</a>
     </p>
-    <p class="legal">
+    <p class="legal" data-i18n="footer.rights">
       <b>版权。</b>可露希尔与缪尔赛思 © 鹰角网络，《明日方舟》（Arknights）。
       千石由乃 © Bushiroad，《BanG Dream!》／梦限大 MewType（Mugendai MewType）。
       两位权利人各自保留全部权利，本项目是非官方同人作品，与权利人无隶属或背书关系。
       官方立绘<strong>不随仓库分发</strong> —— 由每位使用者在本机自行下载。
       本页的视觉风格是一般性的战术界面设计语言，<strong>没有</strong>使用任何游戏素材、Logo 或字体。
     </p>
-    <p class="legal">
+    <p class="legal" data-i18n="footer.legal">
       这一页是纯静态的，托管在 GitHub Pages 上。它不跑任何服务端代码，
       也不读取或修改你机器上的任何东西 —— 它只是把你的选择写成一段 YAML 文本。
       你的选择保存在本浏览器的 localStorage 里。

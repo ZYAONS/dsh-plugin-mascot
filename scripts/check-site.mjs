@@ -859,6 +859,36 @@ ok(
   `canvas=${String(yunoSkeleton.canvas)} status="${String(yunoSkeleton.status)}" html="${String(yunoSkeleton.html)}"`,
 );
 
+// ---- 语言 ---------------------------------------------------------------------
+// Chinese is what the markup ships; English is applied from a map. Both directions are
+// checked, because a one-way switch that cannot be undone is the usual failure.
+await visit(targetUrl, { width: 1360, height: 900 });
+const zhTitle = await cdp.evaluate("document.querySelector('[data-i18n=\"brand.title\"]').textContent");
+const zhTagline = await cdp.evaluate("document.querySelector('[data-i18n=\"tagline\"]').textContent.trim()");
+ok("the page ships in Chinese", /[\u4e00-\u9fff]/u.test(zhTitle) && /[\u4e00-\u9fff]/u.test(zhTagline), `title="${zhTitle}"`);
+ok("and declares it", (await cdp.evaluate("document.documentElement.lang")) === "zh-CN", `lang=${String(await cdp.evaluate("document.documentElement.lang"))}`);
+
+await cdp.click("#lang button[data-lang-choice='en']");
+await wait(400);
+const en = await cdp.evaluate(
+  "({ lang: document.documentElement.lang, title: document.querySelector('[data-i18n=\"brand.title\"]').textContent, tagline: document.querySelector('[data-i18n=\"tagline\"]').textContent.trim(), lit: (document.querySelector('#lang button[data-on=\"1\"]')||{dataset:{}}).dataset.langChoice })",
+);
+ok(
+  "and switching to English translates the page",
+  en.lang === "en" && !/[\u4e00-\u9fff]/u.test(en.title) && en.lit === "en",
+  `lang=${en.lang} lit=${String(en.lit)} title="${en.title}"`,
+);
+
+await cdp.click("#lang button[data-lang-choice='zh']");
+await wait(400);
+const restoredTagline = await cdp.evaluate("document.querySelector('[data-i18n=\"tagline\"]').textContent.trim()");
+ok(
+  "and switching back restores it word for word",
+  restoredTagline === zhTagline,
+  `restored "${restoredTagline.slice(0, 60)}" but it was "${zhTagline.slice(0, 60)}"`,
+);
+ok("and every translated key was restored", (await cdp.evaluate("[...document.querySelectorAll('[data-i18n]')].filter(n => /\\bthe\\b|\\band\\b|\\bwith\\b/i.test(n.textContent)).length")) <= 2, "some elements are still in English after switching back");
+
 // ---- 招呼 ---------------------------------------------------------------------
 // Written as: did the attribute actually appear, and did it actually go away again.
 // A keyframe that is never applied fails silently, and so does one that never clears —

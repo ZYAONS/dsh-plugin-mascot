@@ -15,6 +15,9 @@
 import { createPreview } from "./preview.js";
 
 const REPO = "https://github.com/ZYAONS/dsh-plugin-mascot";
+/** 语言存在自己的键里，与角色、主题那些选择互不干扰。 */
+const LANG_KEY = "dsh.mascot.console.language";
+
 const STATE_KEY = "dsh-mascot-console";
 
 
@@ -392,6 +395,134 @@ function render() {
 }
 //#endregion
 
+//#region language
+/**
+ * 英文文案，键名对应 index.html 里的 data-i18n。
+ *
+ * 只放英文：中文是页面自带的默认，切换回来时用启动快照还原。
+ */
+const EN = {
+  "brand.title": "Mascot Console",
+  "brand.sub": "DSH PLUGIN CONFIGURATOR",
+  "lang.label": "Language",
+  "lang.hint": "interface text only",
+  "theme.label": "Page theme",
+  "theme.hint": "a character's theme selects its character",
+  tagline:
+    "Decide, in a browser, whether the mascot plugin is on, which of Closure, Sengoku Yuno or "
+    + "Muelsyse appears, which artwork it may show, and whether it animates or queries your "
+    + "balance — then paste the generated configuration into your DSH profile. This page never "
+    + "touches your machine; it only turns your choices into YAML.",
+  "meta.plugin": "Plugin",
+  "meta.characters": "Characters",
+  "meta.looks": "Looks",
+  "meta.theme": "Theme",
+  "meta.hosted": "Hosted",
+  "preview.title": "Live preview",
+  "preview.sub": "your own artwork",
+  "preview.status": "Not connected",
+  "preview.note":
+    "The mascot is official game art, so it is published nowhere — not here, not in the repository. "
+    + "This preview reads it from the one place it exists: the DSH on your own machine, which also "
+    + "serves <em>this very page</em> at <code>/dsh-mascot/console/</code>. Open it from there and "
+    + "the frame below fills in with the artwork you installed, animated by the same skeleton the "
+    + "plugin runs. On the neutral theme, <em>Show the skeleton</em> draws the rig itself — three "
+    + "bones derived from the silhouette, and the mesh they deform.",
+  "preview.boot": "Looking for the plugin on this origin…",
+  "preview.showSkeleton": "Show the skeleton",
+  "preview.orFile": "…or preview an image of your own",
+  "plugin.title": "Plugin",
+  "plugin.sub": "on or off",
+  "plugin.on": "Enabled",
+  "plugin.enable.title": "Enable the mascot plugin",
+  "plugin.enable.desc": "With this off, the generated patch simply omits the entry — to disable an existing install, delete its row.",
+  "plugin.balance.title": "Balance lookup",
+  "plugin.balance.desc": "Shows the account balance in the panel. With this off the browser never contacts the provider at all.",
+  "character.title": "Character",
+  "character.sub": "who appears",
+  "character.note":
+    "Each character brings its own interface style — colours, shape language, progress bars, ambient "
+    + "motion and typeface — and picking one sets both the artwork and the theme, so the two can never disagree.",
+  "looks.title": "Looks",
+  "looks.sub": "which artwork may appear",
+  "looks.note":
+    "An unticked look is written into the config's allowlist, so the plugin will not even offer it. "
+    + "The artwork itself is not in the repository — run <code>npm run fetch-art</code> to download it onto your machine.",
+  "motion.title": "Motion",
+  "motion.sub": "how it animates",
+  "motion.skeleton.title": "Skeletal animation",
+  "motion.skeleton.desc": "Rigs three bones from the silhouette and drives a skinned mesh for breathing and weight shifts. Machines without WebGL2 fall back to a still image.",
+  "motion.animated.title": "Multi-frame looks",
+  "motion.animated.desc": "Lets looks with more than one frame — the Q-version that turns around — cycle. With this off only each look's first frame is kept.",
+  "output.title": "Output",
+  "output.sub": "the config it writes",
+  "output.mount": "Mount style",
+  "output.mountName": "Package name",
+  "output.mountFile": "Absolute path (file:)",
+  "output.dir": "Plugin directory",
+  "output.generating": "Generating…",
+  "output.copy": "Copy config",
+  "output.downloadConfig": "Download cordis.patch.yml",
+  "output.downloadRepo": "Download the plugin",
+  "install.title": "Install",
+  "install.sub": "from zero",
+  "install.1": "<b>Get the plugin.</b> Download the archive above and unpack it, or clone the repository.",
+  "install.2": "<b>Add it to your profile.</b> Use the CLI that ships with DSH: <code>dsh plugin --profile desktop add &lt;directory&gt;</code>. Or skip this step entirely and mount it by absolute path — the plugin has no runtime dependencies.",
+  "install.3": "<b>Write the patch.</b> Paste the generated YAML into <code>~/.dsh/profiles/desktop/cordis.patch.yml</code>. Do not edit <code>cordis.yml</code>: it is rewritten to <code>[]</code> on every launch.",
+  "install.4": "<b>Fetch the artwork.</b> In the plugin directory, run <code>npm run fetch-art</code>. The official art is not in the repository; this is the step that downloads it to your machine.",
+  "install.5": "<b>Restart DSH Desktop.</b> The desktop composes its patch layers once per launch, so reloading the page is not enough.",
+  "footer.code": "Code",
+  "footer.repo": "Repository",
+  "footer.rights":
+    "<b>Rights.</b> Closure and Muelsyse © Hypergryph, from <i>Arknights</i>. Sengoku Yuno © Bushiroad, "
+    + "from <i>BanG Dream!</i> / Mugendai MewType. Each owner retains all rights; this is an unofficial "
+    + "fan project with no affiliation or endorsement. The official artwork is <strong>not distributed "
+    + "with the repository</strong> — each user downloads it locally. The visual style of this page is the "
+    + "general tactical-UI idiom; <strong>no game asset, logo or typeface</strong> is used.",
+  "footer.legal":
+    "This page is purely static and hosted on GitHub Pages. It runs no server-side code and does not read "
+    + "or modify anything on your machine — it only turns your choices into a YAML string. Your selections "
+    + "are kept in this browser's localStorage.",
+};
+
+/** The Chinese the page shipped with, captured once so switching back is exact. */
+const original = new Map();
+let language = "zh";
+
+/** The current language, for the parts of the page that build their own text. */
+const currentLanguage = () => language;
+
+/** Paint one language over every element that declares a key. */
+function applyLanguage(next) {
+  language = next === "en" ? "en" : "zh";
+  for (const node of document.querySelectorAll("[data-i18n]")) {
+    const key = node.dataset.i18n;
+    if (!original.has(key)) original.set(key, node.innerHTML);
+    const text = language === "en" ? EN[key] : original.get(key);
+    if (text !== undefined) node.innerHTML = text;
+  }
+  document.documentElement.lang = language === "en" ? "en" : "zh-CN";
+  document.documentElement.dataset.lang = language;
+  for (const button of $("lang").querySelectorAll("button")) {
+    button.dataset.on = button.dataset.langChoice === language ? "1" : "0";
+  }
+  try {
+    window.localStorage.setItem(LANG_KEY, language);
+  } catch {
+    /* private mode — the choice simply does not persist */
+  }
+}
+
+/** The remembered language, defaulting to Chinese. */
+function readStoredLanguage() {
+  try {
+    return window.localStorage.getItem(LANG_KEY) === "en" ? "en" : "zh";
+  } catch {
+    return "zh";
+  }
+}
+//#endregion
+
 //#region preview
 /**
  * Who owns the character on screen.
@@ -668,6 +799,14 @@ async function main() {
   $("f-repo").href = state.catalog.repository ?? REPO;
   $("f-readme").href = `${state.catalog.repository ?? REPO}#readme`;
   $("download-repo").href = `${state.catalog.repository ?? REPO}/archive/refs/heads/main.zip`;
+
+  for (const button of $("lang").querySelectorAll("button")) {
+    button.addEventListener("click", () => {
+      applyLanguage(button.dataset.langChoice);
+      render();
+    });
+  }
+  applyLanguage(readStoredLanguage());
 
   bindToggle("t-plugin", (value) => { state.plugin = value; });
   bindToggle("t-balance", (value) => { state.balance = value; });
