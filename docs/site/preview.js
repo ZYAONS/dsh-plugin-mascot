@@ -169,16 +169,18 @@ export function createPreview(host, onStatus) {
     said = spoken;
     const bubble = document.getElementById("preview-say");
     if (bubble !== null) {
-      // The official wording when it is known, the line's name when it is not, and the
-      // written line only when there is no recording at all. Showing a sentence the
-      // voice is not saying is worse than showing nothing.
-      const said = spoken.ja !== "" ? spoken.ja : (spoken.label !== "" ? `（官方语音：${spoken.label}）` : spoken.ja);
+      // The official line, matching the recording that is playing. Chinese is shown as
+      // the main line because that is what this console is written in, and the recording
+      // says the same sentence in Japanese — the Japanese is in the tooltip where the
+      // game's own wording was transcribed.
+      const said = spoken.zh !== "" ? spoken.zh : (spoken.ja !== "" ? spoken.ja : (spoken.label !== "" ? `（官方语音：${spoken.label}）` : ""));
       bubble.textContent = said;
       bubble.dataset.on = "1";
-      // Dashed when there is no wording to show, so a label is not mistaken for a line.
-      bubble.dataset.silent = spoken.ja === "" ? "1" : (spoken.spoke ? "0" : "1");
-      const explanation = [spoken.zh, spoken.label !== "" ? `官方语音：${spoken.label}` : "", spoken.reason ?? ""].filter((part) => part !== "").join(" — ");
-      bubble.title = explanation;
+      // Dashed when only the line's name is known: a label is not a line.
+      bubble.dataset.silent = spoken.zh === "" && spoken.ja === "" ? "1" : (spoken.spoke ? "0" : "1");
+      bubble.title = [spoken.ja, spoken.label !== "" ? `官方语音：${spoken.label}` : "", spoken.reason ?? ""]
+        .filter((part) => part !== "")
+        .join(" — ");
       window.setTimeout(() => { bubble.dataset.on = "0"; }, 2600);
     }
   }
