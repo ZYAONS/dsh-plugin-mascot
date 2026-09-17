@@ -51,7 +51,8 @@
     "test": "node scripts/check.mjs",
     "preview": "node scripts/preview.mjs",
     "preview:official": "node scripts/preview.mjs --official",
-    "verify": "node scripts/verify-profile.mjs"
+    "verify": "node scripts/verify-profile.mjs",
+    "measure:motion": "node scripts/measure-motion.mjs"
   },
   "dsh": {
     "client": {

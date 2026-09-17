@@ -39,3 +39,6 @@ pm run rig:reference: the Spine 3.8 runtime (Spine's, under
 # the Spine Runtimes License) and a game model (Hypergryph's). Neither is
 # redistributed, so neither is committed.
 .cache/
+
+# 官方 Spine 运行时与模型：只在量动作时下载到本机，不进仓库。
+art/.motion-cache/
