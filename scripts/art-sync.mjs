@@ -554,6 +554,9 @@ export function buildIndex(options = {}) {
         // Eye boxes as [x, y, w, h] fractions of the body, plus the skin tone sampled
         // just below them. Both were computed all along and simply never published.
         eyes: boxes[index].eyes ?? null,
+        // Whether this look blinks. A declaration, not a guess from the id: only the
+        // chibi art has eyes large enough for a lid to read as an eyelid.
+        blink: look.blink === true,
         // Shoulders in stature units, so the rig can put its arm bones where the game does.
         arms: frameArms,
         // "pixels" when the artwork was measured, "anatomy" when the official

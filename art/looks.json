@@ -100,7 +100,8 @@
         "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_4228_closur.png",
         "https://cdn.jsdelivr.net/gh/Light-milk-tea/ArknightsChibi@main/chibi/char_4228_closur.png"
       ],
-      "cors": true
+      "cors": true,
+      "blink": true
     },
     {
       "id": "closure-portrait",
@@ -130,7 +131,8 @@
       "urls": [
         "https://mzh.moegirl.org.cn/Special:FilePath/%E5%8D%83%E7%9F%B3%E7%94%B1%E4%B9%83%20%E5%85%83%E7%A5%96.png"
       ],
-      "cors": false
+      "cors": false,
+      "blink": true
     },
     {
       "id": "yuno-anime",
@@ -167,7 +169,8 @@
       "rights": "《明日方舟》© 上海鹰角网络 — 嘉年华宣传图，由使用者提供并在本机抠图",
       "urls": [],
       "cors": false,
-      "local": true
+      "local": true,
+      "blink": true
     },
     {
       "id": "muelsyse-chibi",
@@ -180,7 +183,8 @@
         "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_249_mlyss.png",
         "https://cdn.jsdelivr.net/gh/Light-milk-tea/ArknightsChibi@main/chibi/char_249_mlyss.png"
       ],
-      "cors": true
+      "cors": true,
+      "blink": true
     },
     {
       "id": "muelsyse-alt",
@@ -192,7 +196,8 @@
       "urls": [
         "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_249_mlyss_boc-8.png"
       ],
-      "cors": true
+      "cors": true,
+      "blink": true
     },
     {
       "id": "muelsyse-portrait",

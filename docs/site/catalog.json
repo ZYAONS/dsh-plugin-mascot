@@ -214,6 +214,7 @@
               0.075
             ]
           ],
+          "blink": true,
           "arms": {
             "halfWidth": 0.055,
             "y": 0.5744,
@@ -344,6 +345,7 @@
               0.032
             ]
           ],
+          "blink": false,
           "arms": {
             "halfWidth": 0.055,
             "y": 0.5744,
@@ -474,6 +476,7 @@
               0.1
             ]
           ],
+          "blink": true,
           "arms": {
             "halfWidth": 0.055,
             "y": 0.5744,
@@ -595,6 +598,7 @@
               0.1
             ]
           ],
+          "blink": true,
           "arms": {
             "halfWidth": 0.055,
             "y": 0.5744,
@@ -730,6 +734,7 @@
               0.032
             ]
           ],
+          "blink": false,
           "arms": {
             "halfWidth": 0.055,
             "y": 0.5744,
@@ -860,6 +865,7 @@
               0.032
             ]
           ],
+          "blink": false,
           "arms": {
             "halfWidth": 0.055,
             "y": 0.5744,
@@ -988,6 +994,7 @@
               0.075
             ]
           ],
+          "blink": true,
           "arms": {
             "halfWidth": 0.055,
             "y": 0.5744,
@@ -1119,6 +1126,7 @@
               0.085
             ]
           ],
+          "blink": true,
           "arms": {
             "halfWidth": 0.055,
             "y": 0.5744,
@@ -1249,6 +1257,7 @@
               0.085
             ]
           ],
+          "blink": true,
           "arms": {
             "halfWidth": 0.055,
             "y": 0.5744,
@@ -1379,6 +1388,7 @@
               0.032
             ]
           ],
+          "blink": false,
           "arms": {
             "halfWidth": 0.055,
             "y": 0.5744,
@@ -1509,6 +1519,7 @@
               0.032
             ]
           ],
+          "blink": false,
           "arms": {
             "halfWidth": 0.055,
             "y": 0.5744,
@@ -1639,6 +1650,7 @@
               0.032
             ]
           ],
+          "blink": false,
           "arms": {
             "halfWidth": 0.055,
             "y": 0.5744,
@@ -1769,6 +1781,7 @@
               0.032
             ]
           ],
+          "blink": false,
           "arms": {
             "halfWidth": 0.055,
             "y": 0.5744,
@@ -1899,6 +1912,7 @@
               0.062
             ]
           ],
+          "blink": false,
           "arms": {
             "halfWidth": 0.055,
             "y": 0.5744,

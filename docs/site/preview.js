@@ -15,7 +15,7 @@
  * Everything here reads. Nothing is written, and nothing is uploaded.
  */
 
-import { RIG, VOICE_LINES, buildRig, createBlink, createSkinner, findNeck, poseRig, rigStatus, setVoiceUrls, speakLine, voiceStatus } from "./rig.js";
+import { RIG, buildRig, createBlink, createSkinner, findNeck, poseRig, rigStatus, setVoiceUrls, speakLine, voiceStatus } from "./rig.js";
 
 /** The dock seat the plugin renders into, in CSS pixels. Mirrors `.dsh-mascot-frames`. */
 const SEAT = { width: 104, height: 172 };
@@ -169,16 +169,18 @@ export function createPreview(host, onStatus) {
     said = spoken;
     const bubble = document.getElementById("preview-say");
     if (bubble !== null) {
-      // The official line, matching the recording that is playing. Chinese is shown as
-      // the main line because that is what this console is written in, and the recording
-      // says the same sentence in Japanese — the Japanese is in the tooltip where the
-      // game's own wording was transcribed.
-      const said = spoken.zh !== "" ? spoken.zh : (spoken.ja !== "" ? spoken.ja : (spoken.label !== "" ? `（官方语音：${spoken.label}）` : ""));
-      bubble.textContent = said;
+      // Shown only when a recording actually plays: the subtitle is the line being said,
+      // and a character with no recording is not saying anything. A silent character gets
+      // no bubble at all rather than a sentence nobody spoke.
+      if (spoken.spoke !== true) {
+        bubble.dataset.on = "0";
+        return;
+      }
+      const shown = spoken.zh !== "" ? spoken.zh : (spoken.ja !== "" ? spoken.ja : spoken.label);
+      bubble.textContent = shown;
       bubble.dataset.on = "1";
-      // Dashed when only the line's name is known: a label is not a line.
-      bubble.dataset.silent = spoken.zh === "" && spoken.ja === "" ? "1" : (spoken.spoke ? "0" : "1");
-      bubble.title = [spoken.ja, spoken.label !== "" ? `官方语音：${spoken.label}` : "", spoken.reason ?? ""]
+      bubble.dataset.silent = "0";
+      bubble.title = [spoken.ja, spoken.label !== "" ? `官方语音：${spoken.label}` : ""]
         .filter((part) => part !== "")
         .join(" — ");
       window.setTimeout(() => { bubble.dataset.on = "0"; }, 2600);
@@ -407,7 +409,9 @@ export function createPreview(host, onStatus) {
       width: poses[0].image.naturalWidth,
       height: poses[0].image.naturalHeight,
       body: face?.body ?? null,
-      eyes: face?.eyes ?? null,
+      // Only the chibi looks blink. Their eyes are large enough for a lid to read as an
+      // eyelid; over a portrait it is a smudge, and the placement work is wasted.
+      eyes: face?.blink === true ? (face.eyes ?? null) : null,
       colour: Array.isArray(face?.skin) ? `rgb(${face.skin.join(",")})` : undefined,
     });
     if (cssBlink !== undefined) {
@@ -745,7 +749,8 @@ export function createPreview(host, onStatus) {
       width: image.naturalWidth,
       height: image.naturalHeight,
       body: face?.body ?? null,
-      eyes: face?.eyes ?? null,
+      // Only chibi looks blink; createBlink returns undefined without eye boxes.
+      eyes: face?.blink === true ? (face.eyes ?? null) : null,
       colour: Array.isArray(face?.skin) ? `rgb(${face.skin.join(",")})` : undefined,
     });
     skinner.canvas.style.width = `${String(SEAT.width)}px`;
@@ -967,7 +972,7 @@ export function createPreview(host, onStatus) {
     // a page that is showing the character perfectly well.
     const boxes = acquired.every((entry) => Array.isArray(entry.frame.box) && Array.isArray(entry.frame.profile));
     if (first.riggable && boxes) {
-      rig(first.image, first.frame.profile, first.frame.box, { body: first.frame.body, eyes: first.frame.eyes, skin: first.frame.skin });
+      rig(first.image, first.frame.profile, first.frame.box, { body: first.frame.body, eyes: first.frame.eyes, skin: first.frame.skin, blink: first.frame.blink });
       say("ok", `正在显示 ${look.name ?? look.nameEn ?? look.id}，由插件同一套骨架绑定驱动。`);
       return;
     }
@@ -986,7 +991,7 @@ export function createPreview(host, onStatus) {
         look.nameEn ?? look.id,
         // The eye boxes and skin tone travel with the frames: the CSS rig draws the same
         // figure as the WebGL one, so it blinks the same way.
-        { body: first.frame.body, eyes: first.frame.eyes, skin: first.frame.skin },
+        { body: first.frame.body, eyes: first.frame.eyes, skin: first.frame.skin, blink: first.frame.blink },
       );
       return;
     }
