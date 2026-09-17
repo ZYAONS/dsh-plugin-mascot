@@ -47,6 +47,7 @@ const PAGE = `<!doctype html>
 <html><head><meta charset="utf-8"><title>measure</title></head><body><pre id="out"></pre>
 <script>
 const sources = __SOURCES__;
+  const ANATOMY = __ANATOMY__;
 const out = document.getElementById("out");
 Promise.all(sources.map((src) => new Promise((done) => {
   const img = new Image();
@@ -137,6 +138,69 @@ Promise.all(sources.map((src) => new Promise((done) => {
       }
       const headBottom = neckRow < 0 ? y0 + Math.floor(bh * 0.45) : y0 + Math.floor(((neckRow + 1) * bh) / PROFILE_ROWS);
 
+      // The body on its own: the largest connected opaque region. A prop that floats
+      // free of the character — Closure's drone sits apart from her in the corner —
+      // stretches the overall box, and every anatomical length is a fraction of the
+      // body, so the body has to be measured separately or the fractions are wrong.
+      const bodyStep = Math.max(1, Math.round(Math.max(W, H) / 420));
+      const bodyCols = Math.ceil(W / bodyStep);
+      const bodyRows = Math.ceil(H / bodyStep);
+      const bodyMask = new Uint8Array(bodyCols * bodyRows);
+      for (let r = 0; r < bodyRows; r++) {
+        for (let c = 0; c < bodyCols; c++) {
+          const i = (Math.min(H - 1, r * bodyStep) * W + Math.min(W - 1, c * bodyStep)) * 4;
+          if (px[i + 3] > 200) bodyMask[r * bodyCols + c] = 1;
+        }
+      }
+      let body = null;
+      {
+        const seen = new Uint8Array(bodyCols * bodyRows);
+        let best = 0;
+        for (let s = 0; s < bodyMask.length; s++) {
+          if (bodyMask[s] === 0 || seen[s] === 1) continue;
+          seen[s] = 1;
+          const stack = [s];
+          let n = 0;
+          let ax = bodyCols;
+          let ay = bodyRows;
+          let bx = -1;
+          let by = -1;
+          while (stack.length > 0) {
+            const i = stack.pop();
+            n += 1;
+            const c = i % bodyCols;
+            const r = (i - c) / bodyCols;
+            if (c < ax) ax = c;
+            if (c > bx) bx = c;
+            if (r < ay) ay = r;
+            if (r > by) by = r;
+            const push = (j) => { if (j >= 0 && seen[j] === 0 && bodyMask[j] === 1) { seen[j] = 1; stack.push(j); } };
+            if (c > 0) push(i - 1);
+            if (c < bodyCols - 1) push(i + 1);
+            if (r > 0) push(i - bodyCols);
+            if (r < bodyRows - 1) push(i + bodyCols);
+          }
+          if (n > best) {
+            best = n;
+            body = { x: ax * bodyStep, y: ay * bodyStep, w: (bx - ax + 1) * bodyStep, h: (by - ay + 1) * bodyStep };
+          }
+        }
+      }
+
+      // Where the official rig says the eyes are, as a fraction of the body. It is a
+      // prior, not an answer: a different art style draws a different head, and on
+      // Closure's own chibi the prediction sits about 7% of the body too high. What it
+      // is good for is shrinking the search enough that the wrong skin region — a pale
+      // coat, which is what actually broke this — cannot be chosen.
+      const anatomy = ANATOMY;
+      const eyePrior = anatomy === null || body === null
+        ? null
+        : {
+          x: body.x + body.w / 2,
+          y: body.y + body.h - anatomy.eyes.y * body.h,
+          radius: body.h * 0.22,
+        };
+
       const findEyes = () => {
         const step = Math.max(1, Math.round(Math.min(bw, headBottom - y0) / 220));
         const cols = Math.ceil(bw / step), rowsN = Math.ceil((headBottom - y0) / step);
@@ -188,9 +252,23 @@ Promise.all(sources.map((src) => new Promise((done) => {
         const isSkin = (i) => opaque[i] === 1 && lum[i] > 165 && sat[i] < 0.42;
         const skinMask = new Uint8Array(cols * rowsN);
         for (let i = 0; i < skinMask.length; i++) skinMask[i] = isSkin(i) ? 1 : 0;
-        const face = blobsOf(skinMask)[0];
-        if (face === undefined) return null;
+        const skinBlobs = blobsOf(skinMask);
+        if (skinBlobs.length === 0) return null;
+        // Ranked, not chosen. Taking the single blob nearest the prior turned out worse
+        // than taking the largest: a sliver of skin can sit right where the prediction
+        // is and hold no eyes at all, and then the measurement returns nothing for the
+        // whole look. Every candidate now gets a turn, prior-nearest first, with area
+        // breaking the tie.
+        const ranked = eyePrior === null
+          ? skinBlobs
+          : [...skinBlobs].sort((a, b) => {
+            const da = Math.hypot(x0 + a.x + a.w / 2 - eyePrior.x, y0 + a.y + a.h / 2 - eyePrior.y) / eyePrior.radius;
+            const db = Math.hypot(x0 + b.x + b.w / 2 - eyePrior.x, y0 + b.y + b.h / 2 - eyePrior.y) / eyePrior.radius;
+            return (da - Math.min(3, b.n / 4000)) - (db - Math.min(3, a.n / 4000));
+          });
 
+        /** The eye pair inside one candidate face, or null when it holds none. */
+        const eyesInFace = (face) => {
         // Everything inside the face that is not skin: eyes, brows, mouth.
         const marks = new Uint8Array(cols * rowsN);
         const fx0 = Math.max(0, Math.floor(face.x / step)), fx1 = Math.min(cols, Math.ceil((face.x + face.w) / step));
@@ -228,18 +306,27 @@ Promise.all(sources.map((src) => new Promise((done) => {
           }
         }
         return best;
+        };
+
+        for (const face of ranked.slice(0, 4)) {
+          const pair = eyesInFace(face);
+          if (pair !== null) return pair;
+        }
+        return null;
       };
 
       const eyeBoxes = findEyes();
       let eyes = null, skin = null;
       if (eyeBoxes !== null) {
-        // Normalised to the bounding box, like the profile, so the client does not
-        // have to know which file it came from.
+        // Normalised to the **body**, not the overall box: the eye positions the rig
+        // predicts are fractions of the body height, so this has to be the same
+        // denominator or the two cannot be compared.
+        const bb = body ?? { x: x0, y: y0, w: bw, h: bh };
         eyes = eyeBoxes.map((b) => [
-          Math.round(((b.x) / bw) * 1000) / 1000,
-          Math.round(((b.y) / bh) * 1000) / 1000,
-          Math.round(((b.w) / bw) * 1000) / 1000,
-          Math.round(((b.h) / bh) * 1000) / 1000,
+          Math.round(((b.x) / bb.w) * 1000) / 1000,
+          Math.round(((b.y) / bb.h) * 1000) / 1000,
+          Math.round(((b.w) / bb.w) * 1000) / 1000,
+          Math.round(((b.h) / bb.h) * 1000) / 1000,
         ]);
         // Skin, sampled just below each eye: the cheek is the one patch of face that
         // is reliably not hair, not an eye and not a highlight.
@@ -258,7 +345,7 @@ Promise.all(sources.map((src) => new Promise((done) => {
 
       const dominant = buckets.reduce((best, bucket) => (bucket.weight > best.weight ? bucket : best), buckets[0]);
       const accent = dominant.weight === 0 ? null : [dominant.r / dominant.weight, dominant.g / dominant.weight, dominant.b / dominant.weight];
-      done({ src, W, H, x0, y0, w: x1 - x0 + 1, h: y1 - y0 + 1, accent, profile, eyes, skin });
+      done({ src, W, H, x0, y0, w: x1 - x0 + 1, h: y1 - y0 + 1, accent, profile, eyes, skin, body });
     } catch (error) { done({ src, error: String(error && error.message ? error.message : error) }); }
   };
   img.onerror = () => done({ src, error: "load failed" });
@@ -271,7 +358,11 @@ function measure(sources, chromium) {
   const work = mkdtempSync(join(tmpdir(), "dsh-mascot-measure-"));
   try {
     const page = join(work, "measure.html");
-    writeFileSync(page, PAGE.replace("__SOURCES__", JSON.stringify(sources.map((source) => pathToFileURL(resolve(source)).href))));
+    const anatomyPath = resolve("art/anatomy.json");
+    const anatomy = existsSync(anatomyPath) ? JSON.parse(readFileSync(anatomyPath, "utf8")) : null;
+    writeFileSync(page, PAGE
+      .replace("__SOURCES__", JSON.stringify(sources.map((source) => pathToFileURL(resolve(source)).href)))
+      .replace("__ANATOMY__", JSON.stringify(anatomy)));
     const dom = execFileSync(
       chromium,
       ["--headless=new", "--disable-gpu", "--no-sandbox", "--hide-scrollbars", "--allow-file-access-from-files", "--virtual-time-budget=60000", "--dump-dom", pathToFileURL(page).href],
@@ -407,6 +498,13 @@ export function buildIndex(options = {}) {
         measured: { width: boxes[index].W, height: boxes[index].H, box: [boxes[index].x0, boxes[index].y0, boxes[index].w, boxes[index].h] },
         // Drives the client's automatic rig; absent when an older index is read.
         profile: boxes[index].profile ?? null,
+        // The character alone, without free-floating props. Anatomy is expressed as a
+        // fraction of this, so it is what the eye positions are measured against.
+        body: boxes[index].body ?? null,
+        // Eye boxes as [x, y, w, h] fractions of the body, plus the skin tone sampled
+        // just below them. Both were computed all along and simply never published.
+        eyes: boxes[index].eyes ?? null,
+        skin: boxes[index].skin ?? null,
       })),
       // The first frame doubles as the look's identity: it is what a static
       // context (a thumbnail, a switcher chip) renders.

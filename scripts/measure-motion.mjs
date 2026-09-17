@@ -200,3 +200,52 @@ for (const [key, name] of Object.entries(ANIMATIONS)) {
 const target = join(root, "art", "motion.json");
 writeFileSync(target, `${JSON.stringify(motion, null, 2)}\n`);
 console.log(`measure-motion: 写入 ${target}`);
+
+/**
+ * 解剖比例：眼睛、胯、胸、颈各在身高的几分之几处。
+ *
+ * 以脚底为原点、身高为单位。不能用骨头包围盒归一化 —— 那个盒子被触手之类的骨头撑到
+ * 1250×370，人物在里面只剩一条。
+ */
+const skeleton = new spine.Skeleton(data);
+skeleton.setToSetupPose();
+skeleton.updateWorldTransform();
+const world = new Map();
+for (const bone of skeleton.bones) world.set(bone.data.name, { x: bone.worldX, y: bone.worldY });
+
+const rootBone = world.get("root");
+let topY = -Infinity;
+for (const [name, point] of world) {
+  if (/^F_Head/u.test(name) && point.y > topY) topY = point.y;
+}
+const stature = topY - rootBone.y;
+
+/** 某组骨头的世界坐标中点。 */
+const centre = (pattern) => {
+  const points = [...world].filter(([name]) => pattern.test(name)).map(([, point]) => point);
+  if (points.length === 0) return null;
+  return {
+    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
+    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
+  };
+};
+const leftEye = centre(/^F_L_Eyelash/u);
+const rightEye = centre(/^F_R_Eyelash/u);
+
+const anatomy = {
+  source: `Arknights Spine ${data.version} · ${MODEL.id}`,
+  unit: "figure height, origin at the feet",
+  eyes: {
+    y: Number((((leftEye.y + rightEye.y) / 2 - rootBone.y) / stature).toFixed(4)),
+    separation: Number(((rightEye.x - leftEye.x) / stature).toFixed(4)),
+    offset: Number(((rightEye.x - (leftEye.x + rightEye.x) / 2) / stature).toFixed(4)),
+  },
+  spine: {
+    waist: Number(((world.get("F_Waist_I").y - rootBone.y) / stature).toFixed(4)),
+    chest: Number(((world.get("F_Chest_I").y - rootBone.y) / stature).toFixed(4)),
+    neck: Number(((world.get("F_Head_I").y - rootBone.y) / stature).toFixed(4)),
+  },
+};
+const anatomyTarget = join(root, "art", "anatomy.json");
+writeFileSync(anatomyTarget, `${JSON.stringify(anatomy, null, 2)}\n`);
+console.log(`measure-motion: 眼睛离地 ${String(anatomy.eyes.y)} 个身高，间距 ${String(anatomy.eyes.separation)}；写入 ${anatomyTarget}`);
