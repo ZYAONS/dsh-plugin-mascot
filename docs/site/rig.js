@@ -759,14 +759,20 @@ function speakLine(characterId, options = {}) {
   }
   // A file the user put there always wins. It is the real voice, which is the whole
   // point — everything below is what happens when there is not one.
-  if (typeof options.url === "string" && options.url !== "") {
+  //
+  // Looked up here rather than demanded from the caller: the plugin passed the url and
+  // the console did not, so the console silently never used the recordings that were
+  // sitting right there. A default the call site has to remember is a default that gets
+  // forgotten.
+  const file = typeof options.url === "string" && options.url !== "" ? options.url : voiceUrls[characterId];
+  if (typeof file === "string" && file !== "") {
     try {
       // Held so a second click can stop the first: overlapping lines are unintelligible.
       if (playing !== undefined) {
         playing.pause();
         playing = undefined;
       }
-      const audio = new Audio(options.url);
+      const audio = new Audio(file);
       audio.volume = options.volume ?? 1;
       playing = audio;
       audio.addEventListener("ended", () => { if (playing === audio) playing = undefined; });

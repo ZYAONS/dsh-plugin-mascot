@@ -580,7 +580,19 @@ await it("the look index is the single source of truth for what is installed", (
 
   // Anything the declaration pins must be a real hash, and anything missing a url
   // would make `npm run fetch-art` fail silently.
+  //
+  // A look may instead declare itself local-only, which is what a file the user cut out
+  // of something they had is: there is no source to fetch it from, and inventing one
+  // would be worse than admitting it. The flag has to be explicit — a look with no urls
+  // and no flag is still an error, so nothing loses its source by accident.
   for (const look of declaration.looks) {
+    if (look.local === true) {
+      assert.ok(
+        !Array.isArray(look.urls) || look.urls.length === 0,
+        `${look.id}: declares itself local-only but also lists source urls`,
+      );
+      continue;
+    }
     assert.ok(Array.isArray(look.urls) && look.urls.length > 0, `${look.id}: needs at least one source url`);
     assert.ok(look.rights.length > 0, `${look.id}: every source must carry its rights line`);
     if (look.sha256 !== undefined) assert.match(look.sha256, /^[0-9a-f]{64}$/u, `${look.id}: sha256 must pin the exact bytes`);

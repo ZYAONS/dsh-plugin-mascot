@@ -15,7 +15,7 @@
  * Everything here reads. Nothing is written, and nothing is uploaded.
  */
 
-import { buildRig, createBlink, createSkinner, findNeck, poseRig, speakLine, voiceStatus, VOICE_LINES, RIG, rigStatus } from "./rig.js";
+import { RIG, VOICE_LINES, buildRig, createBlink, createSkinner, findNeck, poseRig, rigStatus, setVoiceUrls, speakLine, voiceStatus } from "./rig.js";
 
 /** The dock seat the plugin renders into, in CSS pixels. Mirrors `.dsh-mascot-frames`. */
 const SEAT = { width: 104, height: 172 };
@@ -797,6 +797,16 @@ export function createPreview(host, onStatus) {
       if (payload?.ok !== true || !Array.isArray(payload.looks)) return "public";
       origin = window.location.origin;
       index = payload;
+      // The user's own voice files, when the host reported any. Without this the console
+      // falls through to speech synthesis — which on a machine with no Japanese voice
+      // means silence, and the subtitle would show the written line instead of the
+      // official one. The plugin's own half wires this up; the console had been missed.
+      if (payload.voiceBase !== undefined && payload.voices !== undefined) {
+        const voiceBase = String(payload.voiceBase).replace(/\/+$/u, "");
+        setVoiceUrls(Object.fromEntries(
+          Object.entries(payload.voices).map(([id, file]) => [id, `${voiceBase}/${encodeURIComponent(String(file))}`]),
+        ));
+      }
       return "local";
     } catch {
       return "public";

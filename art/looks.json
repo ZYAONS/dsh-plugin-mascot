@@ -159,6 +159,17 @@
       "cors": false
     },
     {
+      "id": "muelsyse-festival",
+      "character": "muelsyse",
+      "name": "Q版·嘉年华",
+      "nameEn": "Chibi · Festival",
+      "file": "muelsyse-festival.png",
+      "rights": "《明日方舟》© 上海鹰角网络 — 嘉年华宣传图，由使用者提供并在本机抠图",
+      "urls": [],
+      "cors": false,
+      "local": true
+    },
+    {
       "id": "muelsyse-chibi",
       "character": "muelsyse",
       "name": "基建小人",
