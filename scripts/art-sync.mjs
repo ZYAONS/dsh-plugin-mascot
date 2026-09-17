@@ -29,6 +29,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { mkdtempSync, rmSync } from "node:fs";
 import { findChromium } from "./chrome.mjs";
 
+/**
+ * Eye boxes measured per artwork file, filled in by buildIndex.
+ *
+ * Module level because two worlds need it: buildIndex reads the file, and measure() runs
+ * the browser page that applies them.
+ */
+let eyesForLook = {};
+
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const artDir = join(root, "art");
 
@@ -48,6 +56,7 @@ const PAGE = `<!doctype html>
 <script>
 const sources = __SOURCES__;
   const ANATOMY = __ANATOMY__;
+  const EYES_BY_FILE = __EYES__;
 const out = document.getElementById("out");
 Promise.all(sources.map((src) => new Promise((done) => {
   const img = new Image();
@@ -322,7 +331,13 @@ Promise.all(sources.map((src) => new Promise((done) => {
       // source of truth: it succeeded on one look out of eleven, and the result it
       // produced there was a sliver of forehead rather than an eye. The prior, by
       // contrast, was checked against artwork and landed within 2% of the real thing.
-      if (eyeBoxes === null && ANATOMY !== null && body !== null) {
+      // Measured for this look, if it has been; otherwise the anatomy prior, which is
+      // only trustworthy for the art style it came from.
+      const measured = EYES_BY_FILE[String(src).split("/").pop()] ?? null;
+      if (measured !== null) {
+        eyes = measured;
+        eyesFrom = "measured";
+      } else if (eyeBoxes === null && ANATOMY !== null && body !== null) {
         const anatomy = ANATOMY;
         const inWidth = (value) => (value * body.h) / body.w;
         const halfWidth = inWidth(anatomy.eyes.separation * 0.26);
@@ -380,9 +395,11 @@ function measure(sources, chromium) {
     const page = join(work, "measure.html");
     const anatomyPath = resolve("art/anatomy.json");
     const anatomy = existsSync(anatomyPath) ? JSON.parse(readFileSync(anatomyPath, "utf8")) : null;
+    // The page knows each cell by its file, so that is the key it gets.
     writeFileSync(page, PAGE
       .replace("__SOURCES__", JSON.stringify(sources.map((source) => pathToFileURL(resolve(source)).href)))
-      .replace("__ANATOMY__", JSON.stringify(anatomy)));
+      .replace("__ANATOMY__", JSON.stringify(anatomy))
+      .replace("__EYES__", JSON.stringify(eyesForLook)));
     const dom = execFileSync(
       chromium,
       ["--headless=new", "--disable-gpu", "--no-sandbox", "--hide-scrollbars", "--allow-file-access-from-files", "--virtual-time-budget=60000", "--dump-dom", pathToFileURL(page).href],
@@ -468,6 +485,12 @@ export function buildIndex(options = {}) {
   const anatomyPath = resolve("art/anatomy.json");
   const anatomyForIndex = existsSync(anatomyPath) ? JSON.parse(readFileSync(anatomyPath, "utf8")) : null;
   const frameArms = anatomyForIndex === null ? null : (anatomyForIndex.arms ?? null);
+  // Eye boxes measured per look, where they have been measured. One ratio cannot serve
+  // both a chibi — head half the figure — and a full-body portrait, and using one anyway
+  // put the lids on the chest of every standing character.
+  const eyesPath = resolve("art/eyes.json");
+  eyesForLook = existsSync(eyesPath) ? (JSON.parse(readFileSync(eyesPath, "utf8")).eyes ?? {}) : {};
+  const frameEyes = (id) => eyesForLook[id] ?? null;
 
   const declaration = JSON.parse(readFileSync(join(artDir, "looks.json"), "utf8"));
   const chromium = options.chromium ?? findChromium();
