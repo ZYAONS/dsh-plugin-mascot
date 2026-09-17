@@ -33,3 +33,9 @@ pm run art:publish. Ignored by default
 pm run build:site only advertises a local copy
 # once it is actually tracked.
 docs/art/
+
+# Fetched on demand by 
+pm run rig:reference: the Spine 3.8 runtime (Spine's, under
+# the Spine Runtimes License) and a game model (Hypergryph's). Neither is
+# redistributed, so neither is committed.
+.cache/

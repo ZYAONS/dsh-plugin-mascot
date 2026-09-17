@@ -55,6 +55,36 @@
       "tagline": "莱茵生命 · 生态终端",
       "taglineEn": "Rhine Lab ecology terminal",
       "theme": "rhine"
+    },
+    {
+      "id": "sakiko",
+      "name": "丰川祥子",
+      "latin": "Togawa Sakiko",
+      "role": "Ave Mujica · 键盘",
+      "roleEn": "Ave Mujica · Keyboard",
+      "tagline": "Ave Mujica",
+      "taglineEn": "Ave Mujica",
+      "theme": "sakiko"
+    },
+    {
+      "id": "miuyin",
+      "name": "谬因",
+      "latin": "谬因",
+      "role": "明日方舟 · 新干员",
+      "roleEn": "Arknights · Operator",
+      "tagline": "罗德岛",
+      "taglineEn": "Rhodes Island",
+      "theme": "miuyin"
+    },
+    {
+      "id": "yuyuan",
+      "name": "予愿安洁莉娜",
+      "latin": "予愿安洁莉娜",
+      "role": "明日方舟 · 新干员",
+      "roleEn": "Arknights · Operator",
+      "tagline": "罗德岛",
+      "taglineEn": "Rhodes Island",
+      "theme": "yuyuan"
     }
   ],
   "looks": [
@@ -150,6 +180,54 @@
       "rights": "《明日方舟》© 上海鹰角网络 — 官方干员立绘 (char_249_muesys)",
       "urls": [
         "https://storage.moegirl.org.cn/moegirl/commons/c/cf/Ak_char_249_muesys_1.png"
+      ],
+      "cors": false
+    },
+    {
+      "id": "sakiko-anime",
+      "character": "sakiko",
+      "name": "动画演出服",
+      "nameEn": "Ave Mujica stage",
+      "file": "sakiko-anime.png",
+      "rights": "《BanG Dream!》© Bushiroad — 官方动画演出服立绘",
+      "urls": [
+        "https://mzh.moegirl.org.cn/Special:FilePath/%E4%B8%B0%E5%B7%9D%E7%A5%A5%E5%AD%90%20%E5%8A%A8%E7%94%BBAM%E6%BC%94%E5%87%BA%E6%9C%8D.png"
+      ],
+      "cors": false
+    },
+    {
+      "id": "sakiko-casual",
+      "character": "sakiko",
+      "name": "常服",
+      "nameEn": "Casual",
+      "file": "sakiko-casual.png",
+      "rights": "《BanG Dream!》© Bushiroad — 官方常服立绘",
+      "urls": [
+        "https://mzh.moegirl.org.cn/Special:FilePath/%E4%B8%B0%E5%B7%9D%E7%A5%A5%E5%AD%90%20ON%E5%B8%B8%E6%9C%8D.webp"
+      ],
+      "cors": false
+    },
+    {
+      "id": "miuyin-portrait",
+      "character": "miuyin",
+      "name": "官方立绘",
+      "nameEn": "Operator portrait",
+      "file": "miuyin-portrait.png",
+      "rights": "《明日方舟》© 上海鹰角网络 — 官方干员立绘",
+      "urls": [
+        "https://mzh.moegirl.org.cn/Special:FilePath/%E6%98%8E%E6%97%A5%E6%96%B9%E8%88%9F%E7%AB%8B%E7%BB%98%20%E8%B0%AC%E5%9B%A0%201.png"
+      ],
+      "cors": false
+    },
+    {
+      "id": "yuyuan-portrait",
+      "character": "yuyuan",
+      "name": "官方立绘",
+      "nameEn": "Operator portrait",
+      "file": "yuyuan-portrait.png",
+      "rights": "《明日方舟》© 上海鹰角网络 — 官方干员立绘",
+      "urls": [
+        "https://mzh.moegirl.org.cn/Special:FilePath/%E6%98%8E%E6%97%A5%E6%96%B9%E8%88%9F%E7%AB%8B%E7%BB%98%20%E4%BA%88%E6%84%BF%E5%AE%89%E6%B4%81%E8%8E%89%E5%A8%9C%202.png"
       ],
       "cors": false
     }

@@ -44,6 +44,7 @@
     "art:watch": "node scripts/art-sync.mjs --watch",
     "art:publish": "node scripts/publish-art.mjs",
     "build:site": "node scripts/build-site.mjs",
+    "rig:reference": "node scripts/rig-reference.mjs",
     "check:site": "node scripts/check-site.mjs",
     "shot:site": "node scripts/check-site.mjs --shot",
     "check": "node --check lib/index.js && node --check lib/client.js && node scripts/check.mjs",

@@ -416,6 +416,35 @@ image tainted by cross-origin data — it renders the plain `<img>` instead. So 
 only ever **add** motion, never remove the mascot. The preview script prints
 `rig: ON (canvas 140x232)` precisely to keep an eye on that.
 
+### 1a. Where the idle's numbers come from
+
+Not from taste. Arknights ships its base chibi as **Spine 3.8 models**, and they are
+readable — [Ark-Models](https://github.com/isHarryh/Ark-Models) mirrors them and the
+official 3.8 runtime parses them:
+
+```bash
+npm run rig:reference            # Closure's base chibi, its Relax animation
+```
+
+```
+Relax: 8.00 s, 240 samples
+  hip  (F_Waist_I)   ±0.19°  2.00 s
+  head (F_Head_I)    ±0.51°  2.00 s
+```
+
+That last column is the one that mattered. The rig used to nod **±2.4° over eight
+seconds** — several times too far and four times too slow, which is why it read as a
+slow lean rather than as breathing. It now runs on the measured 2.00 s beat.
+
+The degrees are *not* copied: the game rigs 297 bones and this rigs three, so an angle
+does not mean the same thing in both. The period does, and the order of magnitude does.
+
+Neither the runtime nor the model is committed — both land in `.cache/spine`, which is
+ignored, because the runtime is Spine's under the Spine Runtimes License and the models
+are Hypergryph's. The extractor fetches one `.skel` rather than the repo's ~1 GB, and
+skips the texture atlas entirely: it hands the reader the real attachment classes with
+a dummy texture region, which satisfies its bookkeeping without an image.
+
 ### 2. Multi-frame animation
 
 Yuno's Q-version source is **two poses**. `cutout.mjs` runs with `mode: "all"`, keeps

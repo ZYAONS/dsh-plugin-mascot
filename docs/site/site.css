@@ -583,3 +583,40 @@ input[type="file"]::file-selector-button:hover { border-color: var(--signal); co
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+/* ================= 三位新角色，三种蓝 ================= */
+[data-theme="sakiko"] {
+  --ink: #0b0a13; --panel: #141225; --panel-2: #1b1830;
+  --line: rgba(170, 160, 250, 0.12); --line-strong: rgba(170, 160, 250, 0.3);
+  --signal: #8b7cf8; --signal-ink: #0d0a1e; --signal-dim: rgba(139, 124, 248, 0.15);
+  --text: #eae7fb; --dim: #8f89ab; --dimmer: #605c78; --ok: #8b7cf8;
+  --radius: 8px; --radius-sm: 5px;
+  --grid: rgba(170, 160, 250, 0.026); --glow: rgba(139, 124, 248, 0.1);
+  --tape-a: #8b7cf8; --tape-b: #0c0a18;
+  --label-font: var(--mono); --label-spacing: 0.16em; --card-lift: translateY(-1px);
+}
+[data-theme="miuyin"] {
+  --ink: #070f16; --panel: #0d1a24; --panel-2: #122430;
+  --line: rgba(120, 190, 245, 0.11); --line-strong: rgba(120, 190, 245, 0.28);
+  --signal: #3fa9f5; --signal-ink: #04121c; --signal-dim: rgba(63, 169, 245, 0.15);
+  --text: #e4f0fb; --dim: #7c93a6; --dimmer: #4d6373; --ok: #3fa9f5;
+  --radius: 14px; --radius-sm: 9px;
+  --grid: rgba(110, 180, 235, 0.026); --glow: rgba(63, 169, 245, 0.1);
+  --tape-a: #3fa9f5; --tape-b: #06121a;
+  --label-font: var(--round, var(--sans)); --label-spacing: 0.1em; --card-lift: translateY(-2px);
+}
+[data-theme="yuyuan"] {
+  --ink: #061014; --panel: #0b1c22; --panel-2: #10262e;
+  --line: rgba(120, 220, 235, 0.11); --line-strong: rgba(120, 220, 235, 0.28);
+  --signal: #4fd6e8; --signal-ink: #04161a; --signal-dim: rgba(79, 214, 232, 0.15);
+  --text: #e2f4f7; --dim: #7c9aa2; --dimmer: #4d6a72; --ok: #4fd6e8;
+  --radius: 10px; --radius-sm: 6px;
+  --grid: rgba(110, 210, 225, 0.026); --glow: rgba(79, 214, 232, 0.1);
+  --tape-a: #4fd6e8; --tape-b: #061418;
+  --label-font: var(--sans); --label-spacing: 0.12em; --card-lift: translateY(-1px);
+}
+[data-theme="miuyin"] .card::before, [data-theme="miuyin"] .card::after { display: none; }
+[data-theme="miuyin"] .card[data-on="1"] { box-shadow: 0 0 26px var(--signal-dim); }
+[data-theme="yuyuan"] .card::before, [data-theme="yuyuan"] .card::after { display: none; }
+[data-theme="yuyuan"] .card[data-on="1"] { box-shadow: 0 0 0 1px var(--signal) inset; }
+[data-theme="sakiko"] h1, [data-theme="sakiko"] .sec-head h2 { font-family: var(--mono); }
