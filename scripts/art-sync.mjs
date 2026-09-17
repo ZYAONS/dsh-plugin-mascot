@@ -317,11 +317,31 @@ Promise.all(sources.map((src) => new Promise((done) => {
 
       const eyeBoxes = findEyes();
       let eyes = null, skin = null;
+      let eyesFrom = "anatomy";
+      // Default to the anatomy prior. The pixel search above is a refinement, not the
+      // source of truth: it succeeded on one look out of eleven, and the result it
+      // produced there was a sliver of forehead rather than an eye. The prior, by
+      // contrast, was checked against artwork and landed within 2% of the real thing.
+      if (eyeBoxes === null && ANATOMY !== null && body !== null) {
+        const anatomy = ANATOMY;
+        const inWidth = (value) => (value * body.h) / body.w;
+        const halfWidth = inWidth(anatomy.eyes.separation * 0.26);
+        const height = anatomy.eyes.separation * 0.44;
+        const eyeMiddleY = 1 - anatomy.eyes.y;
+        const offsetX = inWidth(anatomy.eyes.offset);
+        eyes = [-1, 1].map((sign) => [
+          Math.round((0.5 + sign * offsetX - halfWidth) * 1000) / 1000,
+          Math.round((eyeMiddleY - height / 2) * 1000) / 1000,
+          Math.round(halfWidth * 2 * 1000) / 1000,
+          Math.round(height * 1000) / 1000,
+        ]);
+      }
       if (eyeBoxes !== null) {
         // Normalised to the **body**, not the overall box: the eye positions the rig
         // predicts are fractions of the body height, so this has to be the same
         // denominator or the two cannot be compared.
         const bb = body ?? { x: x0, y: y0, w: bw, h: bh };
+        eyesFrom = "pixels";
         eyes = eyeBoxes.map((b) => [
           Math.round(((b.x) / bb.w) * 1000) / 1000,
           Math.round(((b.y) / bb.h) * 1000) / 1000,
@@ -345,7 +365,7 @@ Promise.all(sources.map((src) => new Promise((done) => {
 
       const dominant = buckets.reduce((best, bucket) => (bucket.weight > best.weight ? bucket : best), buckets[0]);
       const accent = dominant.weight === 0 ? null : [dominant.r / dominant.weight, dominant.g / dominant.weight, dominant.b / dominant.weight];
-      done({ src, W, H, x0, y0, w: x1 - x0 + 1, h: y1 - y0 + 1, accent, profile, eyes, skin, body });
+      done({ src, W, H, x0, y0, w: x1 - x0 + 1, h: y1 - y0 + 1, accent, profile, eyes, eyesFrom, skin, body });
     } catch (error) { done({ src, error: String(error && error.message ? error.message : error) }); }
   };
   img.onerror = () => done({ src, error: "load failed" });
@@ -504,6 +524,9 @@ export function buildIndex(options = {}) {
         // Eye boxes as [x, y, w, h] fractions of the body, plus the skin tone sampled
         // just below them. Both were computed all along and simply never published.
         eyes: boxes[index].eyes ?? null,
+        // "pixels" when the artwork was measured, "anatomy" when the official
+        // proportions were used. Worth publishing: it says how much to trust the box.
+        eyesFrom: boxes[index].eyesFrom ?? null,
         skin: boxes[index].skin ?? null,
       })),
       // The first frame doubles as the look's identity: it is what a static

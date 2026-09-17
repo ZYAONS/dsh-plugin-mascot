@@ -878,11 +878,13 @@ ok(
 // And the frame is emptied while the next one loads, rather than leaving the last one up.
 await cdp.click("#looks .card:nth-child(1)");
 await wait(120);
-const during = await cdp.evaluate("document.querySelectorAll('#preview-host > *').length");
+const during = await cdp.evaluate(
+  "document.querySelectorAll('#preview-host > canvas, #preview-host > .css-rig, #preview-host > img, #preview-host > .preview-still').length",
+);
 ok(
   "and nothing stale is left behind while the next one loads",
   during <= 1,
-  `${String(during)} frames in the host mid-switch`,
+  `${String(during)} frames in the host mid-switch (the blink overlay is not a frame)`,
 );
 await wait(4500);
 
@@ -921,13 +923,16 @@ ok("and every translated key was restored", (await cdp.evaluate("[...document.qu
 // A keyframe that is never applied fails silently, and so does one that never clears —
 // a mascot frozen mid-bow.
 await visit(withQuery("theme=yuno&character=yuno&look=yuno-casual"), { width: 1360, height: 900 });
+// The count, not the flag. The flag is only set for the 1.8 s the gesture lasts, so
+// sampling it as soon as the preview is ready is a race — and the race was lost the
+// moment the blink made the page take slightly longer to settle.
 const greeting = await cdp.evaluate(
-  "(() => { const n = document.querySelector('#preview-host .css-rig'); return n === null ? null : n.dataset.greet === '1'; })()",
+  "(() => { const n = document.querySelector('#preview-host .css-rig'); return n === null ? null : Number(n.dataset.greets ?? 0); })()",
 );
 ok(
   "the CSS rig greets when it appears",
-  greeting === true,
-  greeting === null ? "no CSS rig on screen, so nothing to greet" : `data-greet=${String(greeting)}`,
+  typeof greeting === "number" && greeting >= 1,
+  greeting === null ? "no CSS rig on screen, so nothing to greet" : `greeted ${String(greeting)} time(s)`,
 );
 await wait(2200);
 const settled = await cdp.evaluate(

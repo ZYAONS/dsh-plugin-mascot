@@ -2,13 +2,13 @@
   "source": "Arknights Spine 3.8.99 · 4228_closur",
   "unit": "figure height, origin at the feet",
   "eyes": {
-    "y": 0.8313,
-    "separation": 0.1617,
-    "offset": 0.0809
+    "y": 0.7293,
+    "separation": 0.1419,
+    "offset": 0.0709
   },
   "spine": {
-    "waist": 0.4765,
-    "chest": 0.5669,
-    "neck": 0.7446
+    "waist": 0.418,
+    "chest": 0.4973,
+    "neck": 0.6532
   }
 }

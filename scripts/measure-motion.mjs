@@ -214,9 +214,17 @@ const world = new Map();
 for (const bone of skeleton.bones) world.set(bone.data.name, { x: bone.worldX, y: bone.worldY });
 
 const rootBone = world.get("root");
+// The tip, not the joint. The skull is F_Head_I (24.1) → F_Head_Ii (45.4), and taking
+// joints stopped the measurement at the root of the second bone — 45 units short, which
+// is what pushed every predicted eye up to the hairline.
 let topY = -Infinity;
 for (const [name, point] of world) {
-  if (/^F_Head/u.test(name) && point.y > topY) topY = point.y;
+  if (!/^F_Head/u.test(name)) continue;
+  const bone = skeleton.bones.find((entry) => entry.data.name === name);
+  // bone.length is undefined in 3.8; the length lives on bone.data.
+  const length = bone === undefined || bone.data.length === undefined ? 0 : bone.data.length;
+  const tip = point.y + length;
+  if (tip > topY) topY = tip;
 }
 const stature = topY - rootBone.y;
 

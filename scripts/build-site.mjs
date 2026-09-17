@@ -86,6 +86,13 @@ function frameOf(look, frame) {
     seat: frame.seat,
     box: frame.measured?.box ?? null,
     profile: frame.profile ?? null,
+    // The character alone, without free-floating props, and the eye boxes as fractions
+    // of it. The console needs both in order to blink: the anatomy comes from the
+    // official rig, and these are where that anatomy lands on this particular artwork.
+    body: frame.body ?? null,
+    eyes: frame.eyes ?? null,
+    skin: frame.skin ?? null,
+    eyesFrom: frame.eyesFrom ?? null,
     // Where this frame sits inside the file the console will actually download.
     crop: cut === undefined ? null : { x: cut.x, y: cut.y, width: cut.width, height: cut.height },
     // True only when the copy beside the console is committed, so the page never
@@ -180,12 +187,14 @@ const rigModule = [
   "",
   region(client, "pose"),
   "",
+  region(client, "blink"),
+  "",
   "/** Why the last rig attempt was abandoned, or null when it never was. */",
   "function rigStatus() {",
   "  return lastRigError ?? null;",
   "}",
   "",
-  "export { RIG, findNeck, buildRig, createSkinner, poseRig, rigStatus };",
+  "export { RIG, findNeck, buildRig, createSkinner, poseRig, blinkAmount, createBlink, rigStatus };",
   "",
 ].join("\n");
 const rigTarget = join(root, "docs", "site", "rig.js");

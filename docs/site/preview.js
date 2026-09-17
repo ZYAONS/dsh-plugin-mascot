@@ -15,7 +15,7 @@
  * Everything here reads. Nothing is written, and nothing is uploaded.
  */
 
-import { buildRig, createSkinner, findNeck, poseRig, RIG, rigStatus } from "./rig.js";
+import { buildRig, createBlink, createSkinner, findNeck, poseRig, RIG, rigStatus } from "./rig.js";
 
 /** The dock seat the plugin renders into, in CSS pixels. Mirrors `.dsh-mascot-frames`. */
 const SEAT = { width: 104, height: 172 };
@@ -265,7 +265,7 @@ export function createPreview(host, onStatus) {
    * @param images - one loaded image per drawn pose.
    * @param frame - the frame record, carrying `box` and `profile`.
    */
-  function cssRig(poses, label) {
+  function cssRig(poses, label, face) {
     const first = poses[0];
     const sourceWidth = first.image.naturalWidth;
     const sourceHeight = first.image.naturalHeight;
@@ -353,10 +353,31 @@ export function createPreview(host, onStatus) {
     }
     host.append(rig);
 
+    // The CSS rig draws the same figure, so it blinks on the same schedule.
+    const cssBlink = createBlink(host, {
+      width: poses[0].image.naturalWidth,
+      height: poses[0].image.naturalHeight,
+      body: face?.body ?? null,
+      eyes: face?.eyes ?? null,
+      colour: Array.isArray(face?.skin) ? `rgb(${face.skin.join(",")})` : undefined,
+    });
+    if (cssBlink !== undefined) {
+      const blinkStarted = performance.now();
+      const blinkLoop = (now) => {
+        if (!host.contains(rig)) return;
+        cssBlink((now - blinkStarted) / 1000);
+        timers.push(window.requestAnimationFrame(blinkLoop));
+      };
+      timers.push(window.requestAnimationFrame(blinkLoop));
+    }
+
     // The same two moments the WebGL rig uses: once when it appears, once whenever the
     // pointer comes back to it. A flag rather than a timer, because CSS owns the
     // timeline here — removing it after the animation is all that is needed.
     const greet = () => {
+      // Counted as well as flagged: the flag lives for 1.8 s, and whether a test happens
+      // to sample inside that window is a race, not a fact about the page.
+      rig.dataset.greets = String(Number(rig.dataset.greets ?? 0) + 1);
       delete rig.dataset.greet;
       // Reading offsetWidth flushes the style change, so re-adding the attribute
       // restarts the animation instead of being ignored as "already set".
@@ -656,7 +677,7 @@ export function createPreview(host, onStatus) {
    * @param profile - the silhouette profile, or null for the rig's own default.
    * @param box - the figure's bounding box in image pixels.
    */
-  function rig(image, profile, box) {
+  function rig(image, profile, box, face) {
     stop();
     const bones = buildRig(profile, { rows: 26, cols: 18 });
     const built = createSkinner(image, bones, { width: SEAT.width, left: 0, top: 0 }, box, SEAT);
@@ -668,6 +689,15 @@ export function createPreview(host, onStatus) {
     skinner = built;
     host.textContent = "";
     host.append(skinner.canvas);
+    // Lids over the eyes. `face` carries the body box and the eye boxes; without them
+    // there is simply nothing to blink, which is better than blinking in the wrong place.
+    const blink = createBlink(host, {
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+      body: face?.body ?? null,
+      eyes: face?.eyes ?? null,
+      colour: Array.isArray(face?.skin) ? `rgb(${face.skin.join(",")})` : undefined,
+    });
     skinner.canvas.style.width = `${String(SEAT.width)}px`;
     skinner.canvas.style.height = `${String(SEAT.height)}px`;
     skinner.canvas.style.display = "block";
@@ -676,7 +706,9 @@ export function createPreview(host, onStatus) {
     const started = performance.now();
     const loop = (now) => {
       raf = window.requestAnimationFrame(loop);
-      skinner.draw(poseRig(bones, box, { time: (now - started) / 1000, pokeAge: undefined }));
+      const elapsed = (now - started) / 1000;
+      skinner.draw(poseRig(bones, box, { time: elapsed, pokeAge: undefined }));
+      blink?.(elapsed);
     };
     raf = window.requestAnimationFrame(loop);
     return true;
@@ -685,7 +717,7 @@ export function createPreview(host, onStatus) {
   /** Render whichever supplied image is active. */
   function showOverride() {
     host.textContent = "";
-    return rig(override.image, override.measured.profile, override.measured.box);
+    return rig(override.image, override.measured.profile, override.measured.box, override.measured);
   }
 
   /**
@@ -836,7 +868,7 @@ export function createPreview(host, onStatus) {
     }
     const box = frame.measured?.box;
     if (Array.isArray(frame.profile) && Array.isArray(box)) {
-      rig(image, frame.profile, box);
+      rig(image, frame.profile, box, { body: frame.body, eyes: frame.eyes, skin: frame.skin });
     } else {
       still(image);
       say("warn", `${look.id} 没有量出轮廓，预览退回静态图。请在插件目录跑 \`npm run art:sync\`。`);
@@ -870,7 +902,7 @@ export function createPreview(host, onStatus) {
     // a page that is showing the character perfectly well.
     const boxes = acquired.every((entry) => Array.isArray(entry.frame.box) && Array.isArray(entry.frame.profile));
     if (first.riggable && boxes) {
-      rig(first.image, first.frame.profile, first.frame.box);
+      rig(first.image, first.frame.profile, first.frame.box, { body: first.frame.body, eyes: first.frame.eyes, skin: first.frame.skin });
       say("ok", `正在显示 ${look.name ?? look.nameEn ?? look.id}，由插件同一套骨架绑定驱动。`);
       return;
     }
@@ -887,6 +919,9 @@ export function createPreview(host, onStatus) {
           frame: { ...entry.frame, crop: entry.alreadyCropped ? null : entry.frame.crop },
         })),
         look.nameEn ?? look.id,
+        // The eye boxes and skin tone travel with the frames: the CSS rig draws the same
+        // figure as the WebGL one, so it blinks the same way.
+        { body: first.frame.body, eyes: first.frame.eyes, skin: first.frame.skin },
       );
       return;
     }
