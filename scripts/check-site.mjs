@@ -859,11 +859,32 @@ ok(
   `canvas=${String(yunoSkeleton.canvas)} status="${String(yunoSkeleton.status)}" html="${String(yunoSkeleton.html)}"`,
 );
 
+// ---- 招呼 ---------------------------------------------------------------------
+// Written as: did the attribute actually appear, and did it actually go away again.
+// A keyframe that is never applied fails silently, and so does one that never clears —
+// a mascot frozen mid-bow.
+await visit(withQuery("theme=yuno&character=yuno&look=yuno-casual"), { width: 1360, height: 900 });
+const greeting = await cdp.evaluate(
+  "(() => { const n = document.querySelector('#preview-host .css-rig'); return n === null ? null : n.dataset.greet === '1'; })()",
+);
+ok(
+  "the CSS rig greets when it appears",
+  greeting === true,
+  greeting === null ? "no CSS rig on screen, so nothing to greet" : `data-greet=${String(greeting)}`,
+);
+await wait(2200);
+const settled = await cdp.evaluate(
+  "(() => { const n = document.querySelector('#preview-host .css-rig'); return n === null ? null : n.dataset.greet === '1'; })()",
+);
+ok("and stops greeting after the gesture", settled === false, `data-greet still ${String(settled)} after 2.2s`);
+
 // ---- the neutral theme owns the manual controls -----------------------------
 // And leaving it has to give the artwork back: the skeleton button used to go behind
 // the driver's back, so the record still said "artwork", switching back computed the
 // same key, and nothing was redrawn — the frame stayed on the skeleton for good.
-await visit(targetUrl, { width: 1360, height: 900 });
+// Pinned, because the greeting section above leaves Yuno selected and the choice is
+// persisted — without this the section tests whichever theme was left behind.
+await visit(withQuery("theme=auto&character=closure"), { width: 1360, height: 900 });
 const neutralPreview = await cdp.evaluate(
   "({ theme: document.documentElement.dataset.theme, tools: !document.getElementById('preview-tools').classList.contains('hidden'), canvas: document.querySelector('#preview-host canvas') !== null, credit: document.getElementById('preview-credit').textContent.trim() })",
 );

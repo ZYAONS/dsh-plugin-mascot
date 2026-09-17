@@ -353,6 +353,20 @@ export function createPreview(host, onStatus) {
     }
     host.append(rig);
 
+    // The same two moments the WebGL rig uses: once when it appears, once whenever the
+    // pointer comes back to it. A flag rather than a timer, because CSS owns the
+    // timeline here — removing it after the animation is all that is needed.
+    const greet = () => {
+      delete rig.dataset.greet;
+      // Reading offsetWidth flushes the style change, so re-adding the attribute
+      // restarts the animation instead of being ignored as "already set".
+      void rig.offsetWidth;
+      rig.dataset.greet = "1";
+    };
+    greet();
+    host.addEventListener("pointerenter", greet);
+    timers.push(window.setTimeout(() => { delete rig.dataset.greet; }, 1800));
+
     if (poses.length > 1) {
       const layers = [...rig.children];
       let shown = 0;

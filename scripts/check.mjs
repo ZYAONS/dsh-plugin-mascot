@@ -628,6 +628,37 @@ await it("skin weights are a partition: every vertex sums to one, none negative"
   assert.ok(bottom.w[0] > 0.95, `the feet should be root, got ${String(bottom.w[0])}`);
 });
 
+await it("the greeting moves the figure, and the idle does not stand still", () => {
+  const rig = buildRig(syntheticProfile(0.6, 0.18, 0.8, 10));
+  const box = [0, 0, 100, 200];
+  /** How far apart two poses are, summed over the head bone's matrix. */
+  const distance = (a, b) => Array.from(a[2]).reduce((sum, value, index) => sum + Math.abs(value - b[2][index]), 0);
+  const at = (state) => poseRig(rig, box, state);
+
+  const idle = at({ time: 1.0, pokeAge: undefined, greetAge: undefined });
+  const greeting = at({ time: 1.0, pokeAge: undefined, greetAge: 0.8 });
+  assert.ok(
+    distance(idle, greeting) > 1,
+    `the greeting barely moves the head (distance ${distance(idle, greeting).toFixed(2)})`,
+  );
+
+  // The idle has to keep moving on its own: a figure that only reacts to input is a
+  // still image with a hover state.
+  const later = at({ time: 2.4, pokeAge: undefined, greetAge: undefined });
+  assert.ok(
+    distance(idle, later) > 0.05,
+    `the idle is indistinguishable 1.4s apart (distance ${distance(idle, later).toFixed(4)})`,
+  );
+
+  // And the greeting has to end: 1.8s in it is back to standing, or the mascot would
+  // be permanently mid-bow.
+  const after = at({ time: 1.0, pokeAge: undefined, greetAge: 1.9 });
+  assert.ok(
+    distance(idle, after) < 0.01,
+    `the greeting is still displacing the head after it should have finished (${distance(idle, after).toFixed(4)})`,
+  );
+});
+
 await it("the pose is finite and bounded across the whole idle, including clicks", () => {
   const rig = buildRig(syntheticProfile(0.6, 0.18, 0.8, 10));
   const box = [0, 0, 100, 200];

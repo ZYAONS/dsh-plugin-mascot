@@ -527,6 +527,27 @@ input[type="file"]::file-selector-button:hover { border-color: var(--signal); co
   mask-image: linear-gradient(to bottom, #000 var(--cut, 30%), transparent calc(var(--cut, 30%) + 7%));
 }
 .css-rig img { display: block; width: 100%; height: 100%; }
+/* 招呼：升起 → 点头 → 站回去。三段同长，所以它们一起开始、一起结束。 */
+@keyframes css-rig-greet-rise {
+  0%, 100% { transform: translateY(0); }
+  35% { transform: translateY(-5px); }
+}
+@keyframes css-rig-greet-lean {
+  0%, 100% { transform: rotate(-0.7deg); }
+  40% { transform: rotate(1.1deg); }
+}
+@keyframes css-rig-greet-nod {
+  0%, 100% { transform: rotate(-2.2deg); }
+  30% { transform: rotate(-6deg); }
+  60% { transform: rotate(4.5deg); }
+}
+.css-rig[data-greet="1"] { animation: css-rig-greet-rise 1.8s ease-in-out; }
+.css-rig[data-greet="1"] .rig-root { animation: css-rig-greet-lean 1.8s ease-in-out; }
+.css-rig[data-greet="1"] .rig-head-layer { animation: css-rig-greet-nod 1.8s ease-in-out; }
+@media (prefers-reduced-motion: reduce) {
+  .css-rig[data-greet="1"], .css-rig[data-greet="1"] .rig-root, .css-rig[data-greet="1"] .rig-head-layer { animation: none; }
+}
+
 @keyframes css-rig-float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-4px); }

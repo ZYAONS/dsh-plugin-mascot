@@ -323,8 +323,9 @@ function createSkinner(image, rig, framing, box, seat) {
  *
  * @param rig - the rig being posed.
  * @param box - the figure's bounding box in image pixels.
- * @param state - `{ time, pokeAge }` — seconds since mount, and seconds since
- *   the last click (undefined when there has not been one).
+ * @param state - `{ time, pokeAge, greetAge }` — seconds since mount, seconds
+ *   since the last click, and seconds since the greeting started. The last two
+ *   are undefined when they have not happened.
  * @returns three 2D affine matrices in image space.
  */
 function poseRig(rig, box, state) {
@@ -345,11 +346,36 @@ function poseRig(rig, box, state) {
 	// three, so an angle does not mean the same thing in both. The period does,
 	// and so does the order of magnitude.
 	const BEAT = (Math.PI * 2) / 2.0;
+	// Three layers, none of them larger than the measured amounts: the beat the
+	// game uses, a weight shift an order of magnitude slower, and nothing else.
 	const sway = Math.sin(t * BEAT) * 0.6 * rad;
 	const spineAngle = Math.sin(t * BEAT + 0.7) * 0.5 * rad;
 	const nod = Math.sin(t * BEAT + 1.4) * 0.9 * rad + Math.sin(t * BEAT * 2.6) * 0.2 * rad;
-	const breathe = 1 + Math.sin(t * BEAT) * 0.006;
+	// Second harmonic: a pure sine is mechanical, and breathing in is faster
+	// than breathing out.
+	const breathe = 1 + Math.sin(t * BEAT) * 0.006 + Math.sin(t * BEAT * 2) * 0.0016;
 	const bounce = Math.sin(t * BEAT + Math.PI / 2) * box[3] * 0.004;
+	// Shifting weight from foot to foot, on a period three times slower than the
+	// beat. A body that only rises and falls reads as a deep breath held
+	// perfectly still; this is the layer that makes it read as standing.
+	const SHIFT = (Math.PI * 2) / 6.4;
+	const shift = Math.sin(t * SHIFT) * box[2] * 0.008;
+	const shiftLean = Math.sin(t * SHIFT + 0.4) * 0.35 * rad;
+
+	// The greeting: a raised head, one nod, back to standing. Anchored to when it
+	// started, so it plays the same wherever in the idle it happens.
+	const greetAge = state.greetAge;
+	let greetLift = 0;
+	let greetNod = 0;
+	let greetLean = 0;
+	if (greetAge !== undefined && greetAge >= 0 && greetAge < 1.8) {
+		// 0 -> 1 -> 0 over the whole gesture, with the nod in the middle.
+		const envelope = Math.sin(Math.min(1, greetAge / 1.8) * Math.PI);
+		const nodPhase = Math.max(0, Math.sin((greetAge - 0.45) * Math.PI / 0.75));
+		greetLift = envelope * box[3] * 0.012;
+		greetNod = nodPhase * 2.6 * rad;
+		greetLean = envelope * 0.9 * rad;
+	}
 	// The click impulse is anchored to the click, not to the page clock, so it
 	// decays and rings out from the moment it happened. Both terms are guarded:
 	// `0 * Math.sin(undefined)` is NaN, not zero, and one NaN bone matrix blanks
@@ -390,9 +416,9 @@ function poseRig(rig, box, state) {
 		]);
 	};
 
-	const root = rig2d(rootPivot, sway, squash, (2 - squash) * breathe, 0, bounce);
-	const spineLocal = rig2d(spinePivot, spineAngle, 1, 1, 0, 0);
-	const neckLocal = rig2d(neckPivot, nod + headKick, 1, 1, 0, 0);
+	const root = rig2d(rootPivot, sway + shiftLean, squash, (2 - squash) * breathe, shift, bounce - greetLift - greetLift * 0.35);
+	const spineLocal = rig2d(spinePivot, spineAngle - shiftLean * 0.5 + greetLean, 1, 1, 0, 0);
+	const neckLocal = rig2d(neckPivot, nod + headKick + greetNod - greetLift * 0.35, 1, 1, 0, 0);
 	const spine = mul(root, spineLocal);
 	const neck = mul(spine, neckLocal);
 	return [root, spine, neck];
