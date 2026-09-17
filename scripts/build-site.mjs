@@ -93,6 +93,9 @@ function frameOf(look, frame) {
     eyes: frame.eyes ?? null,
     // Shown as a picture rather than rigged.
     still: frame.still === true,
+    // No source url anywhere: this look exists only on the machine that made it, so the
+    // published copy must say so rather than reporting it as a broken download.
+    localOnly: Array.isArray(look.urls) && look.urls.length === 0,
     arms: frame.arms ?? null,
     skin: frame.skin ?? null,
     eyesFrom: frame.eyesFrom ?? null,

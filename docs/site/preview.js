@@ -906,6 +906,13 @@ export function createPreview(host, onStatus) {
       return;
     }
     const box = frame.measured?.box;
+    // Declared static art: a picture, not a puppet. Portraits are drawn once and left
+    // alone; only the chibi figures are rigged.
+    if (frame.still === true) {
+      still(image);
+      say("ok", `正在显示 ${look.name ?? look.nameEn ?? look.id}（静态立绘）。`);
+      return;
+    }
     if (Array.isArray(frame.profile) && Array.isArray(box)) {
       rig(image, frame.profile, box, { body: frame.body, eyes: frame.eyes, skin: frame.skin });
     } else {
@@ -942,6 +949,11 @@ export function createPreview(host, onStatus) {
     const boxes = acquired.every((entry) => Array.isArray(entry.frame.box) && Array.isArray(entry.frame.profile));
     // Declared static art: a picture, not a puppet. Checked before the rig so a portrait
     // is never handed to the skeleton even though it happens to have a measured profile.
+    if (first.frame.localOnly === true) {
+      notice(`${look.name ?? look.nameEn ?? look.id} 只存在于装了它的那台机器上（本机文件，没有源站）。` + " 在本机由插件托管打开这一页就能看到它。");
+      say("warn", `${look.name ?? look.nameEn ?? look.id} 是本机独有的形象，公网副本取不到。`);
+      return;
+    }
     if (first.frame.still === true) {
       still(first.image);
       say("ok", `正在显示 ${look.name ?? look.nameEn ?? look.id}（静态立绘）。`);
