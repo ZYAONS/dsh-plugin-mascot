@@ -339,6 +339,20 @@ await it("no artwork belonging to anyone else is tracked by git", () => {
       "artwork is fetched onto each machine with `npm run fetch-art` and never redistributed.",
   );
 
+  // Voice files follow the same rule, and for a stronger reason: a recording is the
+  // actor's performance, not an illustration. `voices/` is gitignored, but a .gitignore
+  // is a courtesy — `git add -f` steps over it — so the guard has to look at what git
+  // actually tracks.
+  const recordings = tracked.filter(
+    (file) => /(?:^|\/)voices\//u.test(file) && /\.(?:mp3|ogg|m4a|wav|flac|aac|opus)$/iu.test(file),
+  );
+  assert.deepEqual(
+    recordings,
+    [],
+    `official voice recordings must not be committed — found ${recordings.join(", ")}. ` +
+      "they belong in the user's own voices/ directory on their own machine.",
+  );
+
   // The declaration and the measurements are this project's own data, so they must
   // still be there — a check that passes because everything was deleted is useless.
   assert.ok(tracked.includes("art/looks.json"), "the artwork declaration is part of the project");

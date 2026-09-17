@@ -42,3 +42,6 @@ pm run rig:reference: the Spine 3.8 runtime (Spine's, under
 
 # 官方 Spine 运行时与模型：只在量动作时下载到本机，不进仓库。
 art/.motion-cache/
+
+# 使用者自己放的配音文件。与 art/ 同理：进仓库的是约定与代码，音频留在本机。
+voices/

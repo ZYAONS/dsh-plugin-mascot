@@ -197,7 +197,7 @@ const rigModule = [
   "  return lastRigError ?? null;",
   "}",
   "",
-  "export { RIG, findNeck, buildRig, createSkinner, poseRig, blinkAmount, createBlink, speakLine, voiceStatus, VOICE_LINES, rigStatus };",
+  "export { RIG, findNeck, buildRig, createSkinner, poseRig, blinkAmount, createBlink, speakLine, setVoiceUrls, voiceStatus, VOICE_LINES, rigStatus };",
   "",
 ].join("\n");
 const rigTarget = join(root, "docs", "site", "rig.js");

@@ -108,3 +108,60 @@ you type the acknowledgement to do it.
   公网页面从**素材原本的出处**加载，像素不经过这个仓库。
 - 自我约束写在第 5 节，并且**由测试强制**：`art/` 或 `docs/art/` 下只要有图片被 git 跟踪，`npm test` 就失败。
 - 以上不构成法律意见。如果权利方提出异议，删掉 `art/looks.json` 里对应的条目即可，其余部分不受影响。
+
+## Voice / 配音
+
+The plugin can play a voice line when the mascot is clicked. **No recording ships with
+this repository** — a voice line is the actor's performance, and redistributing one is a
+heavier thing than redistributing a still image. What ships is the mechanism.
+
+Put your own file in `voices/` next to the plugin, named after the character id:
+
+```
+voices/closure.mp3
+voices/yuno.ogg
+voices/muelsyse.m4a
+```
+
+Any of `.mp3`, `.ogg`, `.m4a`, `.wav` works; the first extension in that order wins if
+several are present. The host serves them at `<routePrefix>/voice/<file>` and reports
+which characters have one, so the browser knows before it clicks.
+
+Precedence at click time:
+
+1. **your file**, if there is one — the real voice;
+2. **speech synthesis**, if the machine has a Japanese voice installed;
+3. **nothing**, with the written line still shown in the console.
+
+That third case is deliberate. A Chinese or English voice reading kana produces nonsense,
+and silence with a visible line is easier to understand than gibberish. Measured on the
+machine this was developed on: Windows shipped `zh-CN` (Huihui) and `en-US` (Zira) and no
+Japanese voice at all, so adding one is a Windows language-pack step, not a code change.
+
+`voices/` is gitignored, and `npm test` fails if any audio file is ever *tracked* by git —
+a .gitignore is a courtesy that `git add -f` steps over, so the guard checks what git
+actually tracks rather than trusting the ignore file.
+
+---
+
+## 配音（中文）
+
+点击看板娘时可以播放一句语音。**本仓库不分发任何录音** —— 一句语音是配音演员的表演，
+比一张静图更重。仓库里只有机制。
+
+把你自己的文件放在插件目录下的 `voices/`，用角色 id 命名：
+
+```
+voices/closure.mp3
+voices/yuno.ogg
+```
+
+支持 `.mp3` / `.ogg` / `.m4a` / `.wav`，同名多个时按这个顺序取第一个。宿主在
+`<routePrefix>/voice/<file>` 提供它们，并把"哪些角色有配音"告诉浏览器。
+
+点击时的优先级：**你的文件** > 系统语音合成（若装了日语声音）> 静音但显示台词。第三种
+是刻意的：中文或英文声音读假名会念成乱码，静音配台词比乱码更好懂。
+
+`voices/` 已被 gitignore，并且 `npm test` 会在**任何音频文件被 git 跟踪**时失败 ——
+gitignore 只是一道礼貌的门，`git add -f` 一步就跨过去，所以守卫检查的是 git 实际跟踪
+了什么。

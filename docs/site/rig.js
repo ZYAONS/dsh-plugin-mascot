@@ -695,6 +695,22 @@ const VOICE_LINES = {
 /** Why the last spoken line stayed silent, or null when it spoke. */
 let lastVoiceError = null;
 
+/** The audio element currently speaking, so a second line can cut the first one off. */
+let playing;
+
+/**
+ * Character id -> URL of the user's own voice file, as reported by the host.
+ *
+ * Set from whatever the host found in its voice directory. Empty on the published page,
+ * where there is no such directory and synthesis or silence is all there is.
+ */
+let voiceUrls = {};
+
+/** Record the host's voice manifest. */
+function setVoiceUrls(map) {
+  voiceUrls = map ?? {};
+}
+
 /** The reason the last attempt said nothing, for the console to report. */
 function voiceStatus() {
   return lastVoiceError;
@@ -718,18 +734,41 @@ function speakLine(characterId, options = {}) {
   const line = VOICE_LINES[characterId];
   if (line === undefined) {
     lastVoiceError = `no line written for ${characterId}`;
-    return { ja: "", zh: "", spoke: false, reason: lastVoiceError };
+    return { ja: "", zh: "", spoke: false, source: null, reason: lastVoiceError };
+  }
+  // A file the user put there always wins. It is the real voice, which is the whole
+  // point — everything below is what happens when there is not one.
+  if (typeof options.url === "string" && options.url !== "") {
+    try {
+      // Held so a second click can stop the first: overlapping lines are unintelligible.
+      if (playing !== undefined) {
+        playing.pause();
+        playing = undefined;
+      }
+      const audio = new Audio(options.url);
+      audio.volume = options.volume ?? 1;
+      playing = audio;
+      audio.addEventListener("ended", () => { if (playing === audio) playing = undefined; });
+      // `play()` rejects when the page has not been interacted with yet. A click is an
+      // interaction, so this only fires in odd cases, and it must not look like a crash.
+      audio.play().catch(() => { lastVoiceError = "the browser refused to play the file"; });
+      lastVoiceError = null;
+      return { ja: line.ja, zh: line.zh, spoke: true, source: "file", reason: null };
+    } catch (error) {
+      lastVoiceError = `the voice file could not be played: ${error instanceof Error ? error.message : String(error)}`;
+      return { ja: line.ja, zh: line.zh, spoke: false, source: "file", reason: lastVoiceError };
+    }
   }
   if (typeof window === "undefined" || window.speechSynthesis === undefined) {
     lastVoiceError = "this browser has no speech synthesis";
-    return { ja: line.ja, zh: line.zh, spoke: false, reason: lastVoiceError };
+    return { ja: line.ja, zh: line.zh, spoke: false, source: null, reason: lastVoiceError };
   }
   const voice = japaneseVoice();
   if (voice === undefined) {
     // Deliberately silent. See the note above: a Chinese voice reading kana is worse
     // than nothing, and it would look like a bug rather than a missing language pack.
     lastVoiceError = "no Japanese voice is installed; add one in Windows speech settings";
-    return { ja: line.ja, zh: line.zh, spoke: false, reason: lastVoiceError };
+    return { ja: line.ja, zh: line.zh, spoke: false, source: null, reason: lastVoiceError };
   }
   const utterance = new SpeechSynthesisUtterance(line.ja);
   utterance.voice = voice;
@@ -742,7 +781,7 @@ function speakLine(characterId, options = {}) {
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utterance);
   lastVoiceError = null;
-  return { ja: line.ja, zh: line.zh, spoke: true, reason: null };
+  return { ja: line.ja, zh: line.zh, spoke: true, source: "synthesis", reason: null };
 }
 
 /** Why the last rig attempt was abandoned, or null when it never was. */
@@ -750,4 +789,4 @@ function rigStatus() {
   return lastRigError ?? null;
 }
 
-export { RIG, findNeck, buildRig, createSkinner, poseRig, blinkAmount, createBlink, speakLine, voiceStatus, VOICE_LINES, rigStatus };
+export { RIG, findNeck, buildRig, createSkinner, poseRig, blinkAmount, createBlink, speakLine, setVoiceUrls, voiceStatus, VOICE_LINES, rigStatus };
