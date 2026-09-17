@@ -334,10 +334,10 @@
     {
       "id": "makoto-portrait",
       "character": "makoto",
-      "name": "官方立绘",
-      "nameEn": "Official art",
+      "name": "精二立绘",
+      "nameEn": "Elite 2 art",
       "file": "makoto-portrait.png",
-      "rights": "《明日方舟》×《女神异闻录3 Reload》© 鹰角网络 / ATLUS — 联动干员立绘",
+      "rights": "《明日方舟》×《女神异闻录3 Reload》© 鹰角网络 / ATLUS — 联动干员精二立绘",
       "urls": [],
       "local": true,
       "cors": false,

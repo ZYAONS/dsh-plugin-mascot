@@ -601,7 +601,8 @@ const VOICE_FILE_LINES = {
   closure: { label: "戳一下", ja: "", zh: "别急，我还在算呢。" },
   miuyin: { label: "戳一下", ja: "", zh: "我会把这当作坏孩子的恶作剧，博士。" },
   muelsyse: { label: "戳一下", ja: "ん？", zh: "嗯？" },
-  yuyuan: { label: "戳一下", ja: "", zh: "嗯哼？" },
+  // 「ひらり～っと」是她的招牌台词（部署1），也是那句被念成 "haralido" 的语音。
+  yuyuan: { label: "部署1", ja: "ひらり～っと。", zh: "轻轻地……嘿咻。" },
   dusk: { label: "戳一下", ja: "ちょ、墨がこぼれる！", zh: "墨汁要洒了！" },
   makoto: { label: "戳一下", ja: "", zh: "嗯。" },
 };
