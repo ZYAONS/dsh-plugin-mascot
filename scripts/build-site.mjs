@@ -91,6 +91,9 @@ function frameOf(look, frame) {
     // official rig, and these are where that anatomy lands on this particular artwork.
     body: frame.body ?? null,
     eyes: frame.eyes ?? null,
+    // Whether those boxes were checked against the artwork, and so whether the blink
+    // may use them. See `blinkableFiles` in art-sync.mjs.
+    blinkable: frame.blinkable === true,
     // Shown as a picture rather than rigged.
     still: frame.still === true,
     // No source url anywhere: this look exists only on the machine that made it, so the
@@ -210,7 +213,7 @@ const rigModule = [
   "  return lastRigError ?? null;",
   "}",
   "",
-  "export { RIG, findNeck, buildRig, createSkinner, poseRig, speakLine, setVoiceUrls, voiceStatus, rigStatus };",
+  "export { RIG, findNeck, buildRig, createSkinner, poseRig, sampleBlink, stepJelly, BODY_MESH, EYE_MESH, speakLine, setVoiceUrls, voiceStatus, rigStatus };",
   "",
 ].join("\n");
 const rigTarget = join(root, "docs", "site", "rig.js");

@@ -1,5 +1,7 @@
 {
   "note": "eye boxes per artwork file, as fractions of the measured body box; y is from the top",
+  "blink": [],
+  "blinkNote": "Artwork files whose eye boxes have been checked against the artwork and are accurate enough to warp with. The blink collapses everything inside the box onto a lid line, so a box that sits beside the eye rather than on it drags the fringe down instead of closing anything — and several of the boxes below do exactly that, because they were measured for an earlier blinking attempt that drew a shape over the eye rather than moving it. A file is added here only after its box has been looked at.",
   "eyes": {
     "closure-chibi.png": [
       [

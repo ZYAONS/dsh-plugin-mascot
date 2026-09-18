@@ -176,8 +176,49 @@ function buildRig(profile, options = {}) {
 }
 
 //#region skinning
+/** A number as a GLSL float literal — `1` is not one, `1.0` is. */
+const glslFloat = (value) => (Number.isInteger(value) ? `${String(value)}.0` : String(value));
+
 /**
- * Vertex shader: three bone matrices blended per vertex (linear blend skinning).
+ * Where the lid line rests inside a measured eye box, and how far it dips
+ * below that at the middle, both as fractions of the box's height.
+ *
+ * The spec this follows lays an eyelash layer onto a parabola whose middle is
+ * lowest, then keeps a sliver of thickness so a shut eye reads as a lid rather
+ * than as a stroke. The numbers are not the spec's numbers: they were fitted to
+ * this repository's own measured eye boxes, on this repository's own artwork.
+ */
+const EYE_CLOSE = Object.freeze({
+	/** Where the corners of the lid line sit. */
+	rest: 0.3,
+	/** How much lower the middle of the lid line is than the corners. */
+	dip: 0.3,
+	/** Thickness the eye keeps when shut, so it does not collapse to a line. */
+	keep: 0.18,
+	/** How far the jelly stretches or squashes the band the eye becomes. */
+	jelly: 0.14,
+});
+
+/**
+ * Deformation mesh resolution, per look.
+ *
+ * The coarse mesh is sized to the figure and serves a body that sways. A blink
+ * bends an eye across its own height, and an eye is under a tenth of a figure
+ * tall — the coarse mesh puts fewer than two rows inside one, which is not
+ * enough to bend anything. A look that carries measured eyes gets the finer
+ * mesh so there is something to bend; every other look gets what it always had.
+ *
+ * Both stay well inside the 65535 vertices a `UNSIGNED_SHORT` index allows.
+ */
+const BODY_MESH = Object.freeze({ rows: 26, cols: 18 });
+const EYE_MESH = Object.freeze({ rows: 108, cols: 64 });
+
+/** A zero-width eye box, for a look that has none: the shader ignores it. */
+const NO_EYE = new Float32Array([0, 0, 0, 0]);
+
+/**
+ * Vertex shader: five bone matrices blended per vertex (linear blend skinning),
+ * then a blink.
  *
  * The UV comes from the REST position, not the deformed one, so the artwork is
  * sampled where it was painted and only the geometry moves.
@@ -192,9 +233,49 @@ const SKIN_VERTEX_SHADER = [
 	"uniform mat3 uBones[5];",
 	"uniform mat3 uProject;",
 	"uniform vec2 uImageSize;",
+	// The eyes as `x, y, width, height` in image pixels, then how shut they are
+	// and how far the jelly has pulled them.
+	"uniform vec4 uEyeA;",
+	"uniform vec4 uEyeB;",
+	"uniform float uBlink;",
+	"uniform float uJelly;",
 	"out vec2 vUv;",
+	"",
+	"// Shut one eye by moving its own pixels, rather than by covering them.",
+	"//",
+	"// Nothing is drawn here, and that is the whole point. An earlier attempt at",
+	"// blinking drew a shape over the eye, and on artwork this finely outlined a",
+	"// shape laid on top reads as a patch rather than as a lid. Here the vertices",
+	"// inside the box collapse onto a parabola whose middle is lowest, which is",
+	"// where a shutting lid comes to rest, and the texture is still sampled at the",
+	"// rest position, so what closes is the painted eye itself.",
+	"vec2 closeEye(vec2 p, vec4 eye, float amount, float jelly) {",
+	"  if (amount <= 0.0 || eye.z <= 0.0) return p;",
+	"  vec2 halfSize = eye.zw * 0.5;",
+	"  vec2 local = (p - eye.xy - halfSize) / halfSize;",
+	"  // Fade to nothing outside the box. The cheek is not part of the eye, and",
+	"  // pulling it in would tear the face.",
+	"  float weight = (1.0 - smoothstep(0.80, 1.30, abs(local.x)))",
+	"               * (1.0 - smoothstep(0.80, 1.45, abs(local.y)));",
+	"  if (weight <= 0.0) return p;",
+	"  float across = clamp(local.x, -1.0, 1.0);",
+	`  float lid = eye.y + eye.w * (${glslFloat(EYE_CLOSE.rest)} + ${glslFloat(EYE_CLOSE.dip)} * (1.0 - across * across));`,
+	"  // Collapse onto the lid line but keep a sliver, so a shut eye is a lid and",
+	"  // not an aliased stroke.",
+	`  p.y = lid + (p.y - lid) * mix(1.0, ${glslFloat(EYE_CLOSE.keep)}, amount * weight);`,
+	"  // The jelly rides on top of the collapse, so shutting does not damp it: the",
+	"  // band the eye has become squashes as it shuts and stretches as it opens.",
+	`  p.y = eye.y + halfSize.y + (p.y - eye.y - halfSize.y) * (1.0 + jelly * ${glslFloat(EYE_CLOSE.jelly)} * weight);`,
+	"  return p;",
+	"}",
+	"",
 	"void main() {",
-	"  vec3 p = vec3(aPos, 1.0);",
+	"  // Closed in REST space, then carried by the bones. In rest space the box",
+	"  // still lines up with the face it was measured on; after the bones have moved",
+	"  // the head, it no longer would.",
+	"  vec2 rest = closeEye(aPos, uEyeA, uBlink, uJelly);",
+	"  rest = closeEye(rest, uEyeB, uBlink, uJelly);",
+	"  vec3 p = vec3(rest, 1.0);",
 	"  vec2 skinned = aBone.x * (uBones[0] * p).xy",
 	"               + aBone.y * (uBones[1] * p).xy",
 	"               + aBone.z * (uBones[2] * p).xy",
@@ -246,9 +327,13 @@ let lastRigError;
  * @param framing - `{ width, left, top }` for this seat, from the art index.
  * @param box - the figure's bounding box in image pixels; the mesh covers it.
  * @param seat - the seat's pixel size.
+ * @param eyes - the two eye boxes in image pixels, or null for a look that has
+ *   none. They are `[x, y, width, height]` each, already converted: the art
+ *   index keeps them as fractions of the figure's **body** box, which is a
+ *   different denominator from the box above.
  * @returns a renderer, or undefined.
  */
-function createSkinner(image, rig, framing, box, seat) {
+function createSkinner(image, rig, framing, box, seat, eyes) {
 	const give = (reason) => {
 		lastRigError = reason;
 		return undefined;
@@ -327,7 +412,16 @@ function createSkinner(image, rig, framing, box, seat) {
 		// fills the whole array in a single call.
 		const uBones = gl.getUniformLocation(program, "uBones");
 		const uProject = gl.getUniformLocation(program, "uProject");
+		const uEyeA = gl.getUniformLocation(program, "uEyeA");
+		const uEyeB = gl.getUniformLocation(program, "uEyeB");
+		const uBlink = gl.getUniformLocation(program, "uBlink");
+		const uJelly = gl.getUniformLocation(program, "uJelly");
 		gl.uniform2f(gl.getUniformLocation(program, "uImageSize"), image.naturalWidth, image.naturalHeight);
+		// A look with no eyes gets a zero-width box, which `closeEye` returns from
+		// before it divides anything — so the uniforms can be uploaded every frame
+		// without a branch here.
+		gl.uniform4fv(uEyeA, eyes?.[0] ?? NO_EYE);
+		gl.uniform4fv(uEyeB, eyes?.[1] ?? NO_EYE);
 		gl.enable(gl.BLEND);
 		gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 		gl.clearColor(0, 0, 0, 0);
@@ -356,10 +450,18 @@ function createSkinner(image, rig, framing, box, seat) {
 			/**
 			 * Draw one posed frame.
 			 * @param matrices - three 2D affine matrices in image space.
+			 * @param pose - `{ close, jelly }`: how shut the eyes are, 0 open to 1
+			 *   shut, and how far the jelly has pulled them. Omitted means open.
 			 */
-			draw(matrices) {
+			draw(matrices, pose) {
 				gl.clear(gl.COLOR_BUFFER_BIT);
 				gl.useProgram(program);
+				// A NaN here would take the eye with it, and the eye is the one part of
+				// the figure a viewer is actually looking at. Clamp rather than trust.
+				const close = Number.isFinite(pose?.close) ? Math.min(1, Math.max(0, pose.close)) : 0;
+				const jelly = Number.isFinite(pose?.jelly) ? Math.min(1, Math.max(-1, pose.jelly)) : 0;
+				gl.uniform1f(uBlink, close);
+				gl.uniform1f(uJelly, jelly);
 				for (let index = 0; index < Math.min(5, matrices.length); index++) packed.set(matrices[index], index * 9);
 				gl.uniformMatrix3fv(uBones, false, packed);
 				gl.uniformMatrix3fv(uProject, false, project);
@@ -409,6 +511,21 @@ const SPINE_MOTION = {
 		head: [-3.48, -3.82, -3.13, -0.42, 0.7, -0.02, -0.74, -0.48, 0.09, 0.26, -0.03, -0.31, -0.59, -0.94, -1.29, -1.64, -1.8, -1.93, -2.05, -2.22, -2.85, -3.48],
 	},
 };
+/**
+ * The blink, measured from the same chibi. Zero is open and `peak` is shut:
+ * the channel is a lid angle rather than an openness, so it is divided by
+ * `peak` before use. GENERATED by scripts/motion-literal.mjs — edit neither
+ * this block nor lib/client.js by hand.
+ *
+ * Sampled at the measured rate, not the thinned one the bone channels use: a
+ * blink is about half a second long and thinning it turns the close into a
+ * fade. Read it with `sampleMotion`, the same as any other channel.
+ */
+const BLINK_MOTION = {
+	peak: 20.7,
+	idle: { loop: 8, step: 0.08, close: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20.7, 20.7, 17.48, 17.48, 17.48, 0.727, 0.727, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20.7, 20.7, 17.48, 17.48, 17.48, 0.727, 0.727, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+	greet: { loop: 3.367, step: 0.08, close: [0, 0, 20.7, 20.7, 17.48, 17.48, 17.48, 5.175, 0, 0, 20.7, 17.48, 17.48, 0.727, 0.727, 0.727, 0, 0, 0, 0, 5.916, 5.916, 5.916, 5.916, 5.916, 5.916, 5.916, 5.916, 5.916, 5.916, 5.916, 5.916, 5.916, 5.916, 5.916, 5.916, 5.916, 5.916, 5.916, 5.916, 17.48, 0.727, 0] },
+};
 /* MOTION-END */
 
 /**
@@ -429,6 +546,66 @@ function sampleMotion(animation, channel, time, looping) {
 	const a = values[Math.min(values.length - 1, index)];
 	const b = values[next];
 	return a + (b - a) * ratio;
+}
+
+/**
+ * The greeting's cross-fade at an age: 0 outside it, 1 in its body.
+ *
+ * Shared by the spine curves and the blink so the two cross-fade on the same
+ * clock — a blink that faded in on its own schedule would drift against the
+ * head it belongs to.
+ */
+function greetBlend(greetAge, loop) {
+	return Math.max(0, Math.min(1, greetAge / 0.25, (loop - greetAge) / 0.25));
+}
+
+/**
+ * How shut the eyes are at a moment: 0 open, 1 shut.
+ *
+ * The measured channel is a lid angle rather than an openness — it sits at
+ * zero and spikes — so it is divided by the peak it reaches. Read from the
+ * idle, and cross-faded into the greeting's own blinks, so a blink during the
+ * greeting is the game's blink and not this rig's guess.
+ */
+function sampleBlink(time, greetAge) {
+	const idle = sampleMotion(BLINK_MOTION.idle, "close", time, true) / BLINK_MOTION.peak;
+	const greet = BLINK_MOTION.greet;
+	if (greetAge === undefined || greetAge < 0 || greetAge >= greet.loop) return idle;
+	const blend = greetBlend(greetAge, greet.loop);
+	const during = sampleMotion(greet, "close", greetAge, false) / BLINK_MOTION.peak;
+	return idle * (1 - blend) + during * blend;
+}
+
+/**
+ * The eye's jelly: a damped spring that trails the lid and overshoots.
+ *
+ * The constants are the spec's — a natural frequency of about 9.3 rad/s and a
+ * damping ratio of 0.57 — so the eye squashes as it shuts and springs a little
+ * wide as it opens. The deviation from the lid is what the shader wants; where
+ * the spring has got to on its own is not interesting.
+ *
+ * Where the lid line itself rests is `EYE_CLOSE`, up in the skinning region:
+ * that one belongs to the shader, and this one to the clock.
+ */
+const JELLY = Object.freeze({ stiffness: 86, damping: 10.5 });
+
+/**
+ * Advance the jelly spring by `dt` seconds toward a lid position.
+ *
+ * @param spring - `{ v, form }` from the previous step.
+ * @param close - how shut the eyes are now, 0 open and 1 shut.
+ * @param dt - seconds since the previous step.
+ */
+function stepJelly(spring, close, dt) {
+	// A hidden tab resumes with a `dt` of whole seconds. A spring integrated
+	// over a step that large does not converge, it explodes, and the eye ends
+	// up somewhere off the face.
+	const step = Math.max(0, Math.min(0.05, Number.isFinite(dt) ? dt : 0));
+	const drive = 1 - close;
+	const pull = JELLY.stiffness * (drive - spring.form) - JELLY.damping * spring.v;
+	const v = spring.v + pull * step;
+	const form = spring.form + v * step;
+	return { v, form, deviation: Math.max(-1, Math.min(1, form - drive)) };
 }
 
 /**
@@ -488,7 +665,7 @@ function poseRig(rig, box, state) {
 	let head = idleHead;
 	let greeting = 0;
 	if (greetAge !== undefined && greetAge >= 0 && greetAge < greet.loop) {
-		const blend = Math.max(0, Math.min(1, greetAge / 0.25, (greet.loop - greetAge) / 0.25));
+		const blend = greetBlend(greetAge, greet.loop);
 		greeting = blend * blend * (3 - 2 * blend);
 		waist += (sampleMotion(greet, "waist", greetAge, false) - idleWaist) * greeting;
 		chest += (sampleMotion(greet, "chest", greetAge, false) - idleChest) * greeting;
@@ -678,4 +855,4 @@ function rigStatus() {
   return lastRigError ?? null;
 }
 
-export { RIG, findNeck, buildRig, createSkinner, poseRig, speakLine, setVoiceUrls, voiceStatus, rigStatus };
+export { RIG, findNeck, buildRig, createSkinner, poseRig, sampleBlink, stepJelly, BODY_MESH, EYE_MESH, speakLine, setVoiceUrls, voiceStatus, rigStatus };

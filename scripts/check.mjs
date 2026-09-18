@@ -728,4 +728,131 @@ await it("the pose is finite and bounded across the whole idle, including clicks
 });
 //#endregion
 
+//#region 6 — the blink, against the spec it was taken from
+const { sampleBlink, stepJelly, greetBlend, EYE_CLOSE, JELLY, BODY_MESH, EYE_MESH } = exports_;
+
+await it("the blink schedule is the one measured from the official chibi", () => {
+  // The channel is sampled every 0.08s over an 8.00s loop and spikes exactly twice.
+  const shut = [];
+  for (let index = 0; index < 101; index++) {
+    if (sampleBlink(index * 0.08, undefined) > 0.001) shut.push(index * 0.08);
+  }
+  assert.ok(shut.length > 0, "the eyes never shut");
+  // Two blinks, not one and not a permanent squint.
+  const runs = shut.reduce((groups, time) => {
+    if (groups.length === 0 || time - groups[groups.length - 1][1] > 0.081) groups.push([time, time]);
+    else groups[groups.length - 1][1] = time;
+    return groups;
+  }, []);
+  assert.equal(runs.length, 2, `expected two blinks per idle loop, got ${String(runs.length)}`);
+  for (const [from, to] of runs) {
+    const length = to - from + 0.08;
+    assert.ok(length > 0.2 && length < 0.8, `a blink that lasts ${length.toFixed(2)}s is not a blink`);
+    // Fully shut somewhere in the middle, and open on both sides of it.
+    assert.equal(sampleBlink(from + 0.08, undefined), 1, "the blink never reaches shut");
+    assert.equal(sampleBlink(from - 0.16, undefined), 0, "the eye is already shutting before the blink");
+    assert.equal(sampleBlink(to + 0.16, undefined), 0, "the eye is still shut after the blink");
+  }
+  // And it is genuinely periodic, not a one-off.
+  assert.equal(sampleBlink(1.68, undefined), sampleBlink(1.68 + 8, undefined), "the blink does not repeat with the idle");
+});
+
+await it("the blink is a lid coming down, not a shape drawn on top", () => {
+  // Nothing may be composited over the artwork: the whole deformation is a mapping of
+  // the eye's own vertices onto the lid line. A previous attempt drew a filled shape,
+  // and on artwork this finely outlined that reads as a patch rather than an eyelid.
+  assert.equal(EYE_CLOSE.keep > 0 && EYE_CLOSE.keep < 0.5, true, "a shut eye must keep a sliver of thickness, not vanish and not stay open");
+  assert.ok(EYE_CLOSE.jelly > 0 && EYE_CLOSE.jelly < 0.5, "the jelly should be a subtlety, not a distortion");
+
+  // The lid line, which is what `closeEye` in the vertex shader computes. Kept in step
+  // with the GLSL by construction: the shader interpolates these same constants in.
+  const lid = (across) => EYE_CLOSE.rest + EYE_CLOSE.dip * (1 - across * across);
+  assert.ok(lid(0) > lid(1), "the middle of the lid line must be lower than its corners");
+  assert.ok(lid(1) > 0 && lid(1) < 1, "the corners of the lid must land inside the box");
+  assert.ok(lid(0) > 0 && lid(0) < 1, "the middle of the lid must land inside the box");
+  // A box the art index actually produces, to be sure the constants suit real eye sizes.
+  const eye = [0, 0, 41.1, 35.7];
+  assert.ok(Math.abs(lid(0) - lid(1)) * eye[3] > 4, "the lid's dip must be visible in pixels, not sub-pixel");
+});
+
+await it("the jelly spring converges and cannot be blown up by a stalled frame", () => {
+  const settle = (dt) => {
+    let spring = { v: 0, form: 1 };
+    for (let step = 0; step < 4000; step++) spring = stepJelly(spring, 1, dt);
+    return spring;
+  };
+  for (const dt of [1 / 60, 1 / 30, 0.05]) {
+    const spring = settle(dt);
+    assert.ok(Number.isFinite(spring.v) && Number.isFinite(spring.form), `diverged at dt=${String(dt)}`);
+    // Shut and settled: the spring has caught up with the lid and stopped.
+    assert.ok(Math.abs(spring.form - 0) < 0.01, `settled at ${spring.form.toFixed(4)} instead of shut`);
+    assert.ok(Math.abs(spring.deviation) < 0.01, "a settled spring should not still be squashing");
+  }
+  // A tab that was hidden for ten seconds hands over a `dt` of seconds. Integrated
+  // unclamped the spring does not converge, it explodes, and the eye leaves the face.
+  const huge = stepJelly({ v: 0, form: 1 }, 1, 10);
+  assert.ok(Number.isFinite(huge.v) && Math.abs(huge.form) < 10, `a stalled frame produced ${String(huge.form)}`);
+
+  // Underdamped, so it overshoots: that overshoot is the whole point of the jelly.
+  let spring = { v: 0, form: 1 };
+  let overshot = false;
+  for (let step = 0; step < 240; step++) {
+    spring = stepJelly(spring, 1, 1 / 60);
+    if (spring.deviation < -0.02) overshot = true;
+  }
+  assert.ok(overshot, "the spring never overshoots, so the eye has no squash");
+  assert.ok(JELLY.damping / (2 * Math.sqrt(JELLY.stiffness)) < 1, "the spring must be underdamped to overshoot");
+});
+
+await it("the greeting cross-fade is a fade, not a switch", () => {
+  assert.equal(greetBlend(0, 8), 0, "the greeting starts at nothing");
+  assert.equal(greetBlend(8, 8), 0, "and ends at nothing");
+  assert.equal(greetBlend(4, 8), 1, "and is fully on in the middle");
+  let previous = -1;
+  for (let age = 0; age <= 0.25; age += 0.01) {
+    const value = greetBlend(age, 8);
+    assert.ok(value >= previous - 1e-9, "the fade must not go backwards");
+    assert.ok(value >= 0 && value <= 1, "the fade is a weight");
+    previous = value;
+  }
+});
+
+await it("the blink mesh has the vertices to bend an eye, and fits its index type", () => {
+  // An eye is under a tenth of a figure tall, so the coarse mesh puts fewer than two
+  // rows inside one, which is not enough to bend anything.
+  assert.ok(EYE_MESH.rows > 0.08 * 60, `a mesh of ${String(EYE_MESH.rows)} rows cannot resolve an eye`);
+  assert.ok(EYE_MESH.cols >= BODY_MESH.cols, "the blink mesh should not be coarser than the body mesh");
+  for (const mesh of [BODY_MESH, EYE_MESH]) {
+    const vertices = (mesh.rows + 1) * (mesh.cols + 1);
+    assert.ok(vertices <= 65536, `${String(vertices)} vertices overflows the UNSIGNED_SHORT index buffer`);
+  }
+});
+
+await it("no look blinks on eye boxes that were never checked", () => {
+  // The gate that matters: warping an eye box that sits beside the eye drags the
+  // fringe down instead of closing anything, which is worse than not blinking.
+  const eyes = json("art/eyes.json");
+  const blink = eyes.blink ?? [];
+  assert.ok(Array.isArray(blink), "art/eyes.json: `blink` must be a list of files");
+  for (const file of blink) {
+    const boxes = eyes.eyes?.[file];
+    assert.ok(Array.isArray(boxes) && boxes.length === 2, `${file} is listed as blinkable but has no measured boxes`);
+    for (const box of boxes) {
+      assert.equal(box.length, 4, `${file} has a malformed eye box`);
+      for (const value of box) assert.ok(Number.isFinite(value), `${file} has a non-numeric eye box`);
+    }
+  }
+  const index = json("art/index.json");
+  const frames = (index.looks ?? []).flatMap((look) => look.frames ?? []);
+  assert.ok(frames.length > 0, "the art index has no frames");
+  for (const frame of frames) {
+    // Every published frame must answer the question one way or the other.
+    assert.equal(typeof frame.blinkable, "boolean", `${String(frame.file)} publishes no blinkable flag`);
+    if (frame.blinkable) assert.ok(blink.includes(frame.file), `${String(frame.file)} blinks without being listed in art/eyes.json`);
+  }
+  const listed = blink.filter((file) => frames.some((frame) => frame.file === file));
+  assert.equal(listed.length, blink.length, "art/eyes.json lists a file the art index does not publish");
+});
+//#endregion
+
 console.log(`\ndsh-plugin-mascot: ${String(checks)} checks passed`);

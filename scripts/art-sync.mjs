@@ -36,6 +36,17 @@ import { findChromium } from "./chrome.mjs";
  * the browser page that applies them.
  */
 let eyesForLook = {};
+/**
+ * Artwork files whose eye boxes are good enough to *warp* with.
+ *
+ * A stricter thing than "roughly where the eye is". A blink collapses everything
+ * inside the box onto the lid line, so a box a third of an eye off does not close
+ * the eye — it drags the fringe down over it. The boxes in `art/eyes.json` were
+ * measured for an earlier, abandoned blink and several of them sit beside the eye
+ * rather than on it, so the blink is opt-in per file and `art/eyes.json`'s `blink`
+ * list names the ones that have been checked against the artwork.
+ */
+let blinkableFiles = new Set();
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const artDir = join(root, "art");
@@ -493,7 +504,9 @@ export function buildIndex(options = {}) {
   // both a chibi — head half the figure — and a full-body portrait, and using one anyway
   // put the lids on the chest of every standing character.
   const eyesPath = resolve("art/eyes.json");
-  eyesForLook = existsSync(eyesPath) ? (JSON.parse(readFileSync(eyesPath, "utf8")).eyes ?? {}) : {};
+  const eyeData = existsSync(eyesPath) ? JSON.parse(readFileSync(eyesPath, "utf8")) : {};
+  eyesForLook = eyeData.eyes ?? {};
+  blinkableFiles = new Set(eyeData.blink ?? []);
   const frameEyes = (id) => eyesForLook[id] ?? null;
 
   const declaration = JSON.parse(readFileSync(join(artDir, "looks.json"), "utf8"));
@@ -565,6 +578,9 @@ export function buildIndex(options = {}) {
         // "pixels" when the artwork was measured, "anatomy" when the official
         // proportions were used. Worth publishing: it says how much to trust the box.
         eyesFrom: boxes[index].eyesFrom ?? null,
+        // Whether those boxes have been checked against the artwork, and so whether
+        // the blink may use them. See `blinkableFiles`.
+        blinkable: blinkableFiles.has(file),
         skin: boxes[index].skin ?? null,
       })),
       // The first frame doubles as the look's identity: it is what a static

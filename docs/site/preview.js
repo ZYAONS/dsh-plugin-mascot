@@ -15,7 +15,7 @@
  * Everything here reads. Nothing is written, and nothing is uploaded.
  */
 
-import { RIG, buildRig, createSkinner, findNeck, poseRig, rigStatus, setVoiceUrls, speakLine, voiceStatus } from "./rig.js";
+import { RIG, BODY_MESH, EYE_MESH, buildRig, createSkinner, findNeck, poseRig, rigStatus, sampleBlink, setVoiceUrls, speakLine, stepJelly, voiceStatus } from "./rig.js";
 
 /** The dock seat the plugin renders into, in CSS pixels. Mirrors `.dsh-mascot-frames`. */
 const SEAT = { width: 104, height: 172 };
@@ -713,8 +713,20 @@ export function createPreview(host, onStatus) {
    */
   function rig(image, profile, box, face) {
     stop();
-    const bones = buildRig(profile, { rows: 26, cols: 18 });
-    const built = createSkinner(image, bones, { width: SEAT.width, left: 0, top: 0 }, box, SEAT);
+    // Eyes are stored as fractions of the figure's body box, but the mesh covers the
+    // whole silhouette box, so they are converted here rather than in the skinner.
+    const body = face?.body;
+    // Only boxes the art index vouches for: see `blinkableFiles` in art-sync.mjs.
+    const eyes = face?.blinkable === true && Array.isArray(face?.eyes) && face.eyes.length >= 2 && body !== undefined
+      ? face.eyes.slice(0, 2).map((eye) => [
+        body.x + eye[0] * body.w,
+        body.y + eye[1] * body.h,
+        eye[2] * body.w,
+        eye[3] * body.h,
+      ])
+      : null;
+    const bones = buildRig(profile, eyes === null ? BODY_MESH : EYE_MESH);
+    const built = createSkinner(image, bones, { width: SEAT.width, left: 0, top: 0 }, box, SEAT, eyes);
     if (built === undefined) {
       still(image);
       say("warn", `这个浏览器起不了渲染器，预览退回静态图（${String(rigStatus() ?? "未报告原因")}）。`);
@@ -729,10 +741,21 @@ export function createPreview(host, onStatus) {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     skinner.resize(Math.round(SEAT.width * dpr), Math.round(SEAT.height * dpr));
     const started = performance.now();
+    // The blink is read off the clock, so a dropped frame cannot make it drift; the
+    // jelly is integrated, because a spring's whole point is where it has been.
+    let spring = { v: 0, form: 1 };
+    let last;
     const loop = (now) => {
       raf = window.requestAnimationFrame(loop);
       const elapsed = (now - started) / 1000;
-      skinner.draw(poseRig(bones, box, { time: elapsed, pokeAge: pokeAgeAt(now) }));
+      const step = (now - (last ?? now)) / 1000;
+      last = now;
+      const close = sampleBlink(elapsed, undefined);
+      spring = stepJelly(spring, close, step);
+      skinner.draw(
+        poseRig(bones, box, { time: elapsed, pokeAge: pokeAgeAt(now) }),
+        { close, jelly: spring.deviation },
+      );
     };
     raf = window.requestAnimationFrame(loop);
     // The same click pokes it and speaks it, on both render paths.
@@ -914,7 +937,7 @@ export function createPreview(host, onStatus) {
       return;
     }
     if (Array.isArray(frame.profile) && Array.isArray(box)) {
-      rig(image, frame.profile, box, { body: frame.body, eyes: frame.eyes, skin: frame.skin });
+      rig(image, frame.profile, box, { body: frame.body, eyes: frame.eyes, blinkable: frame.blinkable, skin: frame.skin });
     } else {
       still(image);
       say("warn", `${look.id} 没有量出轮廓，预览退回静态图。请在插件目录跑 \`npm run art:sync\`。`);
@@ -960,7 +983,7 @@ export function createPreview(host, onStatus) {
       return;
     }
     if (first.riggable && boxes) {
-      rig(first.image, first.frame.profile, first.frame.box, { body: first.frame.body, eyes: first.frame.eyes, skin: first.frame.skin });
+      rig(first.image, first.frame.profile, first.frame.box, { body: first.frame.body, eyes: first.frame.eyes, blinkable: first.frame.blinkable, skin: first.frame.skin });
       say("ok", `正在显示 ${look.name ?? look.nameEn ?? look.id}，由插件同一套骨架绑定驱动。`);
       return;
     }
@@ -978,7 +1001,7 @@ export function createPreview(host, onStatus) {
         })),
         look.nameEn ?? look.id,
         // The eye boxes and skin tone travel with the frames: the CSS rig draws the same
-        { body: first.frame.body, eyes: first.frame.eyes, skin: first.frame.skin },
+        { body: first.frame.body, eyes: first.frame.eyes, blinkable: first.frame.blinkable, skin: first.frame.skin },
       );
       return;
     }
