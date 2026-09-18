@@ -809,6 +809,49 @@ if (localUrl !== undefined) {
   const shotB = (await cdp.send("Page.captureScreenshot", { format: "png", clip: { ...localStage, scale: 1 } })).data;
   ok("the live artwork is genuinely animating (two frames differ)", shotA !== shotB, "the two captures are byte-identical, so the sprite is frozen");
 
+  // And the blink must reach the browser.
+  //
+  // This checks the wiring, not the pixels, and the distinction is deliberate. Three
+  // attempts at measuring the blink from the rendered canvas all failed to tell it
+  // apart from the idle: the frame-to-frame difference scored 2.5 with the blink on
+  // and 1.9 with it off, the near-white count 15 against 11, and the eye-band-to-head
+  // white *ratio* — which was supposed to cancel the sway out — scored 8.0 with the
+  // blink on and 10.3 with it off, i.e. higher without. The mascot is about 120px
+  // wide and the idle moves all of it, so every global statistic is the idle.
+  // A pixel assertion here would have passed for the wrong reason, which is worse
+  // than not having one. What the pixels do is verified by looking at them —
+  // `scripts/check.mjs` guards the geometry, and each of the nine looks was rendered
+  // open and shut and inspected.
+  //
+  // What is worth asserting is that the per-look flag survives the whole trip:
+  // art/eyes.json -> the art index -> the route -> the page's own catalogue.
+  const blinkWiring = await cdp.evaluate(`(async () => {
+    const response = await fetch('/dsh-mascot/api/looks');
+    const payload = await response.json();
+    const looks = payload.looks ?? [];
+    const frames = looks.flatMap((look) => look.frames ?? []);
+    const shown = document.querySelector('#looks .card .code')?.textContent?.trim() ?? null;
+    const shownFrame = looks.find((look) => look.id === shown)?.frames?.[0] ?? null;
+    return {
+      served: frames.length,
+      blinkable: frames.filter((frame) => frame.blinkable === true).length,
+      blinkableWithBoxes: frames.filter((frame) => frame.blinkable === true && Array.isArray(frame.eyes) && frame.eyes.length === 2).length,
+      shown,
+      shownBlinkable: shownFrame?.blinkable === true,
+      shownEyes: shownFrame?.eyes ?? null,
+    };
+  })()`);
+  ok(
+    "the route carries the blink flag, and every frame that blinks has the boxes it needs",
+    blinkWiring.served > 0 && blinkWiring.blinkable > 0 && blinkWiring.blinkable === blinkWiring.blinkableWithBoxes,
+    `${String(blinkWiring.blinkable)} of ${String(blinkWiring.served)} frames are blinkable, ${String(blinkWiring.blinkableWithBoxes)} of those carry two boxes`,
+  );
+  ok(
+    "and the look the console is showing is one of them, so it blinks where a viewer can see it",
+    blinkWiring.shownBlinkable === true,
+    `showing "${String(blinkWiring.shown)}" (blinkable=${String(blinkWiring.shownBlinkable)}, eyes=${JSON.stringify(blinkWiring.shownEyes)})`,
+  );
+
   // Switching character must swap what is drawn — the request that started all this.
   const beforeSwitch = await cdp.evaluate("document.querySelector('#preview-host canvas') !== null");
   await cdp.click("#characters .card:nth-child(2)");
