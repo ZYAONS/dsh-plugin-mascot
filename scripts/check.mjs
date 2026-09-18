@@ -852,6 +852,40 @@ await it("no look blinks on eye boxes that were never checked", () => {
   }
   const listed = blink.filter((file) => frames.some((frame) => frame.file === file));
   assert.equal(listed.length, blink.length, "art/eyes.json lists a file the art index does not publish");
+
+  // A blink that is enabled nowhere is indistinguishable from one that is broken, and
+  // that is exactly how this feature would rot.
+  assert.ok(blink.length > 0, "no look blinks at all — the blink is off, or the list was emptied");
+
+  // Geometry the shader relies on. The blink collapses whatever is inside the box, so
+  // a box in the wrong place does not fail loudly — it drags the artwork. These are the
+  // bounds that would have caught the boxes this list was built to replace.
+  for (const file of blink) {
+    const boxes = eyes.eyes[file];
+    assert.ok(boxes.some((box) => box[2] > 0 && box[3] > 0), `${file} is blinkable but both its eye boxes are empty`);
+    for (const [x, y, w, h] of boxes) {
+      if (w === 0 && h === 0) continue; // Deliberate: this eye is not visible in the artwork.
+      assert.ok(w > 0 && h > 0, `${file} has a half-empty eye box`);
+      assert.ok(x > -0.05 && x + w < 1.05, `${file} has an eye box outside the figure horizontally`);
+      // The eyes are in the head, and a chibi's head is the top of it. A box below
+      // this is on the chest, which is what the very first blink did.
+      assert.ok(y > 0.05 && y + h < 0.6, `${file} has an eye box at y=${y.toFixed(3)}, which is not in the head`);
+      // An eye is not the whole figure, and not a pixel.
+      assert.ok(w < 0.35 && h < 0.3, `${file} has an eye box ${w.toFixed(3)}x${h.toFixed(3)} — too big to be an eye`);
+      assert.ok(w > 0.03 && h > 0.02, `${file} has an eye box ${w.toFixed(3)}x${h.toFixed(3)} — too small to be an eye`);
+    }
+  }
+
+  // And the eyes must be a pair, not two boxes stacked on one eye.
+  for (const file of blink) {
+    const live = eyes.eyes[file].filter((box) => box[2] > 0);
+    if (live.length < 2) continue; // A fringe covers the other eye; one box is the truth.
+    const centres = live.map((box) => box[0] + box[2] / 2).sort((a, b) => a - b);
+    const [left, right] = centres;
+    assert.ok(right - left > 0.05, `${file}: the two eye boxes are ${(right - left).toFixed(3)} apart — that is one eye twice`);
+    const heights = live.map((box) => box[1] + box[3] / 2);
+    assert.ok(Math.abs(heights[0] - heights[1]) < 0.06, `${file}: the eyes are at different heights by ${Math.abs(heights[0] - heights[1]).toFixed(3)}`);
+  }
 });
 //#endregion
 
