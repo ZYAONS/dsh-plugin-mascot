@@ -1,0 +1,14 @@
+# dsh-token-thrift 的层：装载插件本身。
+#
+# 与 dsh-agent-budget 的分工见 README：那个管准入（花不起就拒绝），这个管花法
+# （还没超支时让同样的活花更少）。两者可以同时装。
+#
+# 默认 budget: 0 —— 也就是**不启用**。这里不预设一个数字，因为"多少 token 算多"只有使用者
+# 自己知道，猜一个默认值等于替他做了决定。想看效果就把它改成正数：
+#
+#   budget: 2000000
+- insert:
+    - id: token-thrift
+      name: dsh-token-thrift
+      config:
+        budget: 0
