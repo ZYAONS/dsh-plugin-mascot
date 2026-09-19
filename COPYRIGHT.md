@@ -12,8 +12,9 @@ someone else**. The distinction is the whole point of this file.
 | `lib/`, `scripts/`, `docs/site/*.js`, `docs/site/*.css`, `docs/index.html` | MIT — see [LICENSE](LICENSE) |
 | `art/looks.json`, `art/index.json` | MIT — these are data this project generated: a declaration and measurements |
 | `README.md`, `README.zh.md`, `COPYRIGHT.md`, `docs/site/*.png` | MIT |
+| `art/room-*.png` | **Not MIT.** Official game art — see section 2 |
 
-Nothing in this repository is a copy of anyone's artwork. `art/index.json` contains
+Nothing else in this repository is a copy of anyone's artwork. `art/index.json` contains
 *measurements of* artwork — a bounding box, a silhouette profile, a seat size — which
 is why the plugin can rig an image it has never seen.
 
@@ -24,10 +25,40 @@ is why the plugin can rig an image it has never seen.
 | Closure / 可露希尔 | © Hypergryph (上海鹰角网络) — *Arknights* / 明日方舟 | official game assets |
 | Sengoku Yuno / 千石由乃 | © Bushiroad — *BanG Dream!* / Mugendai MewType | official game and anime assets |
 
-**No artwork by either owner is contained in this repository, in any commit.**
-`npm run fetch-art` downloads it to the machine that runs the command, for that
-person's own use. `.gitignore` excludes every image path under `art/`, and
-`docs/art/` — where `npm run art:publish` puts a copy — is excluded too.
+### 2.1 The backdrops, which are shipped deliberately
+
+`art/room-<character id>.<ext>` — the picture drawn behind a character — **is official
+artwork and is committed to this repository on purpose**, at the repository owner's
+direction. `art/room-closure.png` is Hypergryph's *Arknights* furniture artwork.
+
+This is a deliberate exception to rule 1 in section 5, and it is the only one. It is
+recorded here rather than left implicit because the rest of the file argues the opposite
+case, and a reader is entitled to know which rule is in force. What it means:
+
+- **These files are not covered by this project's MIT licence.** They remain Hypergryph's.
+  Forking this repository does not give you any right to them.
+- **They are not "new creativity"** in the sense section 4 uses. They are the original
+  asset, reproduced as-is, which is exactly what the Bushiroad guideline's clause 5
+  prohibits and what section 3 concluded this project would not do.
+- **The looks are still never committed.** The nine chibi frames and ten portraits that
+  the rig is built from remain downloaded per machine. The guard in `npm test` now exempts
+  `art/room-<real character id>` and refuses everything else, so the original posture still
+  holds everywhere it was load-bearing.
+
+The plugin draws a room for every character from gradients, and uses a committed backdrop
+when one exists — see `readRooms` in `lib/index.js`. Deleting `art/room-*.png` returns the
+project to exactly its previous state; nothing else depends on them.
+
+If a rights holder objects to these files, delete them. Rule 6 below applies to them more
+than to anything else here, and there is nothing to unwind.
+
+**No *look* — no chibi frame, no portrait — by either owner is contained in this
+repository, in any commit.** `npm run fetch-art` downloads those to the machine that runs
+the command, for that person's own use. `.gitignore` excludes every image path under
+`art/`, and `docs/art/` — where `npm run art:publish` puts a copy — is excluded too.
+
+The **backdrops** in `art/room-*.png` are the one exception, described in section 2.1
+above: official art, committed on purpose, and not MIT.
 
 ## 3. The terms this project is built around
 
@@ -69,8 +100,11 @@ host to the viewer's browser and are never redistributed here.
 
 ## 5. Rules this project holds itself to
 
-1. **No artwork in the repository.** Enforced by `.gitignore` and by a test:
-   `npm test` fails if any image file is tracked under `art/` or `docs/art/`.
+1. **No *look* in the repository.** Enforced by `.gitignore` and by a test: `npm test`
+   fails if any image file is tracked under `art/` or `docs/art/` — **except**
+   `art/room-<a character id that exists>`, which section 2.1 records as the owner's
+   deliberate exception. The exemption is keyed on the real ids rather than on a wildcard,
+   so a look that happens to be named `room-something.png` still fails.
 2. **No redistribution.** `fetch-art` downloads to one machine. `art:publish` copies
    into `docs/art/` for local preview only, refuses to run without an explicit
    acknowledgement, and that directory is gitignored.
@@ -82,12 +116,16 @@ host to the viewer's browser and are never redistributed here.
 5. **Attribution on screen.** Where artwork is displayed, the console names the
    rights holder next to it rather than burying it in a footer.
 6. **A takedown request is honoured immediately.** If either rights holder objects,
-   the affected looks are removed by deleting their entries from `art/looks.json` —
-   no other part of the project depends on them.
+   the affected looks are removed by deleting their entries from `art/looks.json`, and the
+   backdrops by deleting `art/room-*.png`. No other part of the project depends on either —
+   the plugin falls back to the room it draws from gradients.
 
 ## 6. If you fork this
 
-You inherit none of the artwork rights, and the reasoning above is not legal advice.
+You inherit none of the artwork rights, and the reasoning above is not legal advice. That
+includes the backdrops: `art/room-*.png` ships here, but forking does not license it to you,
+and re-publishing it is your decision and your risk — a public repository carrying a game's
+official art is the shape of thing a takedown notice is written about.
 If you want the characters visible on your own deployed copy, the sources are
 declared in `art/looks.json` and the console will load them from there. Publishing
 the files yourself is your decision and your risk — which is why this project makes
@@ -100,7 +138,16 @@ you type the acknowledgement to do it.
 - **代码是 MIT 的**（`lib/`、`scripts/`、`docs/site/`）。`art/index.json` 不是素材，
   是这个项目自己量出来的数据（包围盒、轮廓剖面），所以也属于代码。
 - **立绘不是我们的**：可露希尔 © 鹰角网络《明日方舟》；千石由乃 © Bushiroad《BanG Dream!》/ 梦限大 MewType。
-- **仓库里一张官方图都没有**，任何一次提交都没有。`npm run fetch-art` 只下载到你自己的机器。
+- **立绘一张都不在仓库里**，任何一次提交都没有。`npm run fetch-art` 只下载到你自己的机器。
+- **例外：角色背景图**（`art/room-<角色 id>.<扩展名>`）是官方素材，**按仓库所有者的决定
+  特意随仓库分发**，`art/room-closure.png` 是鹰角《明日方舟》的家具素材。它们**不在 MIT
+  授权范围内**，fork 也不因此获得任何权利，而它们恰恰是 Bushiroad 指引第 5 条所禁止的
+  「不加创作性地复制」。这是全仓库唯一一处例外，写在这里而不是含糊过去 —— 因为本文其余
+  部分论证的正是相反的做法，读者有权知道现在生效的是哪一条。
+- **守卫仍然拦着立绘**：`npm test` 放行 `art/room-<真实角色 id>`，其余 `art/` 下的图片一律
+  拒绝，且放行名单按 `art/index.json` 里的真实 id 判定，不认通配符 —— 一个碰巧叫
+  `room-xxx.png` 的立绘照样过不去。
+- 删掉 `art/room-*.png` 就回到之前的状态：插件会退回它自己用渐变画的那间房，其余部分不受影响。
 - Bushiroad 有公开的[著作物利用指引](https://bang-dream.com/bdp-guideline/)，
   允许**个人、非营利**的二次创作，但**第 5 条明确禁止**「不加任何创作性地复制、描摹、导入」。
   把官方图提交进 `docs/` 让 Pages 公开提供，正是那一条禁止的事 —— 所以本项目不做。

@@ -330,8 +330,25 @@ await it("no artwork belonging to anyone else is tracked by git", () => {
   // Images under the two directories where downloaded artwork can land. `docs/site`
   // is deliberately not included: the console's own screenshots are renders this
   // project produced, and they are what the README shows.
+  //
+  // `room-<character id>` is exempt, by the repository owner's decision rather than by
+  // oversight: the per-character backdrops are official furniture art, shipped on purpose
+  // and named in section 2 of COPYRIGHT.md. The exemption is keyed on the *real* character
+  // ids from art/index.json rather than on a wildcard, so it cannot quietly widen — a file
+  // called `room-closure-chibi.png` is a look, and a look still fails here. Everything
+  // else the fetch script downloads is refused, which is the part that matters: those are
+  // what a `git add -f` in a hurry would sweep in by the dozen.
+  const characterIds = new Set(
+    JSON.parse(readFileSync(join(root, "art", "index.json"), "utf8")).characters.map((entry) => String(entry.id).toLowerCase()),
+  );
+  const backdropOf = (file) => {
+    const match = /^art\/room-([a-z0-9-]+)\.[a-z]+$/iu.exec(file);
+    return match !== null && characterIds.has(match[1].toLowerCase());
+  };
   const artwork = tracked.filter(
-    (file) => /^(?:art|docs\/art)\//u.test(file) && /\.(?:png|jpe?g|webp|gif|avif|bmp)$/iu.test(file),
+    (file) => /^(?:art|docs\/art)\//u.test(file)
+      && /\.(?:png|jpe?g|webp|gif|avif|bmp)$/iu.test(file)
+      && !backdropOf(file),
   );
   assert.deepEqual(
     artwork,
@@ -359,6 +376,23 @@ await it("no artwork belonging to anyone else is tracked by git", () => {
   assert.ok(tracked.includes("art/looks.json"), "the artwork declaration is part of the project");
   assert.ok(tracked.includes("art/index.json"), "the generated index is part of the project");
   assert.ok(tracked.includes("COPYRIGHT.md"), "the copyright notice must ship with the repository");
+
+  // Whatever backdrops do ship must be for characters that exist, or the exemption above
+  // is a hole rather than a decision.
+  const backdrops = tracked.filter((file) => /^art\/room-/u.test(file));
+  for (const file of backdrops) {
+    assert.ok(backdropOf(file), `${file} is not a backdrop for any character in art/index.json`);
+  }
+  assert.ok(backdrops.length > 0, "the owner's backdrops are meant to ship — if this drops to zero, the exemption should go too");
+  // And the exemption itself, directly: it has to say yes to a real character's backdrop
+  // and no to a look file that merely starts with the same word. The .gitignore pattern
+  // cannot make that distinction — it has no idea which characters exist — so this is
+  // where the precision lives.
+  assert.ok(backdropOf("art/room-closure.png"), "a real character's backdrop may ship");
+  assert.ok(backdropOf("art/room-yuno.webp"), "whatever extension, as long as the id is real");
+  assert.ok(!backdropOf("art/room-closure-chibi.png"), "a look that happens to start with `room-` may not");
+  assert.ok(!backdropOf("art/room-nobody.png"), "nor a backdrop for a character that does not exist");
+  assert.ok(!backdropOf("docs/art/room-closure.png"), "nor a copy published next to the console");
 });
 
 await it("the ignore rules cover every path downloaded artwork can land in", () => {
@@ -372,6 +406,16 @@ await it("the ignore rules cover every path downloaded artwork can land in", () 
     const ignored = spawnSync("git", ["check-ignore", "-q", probe], { cwd: root }).status === 0;
     assert.ok(ignored, `git would not ignore ${probe}`);
   }
+  // The backend exception has to be narrow: the fetch script's own output must stay
+  // ignored even though a backdrop beside it does not.
+  for (const probe of ["art/room-closure.png", "art/room-muelsyse.webp"]) {
+    const ignored = spawnSync("git", ["check-ignore", "-q", probe], { cwd: root }).status !== 0;
+    assert.ok(ignored, `git must NOT ignore ${probe} — backdrops ship with the repository`);
+  }
+  // Only the extension half of the exception is testable here: an ignore pattern cannot
+  // know which characters exist, so `room-*.png` is deliberately broad and the id-level
+  // precision is asserted in the guard above instead.
+  assert.ok(spawnSync("git", ["check-ignore", "-q", "art/room-closure.gif"], { cwd: root }).status === 0, "the exception must not reach an extension the host will not serve");
 });
 //#endregion
 await it("the host half claims one prefix route at the configured path", () => {
