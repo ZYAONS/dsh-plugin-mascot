@@ -397,6 +397,53 @@ await it("a balance read resolves the key and reports the provider figures", asy
   assert.equal(harness.calls[0].init.headers.authorization, "Bearer sk-test-secret");
 });
 
+await it("the headline currency is chosen by name, not by the order the provider lists them", async () => {
+  // The provider answers with one entry per currency, and the order is not part of the
+  // contract. This account gets CNY then USD, so reading the first entry happened to
+  // give yuan — and would have silently shown $0.00 the day the order changed. The
+  // whole point of naming the currency is that the panel is not a coin flip.
+  const both = (order) => () =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve(""),
+      json: () =>
+        Promise.resolve({
+          is_available: true,
+          balance_infos: order.map((currency) =>
+            currency === "CNY"
+              ? { currency, total_balance: "8.63", granted_balance: "0.00", topped_up_balance: "8.63" }
+              : { currency, total_balance: "0.00", granted_balance: "0.00", topped_up_balance: "0.00" }),
+        }),
+    });
+
+  for (const order of [["CNY", "USD"], ["USD", "CNY"]]) {
+    const harness = hostHarness();
+    harness.setUpstream(both(order));
+    const result = await request(harness, "/dsh-mascot/api/balance");
+    assert.equal(result.json.currency, "CNY", `listed as ${order.join(",")} the panel showed ${String(result.json.currency)}`);
+    assert.equal(result.json.totalBalance, "8.63");
+    // And the currency that lost is reported rather than dropped.
+    const wallets = result.json.wallets;
+    assert.equal(wallets.length, 2, "every currency the account holds should survive to the browser");
+    assert.deepEqual(wallets.map((wallet) => wallet.currency).sort(), ["CNY", "USD"]);
+  }
+
+  // A patch row naming a different currency moves the headline.
+  const dollars = hostHarness({ config: { currency: "USD" } });
+  dollars.setUpstream(both(["CNY", "USD"]));
+  const chosen = await request(dollars, "/dsh-mascot/api/balance");
+  assert.equal(chosen.json.currency, "USD", "the configured currency should win");
+  assert.equal(chosen.json.totalBalance, "0.00");
+
+  // And an account holding only one currency still works.
+  const single = hostHarness();
+  single.setUpstream(both(["CNY"]));
+  const only = await request(single, "/dsh-mascot/api/balance");
+  assert.equal(only.json.currency, "CNY");
+  assert.equal(only.json.wallets.length, 1);
+});
+
 await it("the API key never appears in anything the browser receives", async () => {
   const harness = hostHarness();
   const result = await request(harness, "/dsh-mascot/api/balance");
