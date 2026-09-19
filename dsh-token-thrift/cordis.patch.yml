@@ -7,8 +7,18 @@
 # 自己知道，猜一个默认值等于替他做了决定。想看效果就把它改成正数：
 #
 #   budget: 2000000
+#
+# 然后挑一档力度。不写就是 standard：
+#
+#   level: light      只劝一次，到七成，永不遮工具
+#   level: standard   三档劝告（四成/七成/九成），九成起遮 fan-out 工具
+#   level: strict     四档劝告（两成半/五成/七成/八成半），五成半起遮
+#   level: off        与 budget: 0 等价
+#
+# tiers / maskRatio 写了就以你写的为准，level 只提供默认值。
 - insert:
     - id: token-thrift
       name: dsh-token-thrift
       config:
         budget: 0
+        level: standard

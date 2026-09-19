@@ -28,11 +28,30 @@
 
 ## 配置
 
+先给预算，再挑一档力度。**力度有名字，不用自己拼数字**：
+
 ```yaml
 - name: file:///path/to/dsh-token-thrift/lib/index.js
   config:
     budget: 2000000        # 0 = 关闭（默认）
-    maskRatio: 0.9         # 到多少比例开始遮工具；不填则用最后一档的 ratio
+    level: standard        # off / light / standard / strict
+```
+
+| level | 什么时候劝 | 遮工具 |
+| --- | --- | --- |
+| `off` | 不劝 | 不遮（与 `budget: 0` 等价） |
+| `light` | 七成一档 | 永不遮 |
+| `standard`（默认） | 四成 / 七成 / 九成 | 九成起 |
+| `strict` | 两成半 / 五成 / 七成 / 八成半 | 五成半起 |
+
+之所以给名字而不是让你调三个数：**档位和遮罩阈值必须一起动**。档位远早于遮罩就变成光说不做，
+遮罩早于任何劝告就是突然袭击。要自己写也行，写了就以你写的为准：
+
+```yaml
+  config:
+    budget: 2000000
+    level: standard        # 只提供默认档位
+    maskRatio: 0.9         # 到多少比例开始遮工具；0 表示用 level 的阈值
     countCache: true       # 缓存 token 也算花费（它们确实计费）
     maxReminders: 6        # 单会话最多提醒几次，防止档位表写坏
     maskTools: [subagent, subagent_fork, workflow, ralph]
@@ -46,8 +65,12 @@
 
 ## 花费从哪来
 
-读 DSH 自己的 `tokenUsage` 投影（`ctx.sessionProjections.snapshot`），不自己记账。理由是投影已经
-是权威口径，自己再算一份迟早会和它对不上。
+读 DSH 自己的 `tokenUsage` 投影，不自己记账。理由是投影已经是权威口径，自己再算一份迟早会和它对不上。
+
+读法有个讲究：用 `ctx.get("sessionProjections")`，**不是** `ctx.sessionProjections`。Cordis 对没有
+`inject` 声明的服务不是返回 undefined，而是**抛错**；这一行在 `tools/post-execute` 里，所以一次读错
+会让**整个会话的每一次工具调用都失败**。`ctx.get` 是官方给"我没注入但想读一下"的入口，服务不在时
+返回 undefined，正是这段代码本来就假设的行为。
 
 口径：`inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens`。
 
@@ -59,9 +82,12 @@
 node test/run.mjs
 ```
 
-20 项，**不启 DSH**：造一个够用的伪 ctx，把钩子拿出来直接驱动。测的是插件的逻辑（哪一档该响、
+27 项，**不启 DSH**：造一个够用的伪 ctx，把钩子拿出来直接驱动。测的是插件的逻辑（哪一档该响、
 响几次、什么时候遮工具），而不是 DSH 能不能起来——后者用
 `dsh --profile <名字> --dump-config` 验。
+
+伪 ctx 里有两个刻意的设计：`get()` 和**会抛错的属性读取**。区别就是这插件曾经翻车的地方——
+以前那版伪 ctx 把服务当普通属性挂着，于是测试全绿而真机上每次工具调用都挂。
 
 ## 已知边界
 
@@ -69,4 +95,6 @@ node test/run.mjs
   它管不着。
 - **`tools.restrict` 不存在时不会失败**——提醒照发，只是遮不了工具。为了一个可选的优化而中断
   整轮，是不划算的交易（有测试守着）。
+- **它自己出错也绝不会失败工具调用**。钩子里任何没处理到的异常都被吞掉、原样放行——理由同上，
+  而且这不是假设：这个插件曾经因为一个未声明的服务读取，把整个会话的工具链一起打死。
 - **只劝告，不阻断**。想要硬停，去装 `dsh-agent-budget`。

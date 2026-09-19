@@ -75,6 +75,66 @@ const DEFAULT_TIERS = [
   },
 ];
 
+/**
+ * The four strengths, as presets.
+ *
+ * `maskRatio: null` means never mask — for the two gentle levels the point is to advise,
+ * and reaching for the tool table at the first sign of spending is how a coach turns into
+ * an obstacle. `strict` moves the mask to just past halfway, which is the earliest it can
+ * land while still leaving two tiers of advice behind it.
+ */
+export const LEVELS = Object.freeze({
+  /** No listeners at all. The same as `budget: 0`, spelled the other way. */
+  off: { tiers: [], maskRatio: null },
+  /** One reminder, late, and the tool table is never touched. */
+  light: {
+    tiers: [
+      {
+        ratio: 0.7,
+        text:
+          "Token thrift: about 70% of this session's budget is spent. Steadier habits from here: "
+          + "read a targeted range instead of a whole file, batch independent tool calls into one "
+          + "step, and skip re-reading what an earlier result already established.",
+      },
+    ],
+    maskRatio: null,
+  },
+  /** The default: advice in three steps, masking once the budget is nearly gone. */
+  standard: { tiers: DEFAULT_TIERS, maskRatio: 0.9 },
+  /** Lean early and hard, for a session that has to fit in a small budget. */
+  strict: {
+    tiers: [
+      {
+        ratio: 0.25,
+        text:
+          "Token thrift: a quarter of this session's budget is gone. Plan the rest before spending "
+          + "it: decide what the answer needs, then read only that. One batched step beats four "
+          + "small ones, and a range beats a whole file.",
+      },
+      {
+        ratio: 0.5,
+        text:
+          "Token thrift: half the budget is spent. Start converging. Finish what is already in "
+          + "flight before opening another line of investigation, and prefer the answer you can "
+          + "give now over the one that needs three more reads.",
+      },
+      {
+        ratio: 0.7,
+        text:
+          "Token thrift: about 70% is spent. Stop exploring. Do not start subagents, workflows or "
+          + "background fan-out — each one re-reads this conversation from the top.",
+      },
+      {
+        ratio: 0.85,
+        text:
+          "Token thrift: about 85% is spent. Wrap up: say what is done, what is verified, and what "
+          + "is left, in as few words as it takes.",
+      },
+    ],
+    maskRatio: 0.55,
+  },
+});
+
 export const Config = z.object({
   /**
    * The Token budget this coach watches, in Tokens. `0` disables it: with no budget there
@@ -85,16 +145,25 @@ export const Config = z.object({
    * budget service is present.
    */
   budget: z.number().default(0),
-  /** Ratios of `budget` at which to speak, paired with what to say. */
-  tiers: z.array(z.object({ ratio: z.number(), text: z.string() })).default(DEFAULT_TIERS),
   /**
-   * Tools to remove from the agent's tool table once the last tier has fired.
+   * How hard to lean.
+   *
+   * One name is easier to get right than three numbers, because the advice and the
+   * masking threshold have to move together: tiers that fire long before the mask either
+   * nag without effect, and a mask that lands before any advice has been given is a
+   * surprise. `tiers` and `maskRatio` still override this when set.
+   */
+  level: z.union([z.const("off"), z.const("light"), z.const("standard"), z.const("strict")]).default("standard"),
+  /** Ratios of `budget` at which to speak, paired with what to say. Empty uses `level`'s own. */
+  tiers: z.array(z.object({ ratio: z.number(), text: z.string() })).default([]),
+  /**
+   * Tools to remove from the agent's tool table once the masking threshold is crossed.
    *
    * Empty means never mask anything, which is the safe choice for a session whose whole
    * job is fan-out.
    */
   maskTools: z.array(z.string()).default(DEFAULT_MASKED),
-  /** Mask as soon as this ratio is crossed; defaults to the last tier's ratio. */
+  /** Mask as soon as this ratio is crossed; `0` uses `level`'s own threshold. */
   maskRatio: z.number().default(0),
   /**
    * Count cached Tokens toward the spend.
@@ -140,7 +209,16 @@ export function usageTokens(usage, countCache) {
  * @returns the spent Token total, or 0 when nothing has been recorded.
  */
 export function spentTokens(ctx, session, countCache) {
-  const projections = ctx.sessionProjections;
+  // `ctx.get`, not `ctx.sessionProjections`.
+  //
+  // Reading an undeclared service off the context does not hand back undefined in
+  // Cordis — it *throws*: `cannot get property "sessionProjections" without inject`.
+  // This line used to do exactly that, and because it runs inside `tools/post-execute`,
+  // one missing declaration took down every tool call in the session. The guard on the
+  // next line never got the chance to run. `ctx.get` is the documented way to reach a
+  // service you have not injected, and it answers undefined when there is none — which
+  // is the behaviour this function was written to expect.
+  const projections = ctx.get("sessionProjections");
   if (projections === undefined || typeof projections.snapshot !== "function" || session === undefined) return 0;
   let snapshot;
   try {
@@ -200,13 +278,19 @@ export function apply(ctx, config) {
   // could surprise someone who mounted the plugin and left it at its defaults.
   if (budget <= 0) return;
 
-  const tiers = [...config.tiers]
+  const preset = LEVELS[config.level] ?? LEVELS.standard;
+  const wanted = Array.isArray(config.tiers) && config.tiers.length > 0 ? config.tiers : preset.tiers;
+  const tiers = [...wanted]
     .filter((tier) => Number.isFinite(tier.ratio) && tier.ratio > 0 && typeof tier.text === "string" && tier.text !== "")
     .sort((a, b) => a.ratio - b.ratio);
+  // `level: "off"`, or a custom tier list that filtered down to nothing.
   if (tiers.length === 0) return;
 
-  const lastRatio = tiers[tiers.length - 1].ratio;
-  const maskRatio = Number.isFinite(config.maskRatio) && config.maskRatio > 0 ? config.maskRatio : lastRatio;
+  // `Infinity` for "never": `ratio >= Infinity` is false for every real ratio, so the
+  // mask simply never fires, and the comparison below stays a single expression.
+  const maskRatio = Number.isFinite(config.maskRatio) && config.maskRatio > 0
+    ? config.maskRatio
+    : (preset.maskRatio ?? Number.POSITIVE_INFINITY);
 
   /** Per-agent progress. A WeakMap so a finished agent's record goes away with it. */
   const spoken = new WeakMap();
@@ -220,9 +304,15 @@ export function apply(ctx, config) {
     return state;
   };
 
-  ctx.on("tools/post-execute", async (exec, _result, next) => {
-    const downstream = await next();
-
+  /**
+   * What this tool result should carry, and whether it is time to mask.
+   *
+   * Split out from the listener so it can be wrapped. Everything in here runs inside the
+   * tool pipeline, and a throw from it fails the tool call itself — which is not
+   * hypothetical: an undeclared service read in this plugin once took down every tool in
+   * a session, and the error surfaced as if the *tools* were broken.
+   */
+  function advise(exec, downstream) {
     const agent = exec?.agent;
     if (agent === undefined) return downstream;
 
@@ -258,5 +348,18 @@ export function apply(ctx, config) {
       ...downstream,
       additionalContexts: prependContext(notice(text, `token-thrift ${String(percent)}%`), downstream?.additionalContexts),
     };
+  }
+
+  ctx.on("tools/post-execute", async (exec, _result, next) => {
+    const downstream = await next();
+    try {
+      return advise(exec, downstream);
+    } catch {
+      // A coach that cannot count its Tokens is worth nothing. A coach that breaks the
+      // tools it was mounted to make cheaper is worth less than nothing, so nothing this
+      // plugin does may ever fail a tool call. Degrading to "said nothing this time" is
+      // always the right trade.
+      return downstream;
+    }
   });
 }

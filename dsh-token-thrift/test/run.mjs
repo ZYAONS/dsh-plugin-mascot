@@ -9,7 +9,7 @@
  */
 
 import assert from "node:assert/strict";
-import { apply, Config, name, spentTokens, usageTokens } from "../lib/index.js";
+import { apply, Config, LEVELS, name, spentTokens, usageTokens } from "../lib/index.js";
 
 let passed = 0;
 let failed = 0;
@@ -32,18 +32,40 @@ async function it(label, body) {
  *
  * Only the surface this plugin touches is implemented. A fake that implements more would
  * hide the fact that the plugin depends on it.
+ *
+ * `get()` and the throwing property read are both here on purpose, because the difference
+ * between them is what took this plugin down once. It read `ctx.sessionProjections`
+ * directly, which Cordis answers by *throwing* rather than by returning undefined; an
+ * earlier fake handed back a service object, so every test passed while the real plugin
+ * failed every tool call in a session.
  */
-function fakeContext() {
+function fakeContext({ projections = true } = {}) {
   const listeners = new Map();
   const restrictions = [];
   let total = 0;
-  return {
+  let broken = false;
+  const services = projections
+    ? {
+        sessionProjections: {
+          snapshot: () => ({ tokenUsage: { totals: { inputTokens: total, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } } }),
+        },
+      }
+    : {};
+  const target = {
     listeners,
     restrictions,
     setTotal(value) { total = value; },
+    /** Make the next service read fail, to prove the hook degrades instead of throwing. */
+    break() { broken = true; },
     on(event, handler) { listeners.set(event, handler); },
-    sessionProjections: {
-      snapshot: () => ({ tokenUsage: { totals: { inputTokens: total, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } } }),
+    /**
+     * The documented way to reach a service you have not injected. Absent services answer
+     * undefined here rather than throwing — that is the whole difference from a property
+     * read, and the reason `spentTokens` uses this one.
+     */
+    get(service) {
+      if (broken) throw new Error("the projection service is unreachable");
+      return services[service];
     },
     /** Fire the post-execute hook the way the harness would. */
     async postExecute(agent, downstream = { kind: "ok" }) {
@@ -60,6 +82,15 @@ function fakeContext() {
       };
     },
   };
+  // Cordis does not hand back undefined for a service you did not inject: it throws
+  // `cannot get property "x" without inject`. This proxy does the same, so a regression
+  // to a bare property read fails here rather than in someone's session.
+  return new Proxy(target, {
+    get(object, property, receiver) {
+      if (typeof property === "symbol" || property in object) return Reflect.get(object, property, receiver);
+      throw new Error(`cannot get property "${String(property)}" without inject`);
+    },
+  });
 }
 
 const config = (overrides = {}) => Config(overrides);
@@ -94,14 +125,40 @@ await it("spend is read from the tokenUsage projection", () => {
   assert.equal(spentTokens(ctx, {}, true), 4200);
 });
 
+await it("reading a service does not require having declared it", () => {
+  // The regression this guards. `ctx.sessionProjections` throws in Cordis when the
+  // service is not in the plugin's inject list, and because the read happens inside the
+  // tool pipeline the throw failed *every tool call in the session* — the error read as
+  // if the tools themselves were broken. `ctx.get` is the way to read a service you have
+  // not injected, and the fake above throws exactly like Cordis does.
+  const ctx = fakeContext();
+  assert.doesNotThrow(() => spentTokens(ctx, {}, true), "accessing the projection must not throw");
+  ctx.setTotal(4200);
+  assert.equal(spentTokens(ctx, {}, true), 4200);
+});
+
 await it("a host with no projections reads as zero spend, not a crash", () => {
-  assert.equal(spentTokens({}, {}, true), 0);
-  assert.equal(spentTokens({ sessionProjections: {} }, {}, true), 0);
+  assert.equal(spentTokens({ get: () => undefined }, {}, true), 0);
+  assert.equal(spentTokens(fakeContext({ projections: false }), {}, true), 0);
 });
 
 await it("a throwing projection is swallowed", () => {
-  const ctx = { sessionProjections: { snapshot: () => { throw new Error("no session"); } } };
+  const ctx = { get: () => ({ snapshot: () => { throw new Error("no session"); } }) };
   assert.equal(spentTokens(ctx, {}, true), 0);
+});
+
+await it("nothing this plugin does can fail a tool call", async () => {
+  // It already happened once, and from the outside it looked like the *tools* were
+  // broken: every call in the session returned the same host error. A coach that cannot
+  // count its Tokens is worth nothing; one that breaks the tools it was mounted to make
+  // cheaper is worth less than nothing. So the hook swallows anything it cannot handle
+  // and passes the tool result straight through.
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 1000, level: "strict" }));
+  ctx.break();
+  const result = await ctx.postExecute(ctx.agent());
+  assert.deepEqual(result, { kind: "ok" }, "the tool result must survive untouched");
+  assert.equal(ctx.restrictions.length, 0, "and nothing may be masked on the way out");
 });
 
 // ---------------------------------------------------------------- the coach
@@ -238,6 +295,72 @@ await it("a tier list with nothing usable installs nothing", () => {
   const ctx = fakeContext();
   apply(ctx, config({ budget: 100, tiers: [{ ratio: 0, text: "zero" }], maskTools: [] }));
   assert.equal(ctx.listeners.size, 0);
+});
+
+// ---------------------------------------------------------------- levels
+await it("level off installs nothing, the same as budget 0", () => {
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 1000, level: "off" }));
+  assert.equal(ctx.listeners.size, 0, "off means off");
+});
+
+await it("light advises late and never touches the tool table", async () => {
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 1000, level: "light" }));
+  const agent = ctx.agent();
+  ctx.setTotal(600);
+  assert.equal((await ctx.postExecute(agent)).additionalContexts, undefined, "light is quiet at 60%");
+  ctx.setTotal(750);
+  assert.equal((await ctx.postExecute(agent)).additionalContexts?.length, 1, "and speaks at 70%");
+  ctx.setTotal(1000);
+  await ctx.postExecute(agent);
+  assert.equal(ctx.restrictions.length, 0, "light never masks, however full the glass is");
+});
+
+await it("strict leans earlier than standard, and masks earlier still", async () => {
+  const speaks = async (level, percent) => {
+    const ctx = fakeContext();
+    apply(ctx, config({ budget: 1000, level }));
+    ctx.setTotal(percent * 10);
+    return (await ctx.postExecute(ctx.agent())).additionalContexts !== undefined;
+  };
+  const masks = async (level, percent) => {
+    const ctx = fakeContext();
+    apply(ctx, config({ budget: 1000, level }));
+    ctx.setTotal(percent * 10);
+    await ctx.postExecute(ctx.agent());
+    return ctx.restrictions.length > 0;
+  };
+
+  assert.equal(await speaks("standard", 30), false, "standard is quiet at 30%");
+  assert.equal(await speaks("light", 30), false, "light is quiet at 30%");
+  assert.equal(await speaks("strict", 30), true, "strict has already spoken at 30%");
+
+  assert.equal(await speaks("standard", 75), true, "standard speaks by 75%");
+  assert.equal(await speaks("light", 75), true, "and so does light");
+
+  assert.equal(await masks("standard", 60), false, "standard leaves the tool table alone at 60%");
+  assert.equal(await masks("strict", 60), true, "strict masks at 60%");
+  assert.equal(await masks("standard", 95), true, "standard masks once the budget is nearly gone");
+  assert.equal(await masks("light", 100), false, "light never masks");
+});
+
+await it("a hand-written tier list still overrides the level", async () => {
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 1000, level: "strict", tiers: [{ ratio: 0.95, text: "mine" }], maskTools: [] }));
+  const agent = ctx.agent();
+  ctx.setTotal(500);
+  assert.equal((await ctx.postExecute(agent)).additionalContexts, undefined, "the level's own tiers must not fire");
+  ctx.setTotal(960);
+  const result = await ctx.postExecute(agent);
+  assert.match(result.additionalContexts[0].content[0].text, /mine/u);
+});
+
+await it("every level is a name the schema accepts", () => {
+  for (const level of Object.keys(LEVELS)) {
+    assert.equal(Config({ level }).level, level, `${level} must survive validation`);
+  }
+  assert.throws(() => Config({ level: "turbo" }), "an unknown level must be rejected, not silently ignored");
 });
 
 console.log(`\ntoken-thrift: ${String(passed)} passed, ${String(failed)} failed`);
