@@ -726,6 +726,40 @@ await it("the pose is finite and bounded across the whole idle, including clicks
   const moved = poseRig(rig, box, { time: 2.4, pokeAge: undefined });
   assert.ok(Math.abs(moved[2][6]) + Math.abs(moved[2][7]) > 0.01, "the neck transform ignores its parents");
 });
+
+await it("every bone turns by an angle, not by a distance", () => {
+  // The failure this guards against actually happened. `poseRig` computes a greeting
+  // "lift" as a *distance* — box height times 0.008, about four pixels on a chibi —
+  // and it was being subtracted from the neck's rotation as well. Four pixels read as
+  // radians is 83 degrees, so the greeting folded the character's head onto its
+  // shoulder for the whole three seconds it played. Nothing caught it: the result is
+  // finite and bounded, and the test above asks only for those two things.
+  //
+  // A realistic box, because the size of the leak is proportional to it — a small
+  // synthetic box would have hidden this behind the threshold.
+  const rig = buildRig(syntheticProfile(0.6, 0.18, 0.8, 10));
+  const box = [0, 0, 400, 500];
+  const turned = (matrix) => Math.abs(Math.atan2(matrix[1], matrix[0]) * (180 / Math.PI));
+  let worst = 0;
+  let where = "nowhere";
+  const check = (label, state) => {
+    poseRig(rig, box, state).forEach((matrix, index) => {
+      const degrees = turned(matrix);
+      if (degrees > worst) {
+        worst = degrees;
+        where = `${label}, bone ${String(index)}`;
+      }
+    });
+  };
+  for (let step = 0; step <= 200; step++) {
+    check("idle", { time: step * 0.04, pokeAge: undefined });
+    check("greet", { time: 0, pokeAge: undefined, greetAge: step * 0.0168 });
+    check("poke", { time: 3, pokeAge: step * 0.008 });
+  }
+  // Three bones, moved gently: the worst legitimate turn measured across all three
+  // animations is about twenty degrees.
+  assert.ok(worst < 45, `${where} turned ${worst.toFixed(1)} degrees — a distance is being added to an angle`);
+});
 //#endregion
 
 //#region 6 — the blink, against the spec it was taken from
