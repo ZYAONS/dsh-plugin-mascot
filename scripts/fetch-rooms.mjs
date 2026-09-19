@@ -103,7 +103,20 @@ for (const entry of entries) {
   for (const url of entry.urls ?? []) {
     const got = await grab(url);
     if (got === undefined) continue;
-    writeFileSync(join(artDir, `room-${entry.character}.${got.extension}`), got.buffer);
+    const target = join(artDir, `room-${entry.character}.${got.extension}`);
+    try {
+      writeFileSync(target, got.buffer);
+    } catch (error) {
+      // A read-only file stops one character, not the run. Worth naming, because the
+      // failure looks like "the download did not work" when it is really "the file is
+      // locked" — and a read-only image is exactly what lands here after a copy from a
+      // read-only source.
+      console.error(`        写不进去（${error instanceof Error ? error.message : String(error)}）`);
+      console.error(`        多半是这个文件被占用或只读：${target}`);
+      failed += 1;
+      done = true;
+      break;
+    }
     console.log(`        ${String(Math.round(got.buffer.length / 1024))} KB → room-${entry.character}.${got.extension}`);
     written += 1;
     done = true;
