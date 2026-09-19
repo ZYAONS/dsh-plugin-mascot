@@ -656,6 +656,26 @@ await it("the art route stays behind the session, and the console is served from
   assert.match(String(asset.headers["content-type"]), /javascript/u, "with a script content type");
 
 //#region 5b — a character's own backdrop
+//#region 5b — the backdrop declaration
+await it("every declared backdrop names a character that exists, and says which set it is", () => {
+  // The declaration is what `npm run fetch-rooms` downloads from, and the host looks a
+  // backdrop up by the character id in its filename. An entry for a character that is not
+  // in the index would download a file nothing ever asks for, and nobody would notice.
+  const index = JSON.parse(readFileSync(join(root, "art", "index.json"), "utf8"));
+  const ids = new Set(index.characters.map((entry) => entry.id));
+  const declaration = JSON.parse(readFileSync(join(root, "art", "rooms.json"), "utf8"));
+  assert.ok(Array.isArray(declaration.rooms) && declaration.rooms.length > 0, "the declaration must declare something");
+  for (const entry of declaration.rooms) {
+    assert.ok(ids.has(entry.character), `${entry.character} is not a character in art/index.json`);
+    assert.ok(typeof entry.set === "string" && entry.set !== "", `${entry.character} must name the furniture set it uses`);
+    assert.ok(typeof entry.source === "string" && entry.source !== "", `${entry.character} must cite where the image comes from`);
+    // `operatorSet: false` is a claim, and it has to be spelled out rather than omitted:
+    // "this is not actually their set" is the sort of thing a reader should not have to infer.
+    assert.equal(typeof entry.operatorSet, "boolean", `${entry.character} must say whether the set is theirs or a thematic match`);
+    assert.ok(Array.isArray(entry.urls), `${entry.character} must have a urls list (empty is fine when the file is already local)`);
+  }
+});
+//#endregion
 await it("a backdrop is picked up by character id, and nothing else in the directory is", async () => {  // The plugin draws a room for every character. This is the escape hatch for a machine that
   // has the official furniture art and wants to use it: the picture lives in `art/`, which is
   // gitignored, so the repository still ships nothing it does not own.

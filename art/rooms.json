@@ -1,13 +1,35 @@
 {
-  "note": "角色背景图的声明。每张都是官方的家具套装素材，由 `npm run fetch-rooms` 下载到本机 —— 仓库里一张都不带（art/ 已 gitignore，npm test 也会拦）。character 是 art/index.json 里的角色 id，文件名必须是 room-<id>.<扩展名>，宿主按这个名字找（lib/index.js 的 readRooms）。urls 按顺序尝试，第一个成功的就用。operatorSet: false 表示这套家具不是为这个角色出的，只是同题材。",
+  "note": "角色背景图的声明。每张都是鹰角网络的官方家具套装素材，由 `npm run fetch-rooms` 下载到本机 —— 仓库里一张都不带（art/ 已 gitignore，npm test 也会拦）。character 是 art/index.json 里的角色 id，文件名必须是 room-<id>.<扩展名>，宿主按这个名字找（lib/index.js 的 readRooms）。urls 按顺序尝试，第一个成功的就用。operatorSet: false 表示这套家具不是专为这个角色出的，只是同题材/同阵营。屋里的角色站在画面中央偏下，所以用 preview 横幅比单件家具图合适。",
   "rooms": [
     {
       "character": "closure",
       "name": "可露希尔",
       "set": "可露希尔的万能空间",
+      "setLatin": "Closure's All-purpose Space",
       "operatorSet": true,
-      "source": "https://wiki.biligame.com/arknights/?curid=126577",
+      "source": "官方家具预告图",
+      "note": "本人套装。wiki.gg 上还没有这一页，没有可下载的地址 —— 图已经在本机。",
       "urls": []
+    },
+    {
+      "character": "muelsyse",
+      "name": "缪尔赛思",
+      "set": "莱茵生命生态园",
+      "setLatin": "Rhine Tech Eco-Garden",
+      "operatorSet": false,
+      "source": "https://arknights.wiki.gg/wiki/Rhine_Tech_Eco-Garden",
+      "note": "莱茵生命的园区，同阵营。缪尔赛思本人没有专属家具套装。",
+      "urls": ["https://arknights.wiki.gg/images/Rhine_Tech_Eco-Garden_preview.png"]
+    },
+    {
+      "character": "dusk",
+      "name": "夕",
+      "set": "丹青阁",
+      "setLatin": "Tan-Ch'ing Court",
+      "operatorSet": false,
+      "source": "https://arknights.wiki.gg/wiki/Tan-Ch%27ing_Court",
+      "note": "丹青即绘画，夕是画家，也在炎国/岁相一线。",
+      "urls": ["https://arknights.wiki.gg/images/Tan-Ch%27ing_Court_preview.png"]
     }
   ]
 }
