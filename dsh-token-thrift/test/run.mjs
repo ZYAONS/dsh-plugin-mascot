@@ -683,5 +683,64 @@ await it("the bar's colour turns before the number does", () => {
   assert.equal(client.tone(undefined), "#5aa9e6", "an unknown ratio must not throw");
 });
 
+await it("the panel is a control surface, not a read-out", () => {
+  // The controls are the reason to open it. A panel you have to leave in order to act on
+  // is a panel you stop opening, so all three things worth doing live in it: lean harder,
+  // give it room, and let a session be told again.
+  //
+  // Rendered with the state already loaded and already open, by seeding the hook queue —
+  // the panel returns null until its first poll lands, so rendering it for real would
+  // assert nothing at all.
+  const loaded = {
+    ok: true, enabled: true, budget: 1000, level: "standard", maskRatio: 0.9,
+    tiers: [0.4, 0.7, 0.9], maskTools: ["workflow"], countCache: true, maxReminders: 6,
+    levels: ["off", "light", "standard", "strict"],
+    configured: { budget: 1000, level: "standard" }, overridden: { budget: false, level: false },
+    reports: [{ sessionId: "s1", at: 1, spent: 400, ratio: 0.4, masked: false, reminders: 1,
+      tiers: [0.4, 0.7, 0.9],
+      fired: [{ ratio: 0.4, at: 1 }, { ratio: 0.7, at: null }, { ratio: 0.9, at: null }] }],
+  };
+  const queue = [loaded, true];
+  const Hooks = {
+    createElement: (type, props, ...children) => ({
+      type,
+      props: props ?? {},
+      children: children.flat(Infinity).filter((child) => child !== null && child !== undefined && child !== false),
+    }),
+    useState: (initial) => [queue.length > 0 ? queue.shift() : initial, () => {}],
+    useEffect: () => {},
+    Fragment: Symbol.for("react.fragment"),
+  };
+  const rendered = registrations[0]
+    .factory((spec) => {
+      if (spec === "react") return Hooks;
+      throw new Error(`unexpected require(${spec})`);
+    })
+    .ThriftPanel({ sessionId: "s1" });
+
+  // Collected as pairs, because counting bare strings double-counts: the chip carries the
+  // current level's name too, so "standard" appears twice and a name-only filter sees five.
+  const found = [];
+  const walk = (node) => {
+    if (node === null || typeof node !== "object") return;
+    if (Array.isArray(node)) { node.forEach(walk); return; }
+    const cls = typeof node.props?.className === "string" ? node.props.className : undefined;
+    const text = typeof node.children?.[0] === "string" ? node.children[0] : undefined;
+    if (cls !== undefined) found.push({ cls, text });
+    (node.children ?? []).forEach(walk);
+  };
+  walk(rendered);
+
+  const levelButtons = found.filter((node) => node.cls === "dsh-thrift-level").map((node) => node.text).sort();
+  assert.deepEqual(levelButtons, ["light", "off", "standard", "strict"], "one button per level, labelled with the level");
+  assert.ok(found.some((node) => node.cls === "dsh-thrift-budget"), "the budget must be settable from the panel");
+  assert.ok(found.some((node) => node.cls === "dsh-thrift-apply"), "with a way to submit it");
+  assert.ok(found.some((node) => node.cls === "dsh-thrift-restore"), "and a way back to the file's value");
+  assert.ok(found.some((node) => node.cls === "dsh-thrift-reset"), "a session must be resettable from here too");
+  // It is still a read-out as well: the bar and the fired marks have to survive.
+  assert.ok(found.some((node) => node.cls === "dsh-thrift-track"), "the progress bar must stay");
+  assert.equal(found.filter((node) => node.cls === "dsh-thrift-tick").length, 3, "one mark per tier");
+});
+
 console.log(`\ntoken-thrift: ${String(passed)} passed, ${String(failed)} failed`);
 if (failed > 0) process.exit(1);
