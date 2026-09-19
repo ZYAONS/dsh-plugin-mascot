@@ -18,7 +18,8 @@
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -577,6 +578,34 @@ await it("the art route stays behind the session, and the console is served from
   const asset = await request(own, "/dsh-mascot/console/site/preview.js");
   assert.equal(asset.status, 200, "the console's own scripts are served");
   assert.match(String(asset.headers["content-type"]), /javascript/u, "with a script content type");
+
+//#region 5b — a character's own backdrop
+await it("a backdrop is picked up by character id, and nothing else in the directory is", async () => {
+  // The plugin draws a room for every character. This is the escape hatch for a machine that
+  // has the official furniture art and wants to use it: the picture lives in `art/`, which is
+  // gitignored, so the repository still ships nothing it does not own.
+  const dir = mkdtempSync(join(tmpdir(), "mascot-rooms-"));
+  // The look index has to be there or the route answers 404 before it ever looks for rooms.
+  copyFileSync(join(root, "art", "index.json"), join(dir, "index.json"));
+  const blank = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+  writeFileSync(join(dir, "room-closure.png"), blank);
+  writeFileSync(join(dir, "room-muelsyse.webp"), blank);
+  writeFileSync(join(dir, "room-Closure.WEBP"), blank, );
+  writeFileSync(join(dir, "room-closure.gif"), blank);
+  writeFileSync(join(dir, "room-.png"), blank);
+  writeFileSync(join(dir, "closure.png"), blank);
+
+  const payload = (await request(hostHarness({ config: { artDir: dir } }), "/dsh-mascot/api/looks")).json;
+  assert.equal(payload.ok, true);
+  assert.deepEqual(Object.keys(payload.rooms ?? {}).sort(), ["closure", "muelsyse"], "only `room-<id>.<image>`, and only real ids");
+  assert.equal(payload.rooms.closure, "room-Closure.WEBP", "and the preferred extension wins for a character with two");
+  assert.equal(payload.rooms.muelsyse, "room-muelsyse.webp");
+  // A machine with none is the ordinary case, and it must not read as an error.
+  const bare = mkdtempSync(join(tmpdir(), "mascot-rooms-bare-"));
+  copyFileSync(join(root, "art", "index.json"), join(bare, "index.json"));
+  assert.deepEqual((await request(hostHarness({ config: { artDir: bare } }), "/dsh-mascot/api/looks")).json.rooms, {}, "no backdrops is an empty map, not a missing one");
+});
+//#endregion
 
   // Containment, the same rule the art route follows.
   assert.equal((await request(own, "/dsh-mascot/console/../../package.json")).status, 404, "a traversal out of the console root does not resolve");
