@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token 节流 · 控制台</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="bar">
+  <h1>Token 节流</h1>
+  <p class="sub">dsh-token-thrift —— 花得聪明，而不只是卡住上限</p>
+  <div class="state" id="state">
+    <span class="dot" id="dot"></span>
+    <span id="state-text">连接中…</span>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>力度</h2>
+    <p class="hint" id="level-hint">档位和遮罩阈值必须一起动，所以这里给的是名字。</p>
+    <div class="levels" id="levels"></div>
+  </section>
+
+  <section class="card">
+    <h2>预算</h2>
+    <p class="hint">这个 token 数就是 100%。0 表示关闭。</p>
+    <div class="row">
+      <input type="number" id="budget" min="0" step="100000" placeholder="2000000">
+      <button id="apply" class="primary">应用</button>
+      <button id="restore">恢复配置</button>
+      <span class="configured" id="configured"></span>
+    </div>
+  </section>
+
+  <section class="card wide">
+    <h2>当前会话</h2>
+    <div id="current" class="current empty">还没有会话在花 token。</div>
+  </section>
+
+  <section class="card wide">
+    <h2>全部会话 <span class="count" id="count"></span></h2>
+    <div id="sessions" class="sessions"></div>
+  </section>
+
+  <section class="card wide">
+    <h2>状态接口</h2>
+    <p class="hint">面板和这个页面读的是同一个接口。展开可以看原始 JSON。</p>
+    <details>
+      <summary>GET /dsh-token-thrift/api/state</summary>
+      <pre id="raw"></pre>
+    </details>
+  </section>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>

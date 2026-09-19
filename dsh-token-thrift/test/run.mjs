@@ -58,7 +58,16 @@ function fakeContext({ projections = true, webServer = true } = {}) {
     setTotal(value) { total = value; },
     /** Make the next service read fail, to prove the hook degrades instead of throwing. */
     break() { broken = true; },
-    on(event, handler) { listeners.set(event, handler); },
+    /**
+     * `ctx.on` hands back a disposer, and the plugin now leans on that: it installs and
+     * removes the tool listener as the console switches the coach on and off. A fake that
+     * returned undefined made the removal a TypeError, which surfaced as this test hanging
+     * rather than failing.
+     */
+    on(event, handler) {
+      listeners.set(event, handler);
+      return () => listeners.delete(event);
+    },
     effect(callback) {
       const dispose = callback();
       return typeof dispose === "function" ? dispose : () => {};
@@ -373,21 +382,55 @@ await it("every level is a name the schema accepts", () => {
   assert.throws(() => Config({ level: "turbo" }), "an unknown level must be rejected, not silently ignored");
 });
 
-/** Drive a registered route the way the web server would, and return its answer. */
-function ask(route, url) {
-  return new Promise((resolve) => {
+/**
+ * Drive a registered route the way the web server would, and return its answer.
+ *
+ * The request is a real enough object for the handler's own contract: a method, a Host
+ * header for the authorization fallback, and an event emitter for the body.
+ */
+function ask(route, url, { method = "GET", body, host = "127.0.0.1:8080" } = {}) {
+  return new Promise((resolve, reject) => {
+    const listeners = new Map();
+    const req = {
+      url,
+      method,
+      headers: host === null ? {} : { host },
+      on(event, handler) {
+        listeners.set(event, handler);
+        return this;
+      },
+      destroy() {},
+    };
     const res = {
       status: 0,
+      headers: {},
       body: "",
-      writeHead(status) { this.status = status; },
-      end(text) { this.body = text; resolve(this); },
+      writeHead(status, headers) {
+        this.status = status;
+        this.headers = headers ?? {};
+      },
+      end(text) {
+        this.body = typeof text === "string" ? text : "";
+        resolve(this);
+      },
     };
-    route.handler({ url }, res);
+    // The handler runs synchronously up to its first await, and that is where the body
+    // listeners are attached — so firing `end` now is the same order the server uses.
+    //
+    // A handler that throws is rejected through rather than swallowed: swallowing it left
+    // the promise unsettled and the whole file hanging with no output, which is a much
+    // worse way to learn about a bug than a stack trace.
+    Promise.resolve(route.handler(req, res)).catch(reject);
+    if (body !== undefined) listeners.get("data")?.(JSON.stringify(body));
+    listeners.get("end")?.();
   });
 }
 
-// ---------------------------------------------------------------- the visualiser
-await it("the visualiser route answers with what the coach is doing", async () => {
+/** The parsed body of an answer, for the many assertions that only care about JSON. */
+const jsonOf = (answer) => JSON.parse(answer.body);
+
+// ---------------------------------------------------------------- the platform
+await it("the platform route answers with what the coach is doing", async () => {
   const ctx = fakeContext();
   apply(ctx, config({ budget: 1000, level: "strict" }));
   assert.equal(ctx.route?.path, "/dsh-token-thrift", "the state route must be claimed");
@@ -398,7 +441,7 @@ await it("the visualiser route answers with what the coach is doing", async () =
 
   const answer = await ask(ctx.route, "/dsh-token-thrift/api/state");
   assert.equal(answer.status, 200);
-  const payload = JSON.parse(answer.body);
+  const payload = jsonOf(answer);
   assert.equal(payload.ok, true);
   assert.equal(payload.enabled, true);
   assert.equal(payload.budget, 1000);
@@ -414,21 +457,123 @@ await it("the visualiser route answers with what the coach is doing", async () =
   // Fired or not is per tier, which is what makes a timeline drawable.
   assert.deepEqual(report.fired.map((tier) => tier.ratio), [0.25, 0.5, 0.7, 0.85]);
   assert.deepEqual(report.fired.map((tier) => tier.at !== null), [true, true, false, false]);
+  // And the report carries the list it was measured against, because the console can
+  // change the level afterwards and a fired mark only means something against its own list.
+  assert.deepEqual(report.tiers, [0.25, 0.5, 0.7, 0.85]);
 });
 
-await it("a disabled coach still answers, so the panel can say why", async () => {
+await it("the reported ratio follows the budget, not the last tool call", async () => {
+  // Changing the budget is the one interaction the console exists for. Reporting the ratio
+  // the coach computed at the previous tool call made that change look like it did nothing.
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 1000 }));
+  ctx.setTotal(400);
+  await ctx.postExecute(ctx.agent());
+  assert.equal(jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0].ratio, 0.4);
+
+  await ask(ctx.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { budget: 2000 } });
+  assert.equal(jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0].ratio, 0.2, "halving the budget halves the ratio");
+
+  await ask(ctx.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { budget: 0 } });
+  assert.equal(jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0].ratio, 0, "no budget, no ratio");
+});
+
+await it("the console can change the level, and the running coach follows", async () => {
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 1000, level: "light" }));
+  const agent = ctx.agent();
+
+  ctx.setTotal(300);
+  await ctx.postExecute(agent);
+  assert.equal(jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0].masked, false, "light never masks");
+
+  // Switch to strict from the console. No restart, no reload: the listener is a live
+  // thing, which is the difference between a screenshot and a platform.
+  const changed = await ask(ctx.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { level: "strict" } });
+  assert.equal(changed.status, 200);
+  const after = jsonOf(changed);
+  assert.equal(after.level, "strict");
+  assert.equal(after.maskRatio, 0.55);
+  assert.deepEqual(after.tiers, [0.25, 0.5, 0.7, 0.85]);
+  assert.deepEqual(after.overridden, { budget: false, level: true }, "the console must say what it changed");
+  assert.deepEqual(after.configured, { budget: 1000, level: "light" }, "and what the file still says");
+
+  await ctx.postExecute(agent);
+  const at30 = jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0];
+  // 300/1000 is past strict's first tier (25%) but not its mask threshold (55%).
+  assert.ok(at30.fired.some((tier) => tier.ratio === 0.25 && tier.at !== null), "the 25% tier fires now that strict is on");
+  assert.equal(at30.masked, false, "30% is still below strict's 55% mask threshold");
+
+  ctx.setTotal(600);
+  await ctx.postExecute(agent);
+  const at60 = jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0];
+  assert.equal(at60.masked, true, "60% is past it, so the tools are masked");
+  assert.ok(at60.fired.some((tier) => tier.ratio === 0.5 && tier.at !== null), "and the 50% tier fires");
+});
+
+await it("the console can turn a disabled coach on, and off again", async () => {
   const off = fakeContext();
   apply(off, config({ budget: 0 }));
-  const payload = JSON.parse((await ask(off.route, "/dsh-token-thrift/api/state")).body);
+  assert.equal(off.listeners.size, 0, "off still costs nothing");
+
+  const bad = await ask(off.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { level: "turbo" } });
+  assert.equal(bad.status, 400, "an unknown level must be refused, not silently ignored");
+  assert.equal(jsonOf(bad).error, "bad_level");
+  assert.equal(jsonOf(await ask(off.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { budget: -5 } })).error, "bad_budget");
+
+  const on = await ask(off.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { budget: 1000, level: "strict" } });
+  assert.equal(jsonOf(on).enabled, true);
+  assert.equal(off.listeners.size, 1, "turning it on from the console installs the listener");
+
+  off.setTotal(600);
+  assert.ok((await off.postExecute(off.agent())).additionalContexts?.length > 0, "and it now coaches");
+
+  await ask(off.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { budget: null, level: null } });
+  assert.equal(jsonOf(await ask(off.route, "/dsh-token-thrift/api/state")).enabled, false, "null restores the file's value");
+  assert.equal(off.listeners.size, 0, "and the listener goes away with it");
+});
+
+await it("a session can be reset, so the coach can be watched working twice", async () => {
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 100, level: "standard", tiers: [{ ratio: 0.5, text: "half" }], maskTools: [] }));
+  const agent = ctx.agent();
+  ctx.setTotal(60);
+
+  const first = await ctx.postExecute(agent);
+  assert.equal(first.additionalContexts?.length, 1, "the tier fires");
+  assert.equal((await ctx.postExecute(agent)).additionalContexts, undefined, "and only once per session");
+
+  const cleared = await ask(ctx.route, "/dsh-token-thrift/api/reset", { method: "POST", body: { sessionId: "current" } });
+  assert.equal(cleared.status, 200);
+  assert.deepEqual(jsonOf(cleared).reports, [], "the row is gone too");
+
+  const again = await ctx.postExecute(agent);
+  assert.equal(again.additionalContexts?.length, 1, "after a reset the same tier fires again");
+});
+
+await it("a disabled coach still answers, so the console can say why", async () => {
+  const off = fakeContext();
+  apply(off, config({ budget: 0 }));
+  const payload = jsonOf(await ask(off.route, "/dsh-token-thrift/api/state"));
   assert.equal(payload.ok, true);
-  assert.equal(payload.enabled, false, "the panel needs to distinguish off from broken");
+  assert.equal(payload.enabled, false, "the console needs to distinguish off from broken");
   assert.equal(payload.budget, 0);
   assert.deepEqual(payload.reports, []);
+  assert.deepEqual(payload.levels, ["off", "light", "standard", "strict"], "the console draws its buttons from this");
 
   // And `level: "off"` with a real budget is the same story.
   const levelled = fakeContext();
   apply(levelled, config({ budget: 1000, level: "off" }));
-  assert.equal(JSON.parse((await ask(levelled.route, "/dsh-token-thrift/api/state")).body).enabled, false);
+  assert.equal(jsonOf(await ask(levelled.route, "/dsh-token-thrift/api/state")).enabled, false);
+});
+
+await it("nothing gets in without the host's authority", async () => {
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 1000 }));
+  // No Host header and no Connection service: the loopback fallback refuses it.
+  assert.equal((await ask(ctx.route, "/dsh-token-thrift/api/state", { host: null })).status, 401);
+  assert.equal((await ask(ctx.route, "/dsh-token-thrift/api/settings", { method: "POST", host: null, body: { level: "off" } })).status, 401);
+  assert.equal((await ask(ctx.route, "/dsh-token-thrift/console/", { host: null })).status, 401);
 });
 
 await it("the state route is the only thing it serves", async () => {
@@ -437,7 +582,20 @@ await it("the state route is the only thing it serves", async () => {
   assert.equal((await ask(ctx.route, "/dsh-token-thrift/api/state")).status, 200);
   assert.equal((await ask(ctx.route, "/dsh-token-thrift/api/state?x=1")).status, 200, "a query string is not a different route");
   assert.equal((await ask(ctx.route, "/dsh-token-thrift/api/secret")).status, 404);
+  assert.equal((await ask(ctx.route, "/dsh-token-thrift/api/settings")).status, 405, "GET is not how settings change");
+  assert.equal((await ask(ctx.route, "/dsh-token-thrift/api/reset")).status, 405);
   assert.equal((await ask(ctx.route, "/dsh-token-thrift/")).status, 404);
+});
+
+await it("the console offers only its own files", async () => {
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 1000 }));
+  assert.equal((await ask(ctx.route, "/dsh-token-thrift/console/")).status, 200, "the index is served");
+  assert.equal((await ask(ctx.route, "/dsh-token-thrift/console/app.js")).status, 200);
+  assert.equal((await ask(ctx.route, "/dsh-token-thrift/console/app.css")).status, 200);
+  // Extensions outside the allowlist never reach the filesystem.
+  assert.equal((await ask(ctx.route, "/dsh-token-thrift/console/../../lib/index.js")).status, 404);
+  assert.equal((await ask(ctx.route, "/dsh-token-thrift/console/nope.js")).status, 404);
 });
 
 await it("a host with no web server still gets a working coach", async () => {

@@ -222,7 +222,10 @@ window.__ModuleLoader__.load({
 			const ratio = report.ratio ?? 0;
 			const colour = tone(ratio);
 			const fired = new Set((report.fired ?? []).filter((tier) => tier.at !== null).map((tier) => tier.ratio));
-			const marks = state.tiers ?? [];
+			// The report's own tier list, not the currently configured one: the console can
+			// change the level while a session runs, and a fired mark only means anything
+			// against the list it was measured with.
+			const marks = report.tiers ?? state.tiers ?? [];
 
 			return h("div", { className: "dsh-thrift-root", style: { "--dsh-thrift-tone": colour } },
 				open ? h("div", { className: "dsh-thrift-panel", role: "dialog", "aria-label": "Token 节流状态" },

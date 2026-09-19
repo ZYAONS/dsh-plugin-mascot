@@ -26,10 +26,17 @@
  * @module dsh-token-thrift
  */
 
+import { readFile } from "node:fs/promises";
+import { dirname, extname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import z from "@deepseek-ai/schemastery";
 
 /** The plugin's registry id; also the label stamped on every reminder it injects. */
 export const name = "token-thrift";
+
+/** The console lives beside `lib/`, so a `file:`-mounted plugin finds its own folder. */
+const CONSOLE_ROOT = resolve(dirname(dirname(fileURLToPath(import.meta.url))), "console");
 
 /**
  * What a reminder is stamped with.
@@ -266,59 +273,217 @@ function notice(text, summary) {
   };
 }
 
-/** Where the visualiser reads the coach's state. */
+/** Where the platform lives. */
 export const STATE_PATH = "/dsh-token-thrift";
 
-/** How many sessions the visualiser keeps. A GUI shows one; the rest are for looking back. */
+/** How many sessions the platform keeps. A GUI shows one; the rest are for looking back. */
 const REPORT_LIMIT = 8;
 
+/** What the console serves, by extension. */
+const CONSOLE_MIME = Object.freeze({
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+});
+
+/** A loopback Host is the fallback authority when no Connection service is composed. */
+const LOOPBACK_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/iu;
+
 /**
- * Publish what the coach knows, and answer the browser's questions about it.
+ * Decide whether a request may read or change the coach.
  *
- * The coach's state lives in a `WeakMap` keyed on the agent, which is the right shape for
- * the coach and useless to a GUI — nothing outside this module can reach it. So each step
- * also writes a plain snapshot into a small bounded map keyed by session id, and a route
- * hands those to the browser half.
- *
- * Registered even when the coach is off: a panel that says "disabled, budget is 0" is
- * worth more than a panel that looks broken.
+ * A composed web host routes every browser request through Connection, whose signed
+ * cookie is the authority; when that service is absent this falls back to demanding a
+ * loopback Host header, which is strictly narrower than the web server's default bind.
+ * Same rule as the mascot's, deliberately: two plugins on one host should not disagree
+ * about who is allowed in.
  *
  * @param ctx - plugin context.
- * @param meta - `{ enabled, budget, level, maskRatio, tiers }`, what the coach is doing.
- * @returns the publish function the coach calls after each step.
+ * @param req - incoming request.
+ * @returns true when the request may proceed.
  */
-function serveState(ctx, meta) {
-  /** session id -> the last snapshot for it. Insertion-ordered, oldest evicted first. */
-  const reports = new Map();
+function authorized(ctx, req) {
+  const connection = ctx.get("connection");
+  if (connection !== undefined && typeof connection.isAuthenticated === "function") {
+    return connection.isAuthenticated(req) === true;
+  }
+  const host = req.headers?.host;
+  return typeof host === "string" && LOOPBACK_HOST.test(host);
+}
 
-  const publish = (sessionId, report) => {
-    reports.delete(sessionId);
-    reports.set(sessionId, report);
-    while (reports.size > REPORT_LIMIT) reports.delete(reports.keys().next().value);
+/**
+ * The coach's effective settings, config first and console overrides on top.
+ *
+ * Rebuilt on demand rather than computed once at load, because the console changes it
+ * while the coach is running: a coach that only reads its level at startup would need a
+ * restart to be told anything, which is not a platform.
+ *
+ * @param config - validated {@link Config}.
+ * @param override - `{ level, budget }`, either of which may be null.
+ */
+function settingsFor(config, override) {
+  const level = override.level ?? config.level;
+  const budget = override.budget ?? (Number.isFinite(config.budget) ? config.budget : 0);
+  const preset = LEVELS[level] ?? LEVELS.standard;
+  const wanted = Array.isArray(config.tiers) && config.tiers.length > 0 ? config.tiers : preset.tiers;
+  const tiers = [...wanted]
+    .filter((tier) => Number.isFinite(tier.ratio) && tier.ratio > 0 && typeof tier.text === "string" && tier.text !== "")
+    .sort((a, b) => a.ratio - b.ratio);
+  // `Infinity` for "never": `ratio >= Infinity` is false for every real ratio, so the
+  // mask simply never fires, and the comparison below stays a single expression.
+  const fallback = preset.maskRatio ?? Number.POSITIVE_INFINITY;
+  return {
+    level,
+    budget,
+    tiers,
+    maskRatio: Number.isFinite(config.maskRatio) && config.maskRatio > 0 ? config.maskRatio : fallback,
+    maskTools: config.maskTools,
+    countCache: config.countCache,
+    maxReminders: config.maxReminders,
+    enabled: budget > 0 && tiers.length > 0,
+  };
+}
+
+/**
+ * Serve the state the panel and the console read, and the console's own files.
+ *
+ * The coach's state lives in a `WeakMap` keyed on the agent, which is the right shape for
+ * the coach and useless to anything else — nothing outside this module can reach it. So
+ * each step also writes a plain snapshot into a small bounded map keyed by session id.
+ *
+ * Registered even when the coach is off: a console that says "disabled, budget is 0" — and
+ * can turn it on — is worth more than one that looks broken.
+ *
+ * @param ctx - plugin context.
+ * @param deps - `{ settings, override, publish, reset }`.
+ * @returns nothing; the routes are owned by the plugin's effect scope.
+ */
+function servePlatform(ctx, deps) {
+  const webServer = ctx.get("webServer");
+  if (webServer === undefined || typeof webServer.register !== "function") return;
+
+  const json = (res, status, payload) => {
+    const body = JSON.stringify(payload);
+    res.writeHead(status, {
+      "content-type": "application/json; charset=utf-8",
+      "content-length": Buffer.byteLength(body),
+      "cache-control": "no-store",
+    });
+    res.end(body);
   };
 
-  const webServer = ctx.get("webServer");
-  if (webServer === undefined || typeof webServer.register !== "function") return publish;
+  /** Read a JSON body, capped so a stray request cannot be used to eat memory. */
+  const readBody = (req) => new Promise((resolve) => {
+    let text = "";
+    req.on("data", (chunk) => {
+      text += chunk;
+      if (text.length > 4096) req.destroy();
+    });
+    req.on("end", () => {
+      try {
+        resolve(text.length === 0 ? {} : JSON.parse(text));
+      } catch {
+        resolve(undefined);
+      }
+    });
+    req.on("error", () => resolve(undefined));
+  });
 
-  const handler = (req, res) => {
-    const path = String(req.url ?? "/").split("?")[0].replace(/\/+$/u, "");
-    // A browser asks for the snapshot; anything else is a 404 rather than a guess.
-    if (path !== `${STATE_PATH}/api/state`) {
-      res.writeHead(404, { "content-type": "application/json" });
-      res.end(JSON.stringify({ ok: false, error: "not_found" }));
+  const serveConsole = async (res, name) => {
+    const file = name === "" || name === "/" ? "index.html" : name.replace(/^\/+/u, "");
+    const full = resolve(CONSOLE_ROOT, file);
+    // Only the console's own files, whatever the URL said.
+    if (!full.startsWith(CONSOLE_ROOT)) {
+      json(res, 403, { ok: false, error: "forbidden", message: "控制台路径越界" });
       return;
     }
-    res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
-    res.end(JSON.stringify({ ok: true, ...meta, reports: [...reports.values()].reverse() }));
+    const type = CONSOLE_MIME[extname(full)];
+    if (type === undefined) {
+      json(res, 404, { ok: false, error: "not_found", message: `不支持的控制台资源：${file}` });
+      return;
+    }
+    try {
+      const body = await readFile(full);
+      res.writeHead(200, { "content-type": type, "content-length": body.length, "cache-control": "no-store" });
+      res.end(body);
+    } catch {
+      json(res, 404, {
+        ok: false,
+        error: "no_console",
+        message: "控制台文件不在这个安装里——它属于源码仓库，不属于运行时",
+      });
+    }
+  };
+
+  const handler = async (req, res) => {
+    const url = new URL(String(req.url ?? "/"), "http://localhost");
+    const path = url.pathname.replace(/\/+$/u, "");
+    const method = String(req.method ?? "GET").toUpperCase();
+
+    // The console is served from this same origin, which is the whole point: the panel
+    // and the page then read the state without a cross-origin request.
+    if (path === `${STATE_PATH}/console` || path.startsWith(`${STATE_PATH}/console/`)) {
+      if (!authorized(ctx, req)) {
+        json(res, 401, { ok: false, error: "unauthorized", message: "需要 DSH Web 会话认证" });
+        return;
+      }
+      await serveConsole(res, path.slice(`${STATE_PATH}/console`.length));
+      return;
+    }
+
+    if (!authorized(ctx, req)) {
+      json(res, 401, { ok: false, error: "unauthorized", message: "需要 DSH Web 会话认证" });
+      return;
+    }
+
+    if (path === `${STATE_PATH}/api/state`) {
+      if (method !== "GET") {
+        json(res, 405, { ok: false, error: "method_not_allowed", message: "只支持 GET" });
+        return;
+      }
+      json(res, 200, { ok: true, ...deps.snapshot() });
+      return;
+    }
+
+    if (path === `${STATE_PATH}/api/settings`) {
+      if (method !== "POST") {
+        json(res, 405, { ok: false, error: "method_not_allowed", message: "只支持 POST" });
+        return;
+      }
+      const body = await readBody(req);
+      if (body === undefined) {
+        json(res, 400, { ok: false, error: "bad_json", message: "请求体不是 JSON" });
+        return;
+      }
+      const applied = deps.applySettings(body);
+      if (applied.error !== undefined) {
+        json(res, 400, { ok: false, ...applied });
+        return;
+      }
+      json(res, 200, { ok: true, ...deps.snapshot() });
+      return;
+    }
+
+    if (path === `${STATE_PATH}/api/reset`) {
+      if (method !== "POST") {
+        json(res, 405, { ok: false, error: "method_not_allowed", message: "只支持 POST" });
+        return;
+      }
+      const body = (await readBody(req)) ?? {};
+      deps.reset(typeof body.sessionId === "string" ? body.sessionId : undefined);
+      json(res, 200, { ok: true, ...deps.snapshot() });
+      return;
+    }
+
+    json(res, 404, { ok: false, error: "not_found", message: `未知路由 ${path}` });
   };
 
   try {
     ctx.effect(() => webServer.register({ kind: "prefix", path: STATE_PATH, handler }));
   } catch {
     // No route seam, or the context is already disposed. The coach is unaffected: this
-    // whole function exists only to draw it.
+    // whole function exists only to draw and drive it.
   }
-  return publish;
 }
 
 /**
@@ -328,47 +493,134 @@ function serveState(ctx, meta) {
  * @param config - validated {@link Config}.
  */
 export function apply(ctx, config) {
-  const budget = Number.isFinite(config.budget) ? config.budget : 0;
-  const preset = LEVELS[config.level] ?? LEVELS.standard;
-  const wanted = Array.isArray(config.tiers) && config.tiers.length > 0 ? config.tiers : preset.tiers;
-  const tiers = [...wanted]
-    .filter((tier) => Number.isFinite(tier.ratio) && tier.ratio > 0 && typeof tier.text === "string" && tier.text !== "")
-    .sort((a, b) => a.ratio - b.ratio);
+  /** Console overrides on top of the config. In memory only: a restart restores the file. */
+  const override = { level: null, budget: null };
+  let settings = settingsFor(config, override);
 
-  // `Infinity` for "never": `ratio >= Infinity` is false for every real ratio, so the
-  // mask simply never fires, and the comparison below stays a single expression.
-  const maskRatio = Number.isFinite(config.maskRatio) && config.maskRatio > 0
-    ? config.maskRatio
-    : (preset.maskRatio ?? Number.POSITIVE_INFINITY);
-
-  const enabled = budget > 0 && tiers.length > 0;
-  const publish = serveState(ctx, {
-    enabled,
-    budget,
-    level: config.level,
-    // `Infinity` does not survive JSON; null is the wire's word for "never".
-    maskRatio: Number.isFinite(maskRatio) ? maskRatio : null,
-    tiers: tiers.map((tier) => tier.ratio),
-    maskTools: config.maskTools,
-    countCache: config.countCache,
-    maxReminders: config.maxReminders,
-  });
-
-  // Off is off: no budget means no ratios, no reminders, no masking, no listeners that
-  // could surprise someone who mounted the plugin and left it at its defaults.
-  if (!enabled) return;
+  /** session id -> the last snapshot for it. Insertion-ordered, oldest evicted first. */
+  const reports = new Map();
 
   /** Per-agent progress. A WeakMap so a finished agent's record goes away with it. */
   const spoken = new WeakMap();
 
+  /**
+   * The same records, reachable by iteration.
+   *
+   * A `WeakMap` cannot be walked — that is what makes it the right container for the coach
+   * — but the console's reset button has to find a session's record, so the ids are kept
+   * beside it. Both maps hold the agent weakly, so a finished agent still goes away; only
+   * the small state object outlives it.
+   */
+  const spokenKeys = new Map();
+
   const stateOf = (agent) => {
     let state = spoken.get(agent);
     if (state === undefined) {
-      // `firedAt` is for the visualiser only: the coach itself just needs to know that a
+      // `firedAt` is for the platform only: the coach itself just needs to know that a
       // tier has been delivered, but "when" is what makes a timeline readable.
       state = { delivered: new Set(), firedAt: new Map(), masked: false, reminders: 0 };
       spoken.set(agent, state);
     }
+    return state;
+  };
+
+  const publish = (sessionId, report) => {
+    reports.delete(sessionId);
+    reports.set(sessionId, report);
+    while (reports.size > REPORT_LIMIT) reports.delete(reports.keys().next().value);
+  };
+
+  /** Everything the panel and the console read, in one shape. */
+  const snapshot = () => ({
+    enabled: settings.enabled,
+    budget: settings.budget,
+    level: settings.level,
+    // `Infinity` does not survive JSON; null is the wire's word for "never".
+    maskRatio: Number.isFinite(settings.maskRatio) ? settings.maskRatio : null,
+    tiers: settings.tiers.map((tier) => tier.ratio),
+    maskTools: settings.maskTools,
+    countCache: settings.countCache,
+    maxReminders: settings.maxReminders,
+    // What the console needs to draw its own controls: the file's values, and whether
+    // what you are looking at is the file or something someone clicked.
+    configured: { budget: config.budget, level: config.level },
+    overridden: { budget: override.budget !== null, level: override.level !== null },
+    levels: Object.keys(LEVELS),
+    // The ratio is recomputed here rather than taken from the stored report, because the
+    // console can change the budget between two tool calls. Reporting the stale one made
+    // changing the budget look like it had done nothing at all — the one interaction the
+    // page exists for. `spent` and `budget` are both known, so the ratio is a fact.
+    reports: [...reports.values()].reverse().map((report) => ({
+      ...report,
+      ratio: settings.budget > 0 ? Math.round((report.spent / settings.budget) * 10000) / 10000 : 0,
+    })),
+  });
+
+  /**
+   * Turn the coach on or off to match the current settings.
+   *
+   * `ctx.on` is called and disposed here rather than once at load, because the console can
+   * change the budget while the session is running: switching the coach on should not need
+   * a restart, and leaving it off should still cost nothing. The original reason for the
+   * early return survives — a disabled plugin registers no listeners.
+   */
+  let stopListening = null;
+  const sync = () => {
+    if (settings.enabled && stopListening === null) {
+      stopListening = ctx.on("tools/post-execute", listener);
+    } else if (!settings.enabled && stopListening !== null) {
+      stopListening();
+      stopListening = null;
+    }
+  };
+
+  /** Apply a console change and make the running coach match it. */
+  const applySettings = (body) => {
+    if (body.level !== undefined) {
+      if (body.level === null) override.level = null;
+      else if (typeof body.level === "string" && LEVELS[body.level] !== undefined) override.level = body.level;
+      else return { error: "bad_level", message: `没有这个档位：${String(body.level)}` };
+    }
+    if (body.budget !== undefined) {
+      if (body.budget === null) override.budget = null;
+      else if (typeof body.budget === "number" && Number.isFinite(body.budget) && body.budget >= 0) override.budget = body.budget;
+      else return { error: "bad_budget", message: "budget 必须是非负有限数，或 null 表示恢复配置" };
+    }
+    settings = settingsFor(config, override);
+    sync();
+    return {};
+  };
+
+  /**
+   * Forget what a session has been told.
+   *
+   * The tiers fire once per session by design, so without this there is no way to watch
+   * the coach work twice — and a platform you cannot re-run is a screenshot.
+   */
+  const reset = (sessionId) => {
+    if (sessionId === undefined) {
+      spokenKeys.clear();
+      reports.clear();
+      return;
+    }
+    for (const [agent, state] of spokenKeys) {
+      if (state.sessionId === sessionId) {
+        state.delivered.clear();
+        state.firedAt.clear();
+        state.masked = false;
+        state.reminders = 0;
+      }
+    }
+    reports.delete(sessionId);
+  };
+
+  /**
+   * The agents seen so far, so `reset` can reach them.
+   */
+  const knownState = (agent, sessionId) => {
+    const state = stateOf(agent);
+    state.sessionId = sessionId;
+    if (!spokenKeys.has(agent)) spokenKeys.set(agent, state);
     return state;
   };
 
@@ -384,20 +636,20 @@ export function apply(ctx, config) {
     const agent = exec?.agent;
     if (agent === undefined) return downstream;
 
-    const spent = spentTokens(ctx, exec.session ?? agent.session ?? agent, config.countCache);
-    const ratio = spent / budget;
-    const state = stateOf(agent);
+    const spent = spentTokens(ctx, exec.session ?? agent.session ?? agent, settings.countCache);
+    const ratio = spent / settings.budget;
     // The id the GUI can match on. Falls back rather than throwing: a host without a
-    // session id still gets a working coach, just an unlabelled row in the visualiser.
+    // session id still gets a working coach, just an unlabelled row in the platform.
     const sessionId = String(exec?.session?.id ?? agent?.session?.id ?? agent?.id ?? "current");
+    const state = knownState(agent, sessionId);
 
     // Masking first: it changes what the next step may call, and doing it after a reminder
     // would let one more fan-out start before the mask lands.
-    if (!state.masked && config.maskTools.length > 0 && ratio >= maskRatio) {
+    if (!state.masked && settings.maskTools.length > 0 && ratio >= settings.maskRatio) {
       state.masked = true;
       try {
         // Scoped to this agent, so a sibling working on something else keeps its tools.
-        agent.ctx?.tools?.restrict?.({ deny: config.maskTools });
+        agent.ctx?.tools?.restrict?.({ deny: settings.maskTools });
       } catch {
         // A host without the restriction seam still gets the advice below; refusing to
         // continue over an unavailable optimisation would be the wrong trade.
@@ -407,9 +659,9 @@ export function apply(ctx, config) {
 
     // The cap is checked here rather than with an early return above, so that a capped
     // session still reports where it got to.
-    const due = state.reminders >= config.maxReminders
+    const due = state.reminders >= settings.maxReminders
       ? []
-      : tiers.filter((tier) => ratio >= tier.ratio && !state.delivered.has(tier.ratio));
+      : settings.tiers.filter((tier) => ratio >= tier.ratio && !state.delivered.has(tier.ratio));
     for (const tier of due) {
       state.delivered.add(tier.ratio);
       state.firedAt.set(tier.ratio, Date.now());
@@ -423,8 +675,12 @@ export function apply(ctx, config) {
       ratio: Math.round(ratio * 10000) / 10000,
       masked: state.masked,
       reminders: state.reminders,
+      // The tier list *this report was measured against*, not whatever is configured now.
+      // The console can change the level mid-session, and drawing a report's fired marks
+      // against a list it never saw claims tiers fired that never did.
+      tiers: settings.tiers.map((tier) => tier.ratio),
       // Every configured tier, fired or not, so the GUI can draw what is still ahead.
-      fired: tiers.map((tier) => ({ ratio: tier.ratio, at: state.firedAt.get(tier.ratio) ?? null })),
+      fired: settings.tiers.map((tier) => ({ ratio: tier.ratio, at: state.firedAt.get(tier.ratio) ?? null })),
     });
 
     if (due.length === 0) return downstream;
@@ -439,7 +695,8 @@ export function apply(ctx, config) {
     };
   }
 
-  ctx.on("tools/post-execute", async (exec, _result, next) => {
+  /** The hook, wrapped so nothing it does can fail a tool call. */
+  async function listener(exec, _result, next) {
     const downstream = await next();
     try {
       return advise(exec, downstream);
@@ -450,5 +707,10 @@ export function apply(ctx, config) {
       // always the right trade.
       return downstream;
     }
-  });
+  }
+
+  // The platform is served whatever the coach is doing, so it can be turned on from there.
+  servePlatform(ctx, { snapshot, applySettings, reset });
+  sync();
 }
+
