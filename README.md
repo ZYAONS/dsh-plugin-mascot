@@ -473,8 +473,27 @@ Any frame that is a GIF or an animated WebP simply plays — the browser handles
 The choice is stored in localStorage. With the system's "reduce motion" preference
 set, every animation is switched off.
 
-While open, the pill under the sprite shows the balance. If the lookup fails it
-reads "点我 Token / 余额" instead of pretending to know.
+The pill under the sprite shows three figures, and only the ones that can be measured:
+
+| | Where it comes from |
+| --- | --- |
+| **余额** `¥128.42` | the host asks DeepSeek; the API key never reaches the browser |
+| **命中** `89.0%` | this session's cache hit rate (cache reads / billed input) |
+| **今天** `1.2M` | Tokens spent today, on this machine |
+
+If the balance lookup fails it reads "点我 Token / 余额" instead of pretending to know.
+
+**Why "today" needs the host to keep books.** The browser knows what *this session* spent —
+the session projection says so. Nothing knows what the *day* spent: a session that ended an
+hour ago took its numbers with it, and the next one starts at zero. So the host keeps a
+daily ledger (`.cache/usage-daily.json`, gitignored).
+
+The rule is **high-water mark per session, difference added to the day**. The browser reports
+a cumulative session total, repeatedly, so re-reporting the same number has to add nothing —
+otherwise a panel polling every two seconds would inflate the day at its own polling rate,
+and the number would still look like a measurement. A total that goes backwards (a reused id,
+a reset projection) never subtracts; the mark simply holds. Crossing midnight resets it:
+yesterday's numbers are not today's.
 
 ---
 

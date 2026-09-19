@@ -18,7 +18,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -300,7 +300,7 @@ function hostHarness({ apiKey = "sk-test-secret", authenticated = true, config }
 }
 
 /** Drive one request through the claimed route and capture the response. */
-async function request(harness, path, { method = "GET", headers = {} } = {}) {
+async function request(harness, path, { method = "GET", headers = {}, body } = {}) {
   const captured = { status: undefined, headers: undefined, body: "" };
   const res = {
     writeHead(status, responseHeaders) {
@@ -311,7 +311,29 @@ async function request(harness, path, { method = "GET", headers = {} } = {}) {
       captured.body = body ?? "";
     },
   };
-  await harness.route.current.handler({ method, url: path, headers: { host: "127.0.0.1:43120", ...headers } }, res);
+  // A request that carries a body needs somewhere to carry it: the handler reads the
+  // stream, so the fake has to have one. Without this a POST looks like a handler that
+  // threw, and the test blames the wrong thing.
+  const waiting = new Map();
+  const req = {
+    method,
+    url: path,
+    headers: { host: "127.0.0.1:43120", ...headers },
+    on(event, handler) {
+      waiting.set(event, handler);
+      return this;
+    },
+    destroy() {},
+  };
+  const pending = harness.route.current.handler(req, res);
+  if (body !== undefined) {
+    // The handler registers its readers synchronously, before its first await.
+    queueMicrotask(() => {
+      waiting.get("data")?.(body);
+      waiting.get("end")?.();
+    });
+  }
+  await pending;
   // The art route answers with a PNG buffer, so only JSON-looking bodies parse.
   const json = typeof captured.body === "string" && captured.body.startsWith("{") ? JSON.parse(captured.body) : undefined;
   return { ...captured, json };
@@ -417,7 +439,55 @@ await it("the ignore rules cover every path downloaded artwork can land in", () 
   // precision is asserted in the guard above instead.
   assert.ok(spawnSync("git", ["check-ignore", "-q", "art/room-closure.gif"], { cwd: root }).status === 0, "the exception must not reach an extension the host will not serve");
 });
+//#region 5c — today's spend
+await it("the day's total counts each session's growth once, and never its repetition", async () => {
+  // The panel reports a *cumulative* session total, and it reports it repeatedly. If a
+  // repeated report added anything, the day would inflate at the polling rate and the
+  // number would look like a measurement while being an artefact.
+  const harness = hostHarness();
+  const ledger = join(root, ".cache", "usage-daily.json");
+  const before = existsSync(ledger) ? readFileSync(ledger, "utf8") : undefined;
+  try {
+    const post = (body) => request(harness, "/dsh-mascot/api/usage", { method: "POST", body: JSON.stringify(body) });
+    const read = async () => (await request(harness, "/dsh-mascot/api/usage")).json.today;
+    const start = await read();
+
+    await post({ sessionId: "ses_a", total: 100 });
+    assert.equal(await read(), start + 100, "the first report is counted in full");
+    await post({ sessionId: "ses_a", total: 100 });
+    await post({ sessionId: "ses_a", total: 100 });
+    assert.equal(await read(), start + 100, "re-reporting the same total must add nothing");
+
+    await post({ sessionId: "ses_a", total: 250 });
+    assert.equal(await read(), start + 250, "only the growth is added");
+
+    await post({ sessionId: "ses_b", total: 75 });
+    assert.equal(await read(), start + 325, "a second session adds on top");
+
+    // A total that goes backwards is a reused id or a reset projection, not negative spend.
+    // The high-water mark survives it, so the day is not docked and the session's next real
+    // growth is still measured from where it had actually reached.
+    await post({ sessionId: "ses_a", total: 40 });
+    assert.equal(await read(), start + 325, "a smaller total must not subtract");
+    await post({ sessionId: "ses_a", total: 300 });
+    assert.equal(await read(), start + 375, "and the growth past the high-water mark still counts, once");
+
+    // Nonsense is ignored rather than recorded.
+    await post({ sessionId: "ses_c", total: -5 });
+    await post({ sessionId: "ses_c", total: "lots" });
+    await post({ sessionId: "", total: 999 });
+    assert.equal(await read(), start + 375, "only real, growing, attributed numbers count");
+
+    // And the ledger is the only thing POST is for.
+    assert.equal((await request(harness, "/dsh-mascot/api/balance", { method: "POST" })).status, 405, "the other routes stay read-only");
+  } finally {
+    // Put the machine's own ledger back: this test writes the real cache file.
+    if (before === undefined) rmSync(ledger, { force: true });
+    else writeFileSync(ledger, before);
+  }
+});
 //#endregion
+
 await it("the host half claims one prefix route at the configured path", () => {
   const harness = hostHarness();
   assert.equal(harness.route.current.kind, "prefix");
