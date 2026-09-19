@@ -43,10 +43,12 @@ window.__ModuleLoader__.load({
   font-size: 11px; line-height: 1.5; color: #e8eef7; font-variant-numeric: tabular-nums; }
 .dsh-thrift-chip { pointer-events: auto; display: inline-flex; align-items: center; gap: 8px;
   padding: 4px 11px 4px 9px; border-radius: 999px; cursor: pointer; user-select: none;
-  background: rgba(12, 15, 22, .86); border: 1px solid rgba(255,255,255,.14);
-  box-shadow: 0 4px 14px rgba(0,0,0,.38); backdrop-filter: blur(10px); white-space: nowrap;
-  transition: border-color .16s ease, transform .16s ease; }
-.dsh-thrift-chip:hover { border-color: var(--dsh-thrift-tone); transform: translateY(-1px); }
+  /* Translucent on purpose: it sits over whatever the user is reading, and an opaque pill
+     in the corner is a thing you close rather than a thing you glance at. */
+  background: rgba(10, 13, 19, .38); border: 1px solid rgba(255,255,255,.16);
+  box-shadow: 0 4px 16px rgba(0,0,0,.25); backdrop-filter: blur(14px) saturate(1.25);
+  white-space: nowrap; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+.dsh-thrift-chip:hover { border-color: var(--dsh-thrift-tone); background: rgba(10, 13, 19, .6); transform: translateY(-1px); }
 .dsh-thrift-chip[data-open="1"] { border-color: var(--dsh-thrift-tone); }
 .dsh-thrift-chip b { color: var(--dsh-thrift-tone); font-weight: 700; letter-spacing: .02em; }
 .dsh-thrift-chip em { font-style: normal; opacity: .58; }
@@ -55,10 +57,10 @@ window.__ModuleLoader__.load({
 .dsh-thrift-bar > i { display: block; height: 100%; width: 0; background: var(--dsh-thrift-tone);
   border-radius: 999px; transition: width .35s ease; }
 .dsh-thrift-panel { pointer-events: auto; position: absolute; left: 0; bottom: calc(100% + 10px);
-  width: 336px; padding: 13px 14px 12px; border-radius: 12px;
-  background: linear-gradient(158deg, rgba(17,21,30,.97), rgba(9,11,17,.99));
-  border: 1px solid rgba(255,255,255,.13); box-shadow: 0 16px 44px rgba(0,0,0,.5);
-  backdrop-filter: blur(14px); }
+  width: 340px; padding: 13px 14px 12px; border-radius: 13px;
+  /* See the chip: translucent, and blurring what is behind it rather than hiding it. */
+  background: rgba(11, 14, 21, .55); border: 1px solid rgba(255,255,255,.15);
+  box-shadow: 0 18px 48px rgba(0,0,0,.42); backdrop-filter: blur(22px) saturate(1.3); }
 .dsh-thrift-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .dsh-thrift-head b { font-size: 12px; letter-spacing: .04em; }
 .dsh-thrift-head span { opacity: .5; font-size: 10px; }
@@ -68,14 +70,25 @@ window.__ModuleLoader__.load({
 
 /* ---------- the controls ---------- */
 .dsh-thrift-label { margin: 11px 0 5px; font-size: 10px; letter-spacing: .06em; opacity: .5; }
-.dsh-thrift-levels { display: flex; gap: 5px; }
-.dsh-thrift-level { pointer-events: auto; flex: 1 1 0; cursor: pointer; font: inherit; font-size: 10.5px;
-  padding: 5px 2px; border-radius: 6px; color: inherit; background: rgba(255,255,255,.05);
-  border: 1px solid rgba(255,255,255,.12); transition: border-color .15s ease, background .15s ease; }
-.dsh-thrift-level:hover { border-color: var(--dsh-thrift-tone); }
-.dsh-thrift-level[data-current="1"] { border-color: var(--dsh-thrift-tone); color: var(--dsh-thrift-tone);
-  background: rgba(255,255,255,.09); font-weight: 700; }
-.dsh-thrift-words { margin-top: 5px; font-size: 10.5px; opacity: .6; }
+.dsh-thrift-dial-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 3px; }
+.dsh-thrift-dial-head b { font-size: 15px; font-variant-numeric: tabular-nums; color: var(--dsh-thrift-tone); }
+.dsh-thrift-dial-head span { font-size: 10.5px; opacity: .6; }
+.dsh-thrift-dial input[type="range"] { pointer-events: auto; -webkit-appearance: none; appearance: none;
+  width: 100%; height: 18px; background: none; cursor: pointer; margin: 0; }
+.dsh-thrift-dial input[type="range"]::-webkit-slider-runnable-track { height: 6px; border-radius: 999px;
+  background: linear-gradient(90deg, rgba(79,214,168,.55), #ffd34d 45%, #ff5f6d);
+  border: 1px solid rgba(255,255,255,.12); }
+.dsh-thrift-dial input[type="range"]::-moz-range-track { height: 6px; border-radius: 999px;
+  background: linear-gradient(90deg, rgba(79,214,168,.55), #ffd34d 45%, #ff5f6d);
+  border: 1px solid rgba(255,255,255,.12); }
+.dsh-thrift-dial input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
+  width: 14px; height: 14px; margin-top: -5px; border-radius: 50%;
+  background: #0b0e13; border: 2px solid var(--dsh-thrift-tone); box-shadow: 0 0 8px rgba(0,0,0,.5); }
+.dsh-thrift-dial input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%;
+  background: #0b0e13; border: 2px solid var(--dsh-thrift-tone); }
+.dsh-thrift-dial input[type="range"]:focus-visible { outline: 2px solid var(--dsh-thrift-tone); outline-offset: 3px; }
+.dsh-thrift-dial-ticks { position: relative; height: 13px; margin-top: 1px; }
+.dsh-thrift-dial-ticks span { position: absolute; transform: translateX(-50%); font-size: 9.5px; opacity: .42; white-space: nowrap; }
 .dsh-thrift-budget { display: flex; gap: 5px; align-items: stretch; }
 .dsh-thrift-budget input { pointer-events: auto; flex: 1 1 auto; min-width: 0; font: inherit; font-size: 11px;
   padding: 5px 8px; border-radius: 6px; color: inherit; background: rgba(0,0,0,.35);
@@ -201,6 +214,8 @@ window.__ModuleLoader__.load({
 			const [error, setError] = React.useState(undefined);
 			/** A budget being typed. `undefined` means "follow the host", which is the norm. */
 			const [draft, setDraft] = React.useState(undefined);
+			/** The dial while it is being dragged. Also `undefined` when it is not. */
+			const [dial, setDial] = React.useState(undefined);
 
 			React.useEffect(() => {
 				let cancelled = false;
@@ -241,6 +256,7 @@ window.__ModuleLoader__.load({
 						if (payload.ok !== true) throw new Error(payload.message ?? payload.error ?? "被拒绝");
 						setState(payload);
 						setDraft(undefined);
+						setDial(undefined);
 					})
 					.catch((thrown) => setError(String(thrown?.message ?? thrown)));
 			};
@@ -259,12 +275,29 @@ window.__ModuleLoader__.load({
 				},
 			}, extra);
 
-			/** The one line that says what this setting is doing, in words. */
+			/** The one line that says what the dial is doing, in words. */
 			const LEVEL_WORDS = {
 				off: "不劝也不遮",
-				light: "只劝一次（七成），永不遮工具",
-				standard: "四成 / 七成 / 九成 劝告，九成起遮",
-				strict: "两成半 / 五成 / 七成 / 八成半 劝告，五成半起遮",
+				light: "只劝一次，永不遮工具",
+				standard: "两三档劝告，临界才遮",
+				strict: "四档劝告，五成半起遮",
+			};
+
+			/** The nearest name for a dial position, so the label reads like a word. */
+			const presetOf = (intensity) => {
+				const value = Number.isFinite(intensity) ? intensity : 0;
+				if (value <= 0) return "off";
+				let best = "light";
+				let distance = Number.POSITIVE_INFINITY;
+				for (const [name, stop] of Object.entries(state.presets ?? {})) {
+					if (name === "off") continue;
+					const gap = Math.abs(stop - value);
+					if (gap < distance) {
+						distance = gap;
+						best = name;
+					}
+				}
+				return best;
 			};
 
 			const header = (subtitle) => h("div", { className: "dsh-thrift-head" },
@@ -272,17 +305,40 @@ window.__ModuleLoader__.load({
 				h("span", null, subtitle ?? ""),
 				h("button", { className: "dsh-thrift-close", onClick: () => setOpen(false), "aria-label": "关闭" }, "✕"));
 
-			const levelRow = (current, levels) => h("div", { className: "dsh-thrift-levels" },
-				(levels ?? []).map((name) => h("button", {
-					key: name,
-					type: "button",
-					className: "dsh-thrift-level",
-					"data-current": name === current ? "1" : "0",
-					title: LEVEL_WORDS[name] ?? name,
-					onClick: () => {
-						if (name !== current) send(SETTINGS_ENDPOINT, { level: name });
-					},
-				}, name)));
+			/**
+			 * The dial, 0–100.
+			 *
+			 * A slider rather than four words because the four words were always four points
+			 * on one line: leaning harder means speaking earlier, more often, and masking
+			 * sooner, and there is no reason the middle of that line should be unreachable.
+			 * `0` keeps its own meaning — off — and is labelled as such rather than shown as
+			 * a percentage of nothing.
+			 *
+			 * Moved locally and committed on release: a slider that POSTs on every pixel of
+			 * travel would send a hundred settings changes to say one.
+			 */
+			const dialRow = (live, presets, draftDial, setDraftDial, commit) => h("div", { className: "dsh-thrift-dial" },
+				h("div", { className: "dsh-thrift-dial-head" },
+					h("b", null, live <= 0 ? "关" : String(live)),
+					h("span", null, live <= 0 ? "不劝也不遮" : LEVEL_WORDS[presetOf(live)] ?? "")),
+				h("input", {
+					type: "range",
+					min: "0",
+					max: "100",
+					step: "1",
+					"aria-label": "节流力度",
+					value: String(draftDial ?? live),
+					onChange: (event) => setDraftDial(Number(event.target.value)),
+					onPointerUp: commit,
+					onKeyUp: commit,
+					onBlur: commit,
+				}),
+				h("div", { className: "dsh-thrift-dial-ticks" },
+					Object.entries(presets ?? {}).map(([name, stop]) => h("span", {
+						key: name,
+						style: { left: `${String(stop)}%` },
+						title: `${name} · ${String(stop)}`,
+					}, name))));
 
 			const budgetRow = (live) => h("div", { className: "dsh-thrift-budget" },
 				h("input", {
@@ -350,16 +406,24 @@ window.__ModuleLoader__.load({
 					header(state.enabled === true ? "运行中" : "未启用"),
 
 					// ---- the controls, which are the point of opening it ----
-					h("div", { className: "dsh-thrift-label" }, "力度"),
-					levelRow(state.level, state.levels),
-					h("div", { className: "dsh-thrift-words" }, LEVEL_WORDS[state.level] ?? ""),
+					h("div", { className: "dsh-thrift-label" }, "力度（1–100，0 是关闭）"),
+					dialRow(
+						state.intensity ?? 0,
+						state.presets,
+						dial,
+						setDial,
+						() => {
+							if (dial === undefined || dial === state.intensity) return;
+							send(SETTINGS_ENDPOINT, { intensity: dial });
+						},
+					),
 
 					h("div", { className: "dsh-thrift-label" }, "预算（100% 的位置）"),
 					budgetRow(state.budget),
 					h("div", { className: "dsh-thrift-configured" },
-						state.overridden?.level === true || state.overridden?.budget === true
-							? `配置里 ${String(state.configured?.level)} / ${count(state.configured?.budget)}，已被本页覆盖（重启恢复）`
-							: `配置里 ${String(state.configured?.level)} / ${count(state.configured?.budget)}`),
+						state.overridden?.intensity === true || state.overridden?.budget === true
+							? `配置里 力度 ${String(state.configured?.intensity)} · ${count(state.configured?.budget)}，已被本页覆盖（重启恢复）`
+							: `配置里 力度 ${String(state.configured?.intensity)} · ${count(state.configured?.budget)}`),
 					errorLine,
 
 					h("div", { className: "dsh-thrift-rule" }),

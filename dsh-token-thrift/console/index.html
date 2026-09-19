@@ -19,8 +19,15 @@
 <main>
   <section class="card">
     <h2>力度</h2>
-    <p class="hint" id="level-hint">档位和遮罩阈值必须一起动，所以这里给的是名字。</p>
-    <div class="levels" id="levels"></div>
+    <p class="hint" id="level-hint">一条直线上的两个端点：越往右，劝得越早、越多、也越早开始遮工具。0 是关闭。</p>
+    <div class="dial" id="dial">
+      <div class="dial-head">
+        <b id="dial-value">—</b>
+        <span id="dial-words"></span>
+      </div>
+      <input type="range" id="dial-range" min="0" max="100" step="1" aria-label="节流力度">
+      <div class="dial-ticks" id="dial-ticks"></div>
+    </div>
   </section>
 
   <section class="card">

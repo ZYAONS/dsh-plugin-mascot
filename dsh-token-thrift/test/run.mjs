@@ -9,7 +9,7 @@
  */
 
 import assert from "node:assert/strict";
-import { apply, Config, LEVELS, name, spentTokens, usageTokens } from "../lib/index.js";
+import { apply, Config, ladderFor, name, PRESETS, presetOf, spentTokens, usageTokens } from "../lib/index.js";
 
 let passed = 0;
 let failed = 0;
@@ -24,6 +24,9 @@ async function it(label, body) {
     failed += 1;
     console.log(`  FAIL  ${label}`);
     console.log(`        → ${String(error?.message ?? error)}`);
+    // The lines, because "0 !== 1" on its own does not say which assertion produced it.
+    const frames = String(error?.stack ?? "").split("\n").filter((line) => line.includes("run.mjs:")).slice(0, 3);
+    for (const frame of frames) console.log(`        ${frame.trim()}`);
   }
 }
 
@@ -89,7 +92,7 @@ function fakeContext({ projections = true, webServer = true } = {}) {
     /** Fire the post-execute hook the way the harness would. */
     async postExecute(agent, downstream = { kind: "ok" }) {
       const handler = listeners.get("tools/post-execute");
-      assert.ok(handler !== undefined, "tools/post-execute was never registered");
+      assert.ok(handler !== undefined, `tools/post-execute was never registered (have: ${[...listeners.keys()].join(", ") || "nothing"})`);
       return handler({ agent, name: "pwsh" }, downstream, async () => downstream);
     },
     /** An agent whose scoped tools.restrict() is observable. */
@@ -316,57 +319,108 @@ await it("a tier list with nothing usable installs nothing", () => {
   assert.equal(ctx.listeners.size, 0);
 });
 
-// ---------------------------------------------------------------- levels
-await it("level off installs nothing, the same as budget 0", () => {
-  const ctx = fakeContext();
-  apply(ctx, config({ budget: 1000, level: "off" }));
-  assert.equal(ctx.listeners.size, 0, "off means off");
+// ---------------------------------------------------------------- the dial
+await it("the dial is monotonic: leaning harder speaks earlier, more often, and masks sooner", () => {
+  let previousFirst = 2;
+  let previousCount = 0;
+  let previousMask = 2;
+  for (let value = 1; value <= 100; value++) {
+    const { tiers, maskRatio } = ladderFor(value);
+    assert.ok(tiers.length >= 1, `intensity ${String(value)} produced no tiers`);
+
+    const first = tiers[0].ratio;
+    assert.ok(first <= previousFirst + 1e-9, `intensity ${String(value)} starts later than ${String(value - 1)}`);
+    assert.ok(tiers.length >= previousCount, `intensity ${String(value)} has fewer tiers than ${String(value - 1)}`);
+    assert.ok(tiers.length <= 4, `intensity ${String(value)} produced ${String(tiers.length)} tiers`);
+
+    // Every tier sits inside (0, 1] and they are strictly increasing.
+    for (const tier of tiers) {
+      assert.ok(tier.ratio > 0 && tier.ratio <= 1, `intensity ${String(value)} has a tier at ${String(tier.ratio)}`);
+      assert.ok(tier.text.length > 0, `intensity ${String(value)} has a silent tier`);
+    }
+    for (let index = 1; index < tiers.length; index++) {
+      assert.ok(tiers[index].ratio > tiers[index - 1].ratio, `intensity ${String(value)} has an out-of-order tier`);
+    }
+
+    if (maskRatio !== null) {
+      assert.ok(maskRatio <= previousMask + 1e-9, `intensity ${String(value)} masks later than ${String(value - 1)}`);
+      assert.ok(maskRatio > 0.4 && maskRatio <= 1, `intensity ${String(value)} masks at an impossible ratio`);
+    }
+    previousFirst = first;
+    previousCount = tiers.length;
+    previousMask = maskRatio ?? previousMask;
+  }
+  // The ends, spelled out, because they are what the two words used to mean.
+  assert.deepEqual(ladderFor(100).tiers.map((tier) => tier.ratio), [0.25, 0.47, 0.68, 0.9]);
+  assert.equal(ladderFor(100).maskRatio, 0.55, "the harsh end lands on the old `strict` threshold");
+  assert.equal(ladderFor(1).tiers.length, 1, "the gentle end says one thing");
+  assert.equal(ladderFor(1).maskRatio, null, "and never touches the tool table");
+  assert.deepEqual(ladderFor(0), { tiers: [], maskRatio: null }, "zero is off");
 });
 
-await it("light advises late and never touches the tool table", async () => {
+await it("a tier's words follow where it sits, not which one it is", () => {
+  // The dial changes how many tiers there are, so tier #2 of a gentle setting sits where
+  // tier #4 of a harsh one does. If the words came from the index, a setting with one tier
+  // would politely suggest cheaper habits at 90% spent.
+  const at = (value) => ladderFor(value).tiers.map((tier) => `${tier.ratio}:${tier.text.slice(15, 26)}`);
+  assert.match(ladderFor(100).tiers[3].text, /wrap up/u, "the 90% tier of the harsh end wraps up");
+  assert.match(ladderFor(1).tiers[0].text, /wrap up/u, "and so does the only tier of the gentle end, at 89%");
+  assert.match(ladderFor(25).tiers[0].text, /stop exploring/u, "74% says stop exploring");
+  assert.match(ladderFor(40).tiers[0].text, /converging/u, "64% says start converging");
+  assert.match(ladderFor(40).tiers[1].text, /wrap up/u, "and its 90% tier still wraps up");
+  assert.equal(at(100).length, 4);
+});
+
+await it("the old names are now stops on the dial, and still mean something", () => {
+  assert.equal(PRESETS.off, 0);
+  assert.ok(PRESETS.light < PRESETS.standard && PRESETS.standard < PRESETS.strict, "the stops stay ordered");
+  for (const [word, stop] of Object.entries(PRESETS)) {
+    assert.equal(presetOf(stop), word, `${word} should be the name of its own stop`);
+  }
+  assert.equal(presetOf(0), "off");
+  assert.equal(presetOf(100), "strict");
+  assert.equal(presetOf(undefined), "off", "an absent dial is off, not a crash");
+});
+
+await it("a profile patch written before the dial still configures the same thing", async () => {
+  // `level: strict` has to keep working: it is in somebody's patch file.
   const ctx = fakeContext();
-  apply(ctx, config({ budget: 1000, level: "light" }));
+  apply(ctx, config({ budget: 1000, level: "strict" }));
   const agent = ctx.agent();
+  ctx.setTotal(300);
+  assert.ok((await ctx.postExecute(agent)).additionalContexts?.length > 0, "strict has already spoken at 30%");
   ctx.setTotal(600);
-  assert.equal((await ctx.postExecute(agent)).additionalContexts, undefined, "light is quiet at 60%");
-  ctx.setTotal(750);
-  assert.equal((await ctx.postExecute(agent)).additionalContexts?.length, 1, "and speaks at 70%");
-  ctx.setTotal(1000);
   await ctx.postExecute(agent);
-  assert.equal(ctx.restrictions.length, 0, "light never masks, however full the glass is");
+  assert.equal(ctx.restrictions.length, 1, "and masks past its 55% threshold");
+
+  const quiet = fakeContext();
+  apply(quiet, config({ budget: 1000, level: "off" }));
+  assert.equal(quiet.listeners.size, 0, "off means off");
+
+  // And an explicit intensity beats it.
+  const dialled = fakeContext();
+  apply(dialled, config({ budget: 1000, level: "strict", intensity: 20 }));
+  dialled.setTotal(300);
+  assert.equal((await dialled.postExecute(dialled.agent())).additionalContexts, undefined, "20 is gentle again");
+  assert.equal(dialled.restrictions.length, 0, "and it does not mask");
 });
 
-await it("strict leans earlier than standard, and masks earlier still", async () => {
-  const speaks = async (level, percent) => {
-    const ctx = fakeContext();
-    apply(ctx, config({ budget: 1000, level }));
-    ctx.setTotal(percent * 10);
-    return (await ctx.postExecute(ctx.agent())).additionalContexts !== undefined;
-  };
-  const masks = async (level, percent) => {
-    const ctx = fakeContext();
-    apply(ctx, config({ budget: 1000, level }));
-    ctx.setTotal(percent * 10);
-    await ctx.postExecute(ctx.agent());
-    return ctx.restrictions.length > 0;
-  };
+await it("the dial turns the coach on and off, from the config alone", () => {
+  // The route-driven version of this lives with the platform tests, below; this one is
+  // here because it is really a statement about `settingsFor`.
+  const off = fakeContext();
+  apply(off, config({ budget: 1000, intensity: 0 }));
+  assert.equal(off.listeners.size, 0, "zero installs nothing — and 0 must not mean `unset`");
 
-  assert.equal(await speaks("standard", 30), false, "standard is quiet at 30%");
-  assert.equal(await speaks("light", 30), false, "light is quiet at 30%");
-  assert.equal(await speaks("strict", 30), true, "strict has already spoken at 30%");
-
-  assert.equal(await speaks("standard", 75), true, "standard speaks by 75%");
-  assert.equal(await speaks("light", 75), true, "and so does light");
-
-  assert.equal(await masks("standard", 60), false, "standard leaves the tool table alone at 60%");
-  assert.equal(await masks("strict", 60), true, "strict masks at 60%");
-  assert.equal(await masks("standard", 95), true, "standard masks once the budget is nearly gone");
-  assert.equal(await masks("light", 100), false, "light never masks");
+  const on = fakeContext();
+  apply(on, config({ budget: 1000, intensity: 100 }));
+  assert.equal(on.listeners.size, 1);
+  assert.equal(on.restrictions.length, 0);
 });
 
-await it("a hand-written tier list still overrides the level", async () => {
+await it("a hand-written tier list still overrides the dial", async () => {
   const ctx = fakeContext();
-  apply(ctx, config({ budget: 1000, level: "strict", tiers: [{ ratio: 0.95, text: "mine" }], maskTools: [] }));
+  apply(ctx, config({ budget: 1000, intensity: 100, tiers: [{ ratio: 0.95, text: "mine" }], maskTools: [] }));
   const agent = ctx.agent();
   ctx.setTotal(500);
   assert.equal((await ctx.postExecute(agent)).additionalContexts, undefined, "the level's own tiers must not fire");
@@ -375,9 +429,12 @@ await it("a hand-written tier list still overrides the level", async () => {
   assert.match(result.additionalContexts[0].content[0].text, /mine/u);
 });
 
-await it("every level is a name the schema accepts", () => {
-  for (const level of Object.keys(LEVELS)) {
-    assert.equal(Config({ level }).level, level, `${level} must survive validation`);
+await it("the schema takes a dial position and refuses nonsense", () => {
+  assert.equal(Config({ intensity: 0 }).intensity, 0, "zero is a position, not an absent value");
+  assert.equal(Config({ intensity: 57 }).intensity, 57);
+  assert.equal(Config({}).intensity, -1, "and the default is the sentinel for `nobody said`");
+  for (const level of Object.keys(PRESETS)) {
+    assert.equal(Config({ level }).level, level, `${level} must still survive validation`);
   }
   assert.throws(() => Config({ level: "turbo" }), "an unknown level must be rejected, not silently ignored");
 });
@@ -432,7 +489,7 @@ const jsonOf = (answer) => JSON.parse(answer.body);
 // ---------------------------------------------------------------- the platform
 await it("the platform route answers with what the coach is doing", async () => {
   const ctx = fakeContext();
-  apply(ctx, config({ budget: 1000, level: "strict" }));
+  apply(ctx, config({ budget: 1000, intensity: 100 }));
   assert.equal(ctx.route?.path, "/dsh-token-thrift", "the state route must be claimed");
   assert.equal(ctx.route?.kind, "prefix");
 
@@ -445,21 +502,22 @@ await it("the platform route answers with what the coach is doing", async () => 
   assert.equal(payload.ok, true);
   assert.equal(payload.enabled, true);
   assert.equal(payload.budget, 1000);
-  assert.equal(payload.level, "strict");
-  assert.equal(payload.maskRatio, 0.55, "strict masks past halfway");
-  assert.deepEqual(payload.tiers, [0.25, 0.5, 0.7, 0.85]);
+  assert.equal(payload.intensity, 100, "the dial is what the platform reports");
+  assert.equal(payload.level, "strict", "and the old word is derived from it, for labels");
+  assert.equal(payload.maskRatio, 0.55, "the harsh end masks past halfway");
+  assert.deepEqual(payload.tiers, [0.25, 0.47, 0.68, 0.9]);
 
   assert.equal(payload.reports.length, 1, "one session, one row");
   const [report] = payload.reports;
   assert.equal(report.spent, 600);
   assert.equal(report.ratio, 0.6);
-  assert.equal(report.masked, true, "60% is past strict's mask threshold");
+  assert.equal(report.masked, true, "60% is past the mask threshold");
   // Fired or not is per tier, which is what makes a timeline drawable.
-  assert.deepEqual(report.fired.map((tier) => tier.ratio), [0.25, 0.5, 0.7, 0.85]);
+  assert.deepEqual(report.fired.map((tier) => tier.ratio), [0.25, 0.47, 0.68, 0.9]);
   assert.deepEqual(report.fired.map((tier) => tier.at !== null), [true, true, false, false]);
   // And the report carries the list it was measured against, because the console can
   // change the level afterwards and a fired mark only means something against its own list.
-  assert.deepEqual(report.tiers, [0.25, 0.5, 0.7, 0.85]);
+  assert.deepEqual(report.tiers, [0.25, 0.47, 0.68, 0.9]);
 });
 
 await it("the reported ratio follows the budget, not the last tool call", async () => {
@@ -478,37 +536,38 @@ await it("the reported ratio follows the budget, not the last tool call", async 
   assert.equal(jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0].ratio, 0, "no budget, no ratio");
 });
 
-await it("the console can change the level, and the running coach follows", async () => {
+await it("the console can turn the dial, and the running coach follows", async () => {
   const ctx = fakeContext();
-  apply(ctx, config({ budget: 1000, level: "light" }));
+  apply(ctx, config({ budget: 1000, intensity: 20 }));
   const agent = ctx.agent();
 
   ctx.setTotal(300);
   await ctx.postExecute(agent);
-  assert.equal(jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0].masked, false, "light never masks");
+  assert.equal(jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0].masked, false, "a gentle dial never masks");
 
-  // Switch to strict from the console. No restart, no reload: the listener is a live
-  // thing, which is the difference between a screenshot and a platform.
-  const changed = await ask(ctx.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { level: "strict" } });
+  // Turn it up from the console. No restart, no reload: the listener is a live thing,
+  // which is the difference between a screenshot and a platform.
+  const changed = await ask(ctx.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { intensity: 100 } });
   assert.equal(changed.status, 200);
   const after = jsonOf(changed);
-  assert.equal(after.level, "strict");
+  assert.equal(after.intensity, 100);
+  assert.equal(after.level, "strict", "the word follows the dial");
   assert.equal(after.maskRatio, 0.55);
-  assert.deepEqual(after.tiers, [0.25, 0.5, 0.7, 0.85]);
-  assert.deepEqual(after.overridden, { budget: false, level: true }, "the console must say what it changed");
-  assert.deepEqual(after.configured, { budget: 1000, level: "light" }, "and what the file still says");
+  assert.deepEqual(after.tiers, [0.25, 0.47, 0.68, 0.9]);
+  assert.deepEqual(after.overridden, { budget: false, intensity: true }, "the console must say what it changed");
+  assert.equal(after.configured.intensity, 20, "and what the file still says");
 
   await ctx.postExecute(agent);
   const at30 = jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0];
-  // 300/1000 is past strict's first tier (25%) but not its mask threshold (55%).
-  assert.ok(at30.fired.some((tier) => tier.ratio === 0.25 && tier.at !== null), "the 25% tier fires now that strict is on");
-  assert.equal(at30.masked, false, "30% is still below strict's 55% mask threshold");
+  // 300/1000 is past the first tier (25%) but not the mask threshold (55%).
+  assert.ok(at30.fired.some((tier) => tier.ratio === 0.25 && tier.at !== null), "the 25% tier fires now that the dial is up");
+  assert.equal(at30.masked, false, "30% is still below the 55% mask threshold");
 
   ctx.setTotal(600);
   await ctx.postExecute(agent);
   const at60 = jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0];
   assert.equal(at60.masked, true, "60% is past it, so the tools are masked");
-  assert.ok(at60.fired.some((tier) => tier.ratio === 0.5 && tier.at !== null), "and the 50% tier fires");
+  assert.ok(at60.fired.some((tier) => tier.ratio === 0.47 && tier.at !== null), "and the second tier fires");
 });
 
 await it("the console can turn a disabled coach on, and off again", async () => {
@@ -516,21 +575,44 @@ await it("the console can turn a disabled coach on, and off again", async () => 
   apply(off, config({ budget: 0 }));
   assert.equal(off.listeners.size, 0, "off still costs nothing");
 
-  const bad = await ask(off.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { level: "turbo" } });
-  assert.equal(bad.status, 400, "an unknown level must be refused, not silently ignored");
-  assert.equal(jsonOf(bad).error, "bad_level");
+  const bad = await ask(off.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { intensity: 140 } });
+  assert.equal(bad.status, 400, "an out-of-range dial must be refused, not clamped silently");
+  assert.equal(jsonOf(bad).error, "bad_intensity");
   assert.equal(jsonOf(await ask(off.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { budget: -5 } })).error, "bad_budget");
 
-  const on = await ask(off.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { budget: 1000, level: "strict" } });
+  const on = await ask(off.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { budget: 1000, intensity: 100 } });
   assert.equal(jsonOf(on).enabled, true);
   assert.equal(off.listeners.size, 1, "turning it on from the console installs the listener");
 
   off.setTotal(600);
   assert.ok((await off.postExecute(off.agent())).additionalContexts?.length > 0, "and it now coaches");
 
-  await ask(off.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { budget: null, level: null } });
+  await ask(off.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { budget: null, intensity: null } });
   assert.equal(jsonOf(await ask(off.route, "/dsh-token-thrift/api/state")).enabled, false, "null restores the file's value");
   assert.equal(off.listeners.size, 0, "and the listener goes away with it");
+
+  // The old word still works as a way to say a position on the dial — but it is only a
+  // position, so it needs a budget to actually run: restoring `budget: null` above put the
+  // file's 0 back, and a coach with no budget is off whatever the dial says.
+  const worded = await ask(off.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { level: "strict", budget: 1000 } });
+  assert.equal(jsonOf(worded).intensity, PRESETS.strict, "`level: strict` is just a stop on the dial");
+  assert.equal(off.listeners.size, 1, "and with a budget it runs again");
+});
+
+await it("turning the dial down mid-session switches the coach off again", async () => {
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 1000, intensity: 100 }));
+  assert.equal(ctx.listeners.size, 1);
+
+  ctx.setTotal(300);
+  assert.ok((await ctx.postExecute(ctx.agent())).additionalContexts?.length > 0, "it is coaching");
+
+  const off = await ask(ctx.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { intensity: 0 } });
+  assert.equal(jsonOf(off).enabled, false, "zero stops it");
+  assert.equal(ctx.listeners.size, 0, "and the listener goes with it");
+  // There is no hook left to fire, which is the point — so the check is that the platform
+  // says so, not that a hook declines to speak.
+  assert.equal(jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).enabled, false);
 });
 
 await it("a session can be reset, so the coach can be watched working twice", async () => {
@@ -559,7 +641,7 @@ await it("a disabled coach still answers, so the console can say why", async () 
   assert.equal(payload.enabled, false, "the console needs to distinguish off from broken");
   assert.equal(payload.budget, 0);
   assert.deepEqual(payload.reports, []);
-  assert.deepEqual(payload.levels, ["off", "light", "standard", "strict"], "the console draws its buttons from this");
+  assert.deepEqual(payload.presets, { off: 0, light: 25, standard: 55, strict: 100 }, "the console labels its dial from this");
 
   // And `level: "off"` with a real budget is the same story.
   const levelled = fakeContext();
@@ -692,13 +774,13 @@ await it("the panel is a control surface, not a read-out", () => {
   // the panel returns null until its first poll lands, so rendering it for real would
   // assert nothing at all.
   const loaded = {
-    ok: true, enabled: true, budget: 1000, level: "standard", maskRatio: 0.9,
-    tiers: [0.4, 0.7, 0.9], maskTools: ["workflow"], countCache: true, maxReminders: 6,
-    levels: ["off", "light", "standard", "strict"],
-    configured: { budget: 1000, level: "standard" }, overridden: { budget: false, level: false },
+    ok: true, enabled: true, budget: 1000, intensity: 55, level: "standard", maskRatio: 0.75,
+    tiers: [0.54, 0.9], maskTools: ["workflow"], countCache: true, maxReminders: 6,
+    presets: { off: 0, light: 25, standard: 55, strict: 100 },
+    configured: { budget: 1000, intensity: -1 }, overridden: { budget: false, intensity: false },
     reports: [{ sessionId: "s1", at: 1, spent: 400, ratio: 0.4, masked: false, reminders: 1,
-      tiers: [0.4, 0.7, 0.9],
-      fired: [{ ratio: 0.4, at: 1 }, { ratio: 0.7, at: null }, { ratio: 0.9, at: null }] }],
+      tiers: [0.54, 0.9],
+      fired: [{ ratio: 0.54, at: 1 }, { ratio: 0.9, at: null }] }],
   };
   const queue = [loaded, true];
   const Hooks = {
@@ -732,14 +814,30 @@ await it("the panel is a control surface, not a read-out", () => {
   walk(rendered);
 
   const levelButtons = found.filter((node) => node.cls === "dsh-thrift-level").map((node) => node.text).sort();
-  assert.deepEqual(levelButtons, ["light", "off", "standard", "strict"], "one button per level, labelled with the level");
+  assert.deepEqual(levelButtons, [], "the four buttons are gone — the dial replaced them");
+  assert.ok(found.some((node) => node.cls === "dsh-thrift-dial"), "the dial must be in the panel");
   assert.ok(found.some((node) => node.cls === "dsh-thrift-budget"), "the budget must be settable from the panel");
   assert.ok(found.some((node) => node.cls === "dsh-thrift-apply"), "with a way to submit it");
   assert.ok(found.some((node) => node.cls === "dsh-thrift-restore"), "and a way back to the file's value");
   assert.ok(found.some((node) => node.cls === "dsh-thrift-reset"), "a session must be resettable from here too");
   // It is still a read-out as well: the bar and the fired marks have to survive.
   assert.ok(found.some((node) => node.cls === "dsh-thrift-track"), "the progress bar must stay");
-  assert.equal(found.filter((node) => node.cls === "dsh-thrift-tick").length, 3, "one mark per tier");
+  assert.equal(found.filter((node) => node.cls === "dsh-thrift-tick").length, 2, "one mark per tier of this dial position");
+
+  // And the dial is a range input spanning the whole 0–100, not a set of stops.
+  const ranges = [];
+  const walkRanges = (node) => {
+    if (node === null || typeof node !== "object") return;
+    if (Array.isArray(node)) { node.forEach(walkRanges); return; }
+    if (node.type === "input" && node.props?.type === "range") ranges.push(node.props);
+    (node.children ?? []).forEach(walkRanges);
+  };
+  walkRanges(rendered);
+  assert.equal(ranges.length, 1, "exactly one dial");
+  assert.equal(ranges[0].min, "0");
+  assert.equal(ranges[0].max, "100");
+  assert.equal(ranges[0].step, "1");
+  assert.equal(ranges[0].value, "55", "and it shows where the dial currently is");
 });
 
 console.log(`\ntoken-thrift: ${String(passed)} passed, ${String(failed)} failed`);

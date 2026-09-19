@@ -50,97 +50,105 @@ const PLUGIN_SOURCE = { kind: "plugin", plugin: name };
 const DEFAULT_MASKED = ["subagent", "subagent_fork", "workflow", "ralph"];
 
 /**
- * The escalating advice, in the order it is delivered.
+ * What the coach can say, chosen by *where a tier sits* rather than by its index.
  *
- * Each tier fires once per session, at the first tool result after its ratio is crossed.
- * Delivered as advice rather than as a refusal: the point is to change how the remaining
- * budget is spent, not to stop the work.
+ * That distinction is the whole reason this is a table and not four constants: the dial
+ * decides how many tiers there are, so the second tier of a gentle setting sits where the
+ * fourth tier of a harsh one does. A tier at 85% should say "wrap up" in both cases.
  */
-const DEFAULT_TIERS = [
+const TIER_VOICE = [
   {
-    ratio: 0.4,
+    from: 0,
     text:
-      "Token thrift: about 40% of this session's budget is spent. Cheaper habits from here: "
-      + "read a targeted range instead of a whole file; batch independent tool calls into one "
-      + "step; skip re-reading what a previous result already established; answer at the length "
-      + "the question needs and no longer.",
+      "Token thrift: cheaper habits from here. Read a targeted range instead of a whole file; "
+      + "batch independent tool calls into one step; skip re-reading what an earlier result "
+      + "already established; answer at the length the question needs and no longer.",
   },
   {
-    ratio: 0.7,
+    from: 0.5,
     text:
-      "Token thrift: about 70% of this session's budget is spent. Stop exploring and start "
-      + "converging. Do not start new subagents, workflows or background fan-out — each one "
-      + "re-reads this conversation. Prefer finishing what is already in flight over opening "
-      + "another line of investigation.",
+      "Token thrift: half the budget is spent. Start converging. Finish what is already in flight "
+      + "before opening another line of investigation, and prefer the answer you can give now over "
+      + "the one that needs three more reads.",
   },
   {
-    ratio: 0.9,
+    from: 0.68,
     text:
-      "Token thrift: about 90% of this session's budget is spent. Wrap up now: state what is "
-      + "done, what is verified, and what is left, in as few words as it takes. Only call a "
-      + "tool if the task cannot be reported without it.",
+      "Token thrift: stop exploring. Do not start subagents, workflows or background fan-out — each "
+      + "one re-reads this conversation from the top.",
+  },
+  {
+    from: 0.84,
+    text:
+      "Token thrift: wrap up now. Say what is done, what is verified, and what is left, in as few "
+      + "words as it takes. Only call a tool if the task cannot be reported without it.",
   },
 ];
 
+/** The words for a tier at this ratio. */
+function voiceFor(ratio) {
+  let chosen = TIER_VOICE[0];
+  for (const entry of TIER_VOICE) if (ratio >= entry.from) chosen = entry;
+  return chosen.text;
+}
+
 /**
- * The four strengths, as presets.
+ * The dial: one number from 0 to 100, and everything else follows from it.
  *
- * `maskRatio: null` means never mask — for the two gentle levels the point is to advise,
- * and reaching for the tool table at the first sign of spending is how a coach turns into
- * an obstacle. `strict` moves the mask to just past halfway, which is the earliest it can
- * land while still leaving two tiers of advice behind it.
+ * It replaces four named settings because the two things that have to move together — when
+ * the advice starts, and when the tool table is touched — are not really four decisions.
+ * At one end the coach says one thing, late, and never masks; at the other it starts at a
+ * quarter spent and masks just past halfway. Everything between is a straight line, so a
+ * number the user picked means something they can predict.
+ *
+ * @param intensity - 0 disables; 1..100 is the dial.
+ * @returns `{ tiers, maskRatio }`; `maskRatio: null` means never mask.
  */
-export const LEVELS = Object.freeze({
-  /** No listeners at all. The same as `budget: 0`, spelled the other way. */
-  off: { tiers: [], maskRatio: null },
-  /** One reminder, late, and the tool table is never touched. */
-  light: {
-    tiers: [
-      {
-        ratio: 0.7,
-        text:
-          "Token thrift: about 70% of this session's budget is spent. Steadier habits from here: "
-          + "read a targeted range instead of a whole file, batch independent tool calls into one "
-          + "step, and skip re-reading what an earlier result already established.",
-      },
-    ],
-    maskRatio: null,
-  },
-  /** The default: advice in three steps, masking once the budget is nearly gone. */
-  standard: { tiers: DEFAULT_TIERS, maskRatio: 0.9 },
-  /** Lean early and hard, for a session that has to fit in a small budget. */
-  strict: {
-    tiers: [
-      {
-        ratio: 0.25,
-        text:
-          "Token thrift: a quarter of this session's budget is gone. Plan the rest before spending "
-          + "it: decide what the answer needs, then read only that. One batched step beats four "
-          + "small ones, and a range beats a whole file.",
-      },
-      {
-        ratio: 0.5,
-        text:
-          "Token thrift: half the budget is spent. Start converging. Finish what is already in "
-          + "flight before opening another line of investigation, and prefer the answer you can "
-          + "give now over the one that needs three more reads.",
-      },
-      {
-        ratio: 0.7,
-        text:
-          "Token thrift: about 70% is spent. Stop exploring. Do not start subagents, workflows or "
-          + "background fan-out — each one re-reads this conversation from the top.",
-      },
-      {
-        ratio: 0.85,
-        text:
-          "Token thrift: about 85% is spent. Wrap up: say what is done, what is verified, and what "
-          + "is left, in as few words as it takes.",
-      },
-    ],
-    maskRatio: 0.55,
-  },
-});
+export function ladderFor(intensity) {
+  const value = Number.isFinite(intensity) ? Math.max(0, Math.min(100, intensity)) : 0;
+  if (value <= 0) return { tiers: [], maskRatio: null };
+  const p = value / 100;
+  // One tier at the gentle end, four at the harsh one. `first` is where advice begins:
+  // 90% spent when barely leaning, a quarter spent when leaning hard.
+  const count = Math.max(1, Math.round(4 * p));
+  const first = 0.9 - 0.65 * p;
+  const tiers = [];
+  for (let index = 0; index < count; index++) {
+    const ratio = count === 1 ? first : first + (0.9 - first) * (index / (count - 1));
+    const rounded = Math.round(ratio * 100) / 100;
+    tiers.push({ ratio: rounded, text: voiceFor(rounded) });
+  }
+  // Masking is the only hard move the coach has, so the bottom third of the dial never
+  // does it: a setting that reaches for the tool table before it has said anything is how
+  // a coach turns into an obstacle.
+  const maskRatio = value <= 30 ? null : Math.round((1 - 0.45 * p) * 100) / 100;
+  return { tiers, maskRatio };
+}
+
+/**
+ * The old names, kept as stops on the dial.
+ *
+ * A profile patch written before the dial existed says `level: standard`; that should keep
+ * meaning what it meant, so the names survive as positions rather than as behaviour.
+ */
+export const PRESETS = Object.freeze({ off: 0, light: 25, standard: 55, strict: 100 });
+
+/** The nearest name for a dial position, for a label that reads like a word. */
+export function presetOf(intensity) {
+  const value = Number.isFinite(intensity) ? intensity : 0;
+  if (value <= 0) return "off";
+  let best = "light";
+  let distance = Number.POSITIVE_INFINITY;
+  for (const [name, stop] of Object.entries(PRESETS)) {
+    if (name === "off") continue;
+    const gap = Math.abs(stop - value);
+    if (gap < distance) {
+      distance = gap;
+      best = name;
+    }
+  }
+  return best;
+}
 
 export const Config = z.object({
   /**
@@ -153,15 +161,20 @@ export const Config = z.object({
    */
   budget: z.number().default(0),
   /**
-   * How hard to lean.
+   * How hard to lean, 1–100. `0` is off.
    *
-   * One name is easier to get right than three numbers, because the advice and the
-   * masking threshold have to move together: tiers that fire long before the mask either
-   * nag without effect, and a mask that lands before any advice has been given is a
-   * surprise. `tiers` and `maskRatio` still override this when set.
+   * `-1` is the sentinel for "nobody said", which is not the same as "off" — the config
+   * default has to be distinguishable from a deliberate zero, or a patch that sets the
+   * dial to 0 would silently fall back to `level` and switch the coach back on.
+   *
+   * The two ends are: one reminder at 90% spent and never a mask, versus advice from a
+   * quarter spent and a mask just past halfway. `tiers` and `maskRatio` still override it
+   * when set by hand.
    */
+  intensity: z.number().default(-1),
+  /** An older way to say `intensity`, kept so a pre-existing patch row still works. */
   level: z.union([z.const("off"), z.const("light"), z.const("standard"), z.const("strict")]).default("standard"),
-  /** Ratios of `budget` at which to speak, paired with what to say. Empty uses `level`'s own. */
+  /** Ratios of `budget` at which to speak, paired with what to say. Empty uses the dial. */
   tiers: z.array(z.object({ ratio: z.number(), text: z.string() })).default([]),
   /**
    * Tools to remove from the agent's tool table once the masking threshold is crossed.
@@ -170,7 +183,7 @@ export const Config = z.object({
    * job is fan-out.
    */
   maskTools: z.array(z.string()).default(DEFAULT_MASKED),
-  /** Mask as soon as this ratio is crossed; `0` uses `level`'s own threshold. */
+  /** Mask as soon as this ratio is crossed; `0` uses the dial's own threshold. */
   maskRatio: z.number().default(0),
   /**
    * Count cached Tokens toward the spend.
@@ -323,24 +336,30 @@ function authorized(ctx, req) {
  */
 function settingsFor(config, override) {
   const level = override.level ?? config.level;
-  const budget = override.budget ?? (Number.isFinite(config.budget) ? config.budget : 0);
-  const preset = LEVELS[level] ?? LEVELS.standard;
-  const wanted = Array.isArray(config.tiers) && config.tiers.length > 0 ? config.tiers : preset.tiers;
+  // The dial is the control; `level` is an older spelling of it and only supplies a
+  // starting position when nobody has turned anything.
+  const intensity = override.intensity
+    ?? (Number.isFinite(config.intensity) && config.intensity >= 0 ? config.intensity : (PRESETS[level] ?? PRESETS.standard));
+  const built = ladderFor(intensity);
+  const wanted = Array.isArray(config.tiers) && config.tiers.length > 0 ? config.tiers : built.tiers;
   const tiers = [...wanted]
     .filter((tier) => Number.isFinite(tier.ratio) && tier.ratio > 0 && typeof tier.text === "string" && tier.text !== "")
     .sort((a, b) => a.ratio - b.ratio);
   // `Infinity` for "never": `ratio >= Infinity` is false for every real ratio, so the
   // mask simply never fires, and the comparison below stays a single expression.
-  const fallback = preset.maskRatio ?? Number.POSITIVE_INFINITY;
+  const fallback = Number.isFinite(config.maskRatio) && config.maskRatio > 0
+    ? config.maskRatio
+    : (built.maskRatio ?? Number.POSITIVE_INFINITY);
   return {
-    level,
-    budget,
+    intensity,
+    level: presetOf(intensity),
+    budget: override.budget ?? (Number.isFinite(config.budget) ? config.budget : 0),
     tiers,
-    maskRatio: Number.isFinite(config.maskRatio) && config.maskRatio > 0 ? config.maskRatio : fallback,
+    maskRatio: fallback,
     maskTools: config.maskTools,
     countCache: config.countCache,
     maxReminders: config.maxReminders,
-    enabled: budget > 0 && tiers.length > 0,
+    enabled: (override.budget ?? config.budget) > 0 && tiers.length > 0,
   };
 }
 
@@ -494,7 +513,7 @@ function servePlatform(ctx, deps) {
  */
 export function apply(ctx, config) {
   /** Console overrides on top of the config. In memory only: a restart restores the file. */
-  const override = { level: null, budget: null };
+  const override = { intensity: null, budget: null };
   let settings = settingsFor(config, override);
 
   /** session id -> the last snapshot for it. Insertion-ordered, oldest evicted first. */
@@ -534,7 +553,11 @@ export function apply(ctx, config) {
   const snapshot = () => ({
     enabled: settings.enabled,
     budget: settings.budget,
+    /** The dial, 0–100. This is the control; `level` is only a word for where it is. */
+    intensity: settings.intensity,
     level: settings.level,
+    /** The named stops, so a UI can label the dial without hard-coding them. */
+    presets: PRESETS,
     // `Infinity` does not survive JSON; null is the wire's word for "never".
     maskRatio: Number.isFinite(settings.maskRatio) ? settings.maskRatio : null,
     tiers: settings.tiers.map((tier) => tier.ratio),
@@ -543,9 +566,11 @@ export function apply(ctx, config) {
     maxReminders: settings.maxReminders,
     // What the console needs to draw its own controls: the file's values, and whether
     // what you are looking at is the file or something someone clicked.
-    configured: { budget: config.budget, level: config.level },
-    overridden: { budget: override.budget !== null, level: override.level !== null },
-    levels: Object.keys(LEVELS),
+    configured: { budget: config.budget, level: config.level, intensity: config.intensity },
+    overridden: {
+      budget: override.budget !== null,
+      intensity: override.intensity !== null,
+    },
     // The ratio is recomputed here rather than taken from the stored report, because the
     // console can change the budget between two tool calls. Reporting the stale one made
     // changing the budget look like it had done nothing at all — the one interaction the
@@ -576,9 +601,16 @@ export function apply(ctx, config) {
 
   /** Apply a console change and make the running coach match it. */
   const applySettings = (body) => {
-    if (body.level !== undefined) {
-      if (body.level === null) override.level = null;
-      else if (typeof body.level === "string" && LEVELS[body.level] !== undefined) override.level = body.level;
+    if (body.intensity !== undefined) {
+      if (body.intensity === null) override.intensity = null;
+      else if (typeof body.intensity === "number" && Number.isFinite(body.intensity) && body.intensity >= 0 && body.intensity <= 100) {
+        override.intensity = body.intensity;
+      } else return { error: "bad_intensity", message: "力度必须是 0 到 100 之间的数，或 null 表示恢复配置" };
+    }
+    // Still accepted: an older page, or a hand-written call, saying `level: "strict"`.
+    if (body.level !== undefined && body.intensity === undefined) {
+      if (body.level === null) override.intensity = null;
+      else if (typeof body.level === "string" && PRESETS[body.level] !== undefined) override.intensity = PRESETS[body.level];
       else return { error: "bad_level", message: `没有这个档位：${String(body.level)}` };
     }
     if (body.budget !== undefined) {

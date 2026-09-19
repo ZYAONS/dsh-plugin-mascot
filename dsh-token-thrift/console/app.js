@@ -15,16 +15,18 @@
   var RESET_URL = "/dsh-token-thrift/api/reset";
   var POLL_MS = 1500;
 
-  /** 每一档在说人话的时候是什么。键必须和主驾那边的 LEVELS 对齐。 */
+  /** 每一档在说人话的时候是什么。键必须和主驾那边的 PRESETS 对齐。 */
   var LEVEL_TEXT = {
     off: "不劝也不遮",
-    light: "只劝一次（七成）",
-    standard: "三档劝告，九成起遮",
+    light: "只劝一次，永不遮工具",
+    standard: "两三档劝告，临界才遮",
     strict: "四档劝告，五成半起遮",
   };
 
   var el = function (id) { return document.getElementById(id); };
   var last = null;
+  /** 拖动中的值。松手才提交 —— 每移动一个像素就 POST 一次等于用一百次请求说一件事。 */
+  var dialDraft = null;
 
   function num(value) {
     if (typeof value !== "number" || !isFinite(value)) return "—";
@@ -72,29 +74,47 @@
 
   /* ---------------------------------------------------------------- 控件，只建一次 */
 
-  function buildLevels(levels, current) {
-    var host = el("levels");
+  /** 离当前力度最近的那个名字，让标签读起来像个词。 */
+  function nameFor(intensity) {
+    var value = typeof intensity === "number" && isFinite(intensity) ? intensity : 0;
+    if (value <= 0) return "off";
+    var presets = (last && last.presets) || {};
+    var best = "light";
+    var distance = Infinity;
+    Object.keys(presets).forEach(function (name) {
+      if (name === "off") return;
+      var gap = Math.abs(presets[name] - value);
+      if (gap < distance) { distance = gap; best = name; }
+    });
+    return best;
+  }
+
+  function buildTicks(presets) {
+    var host = el("dial-ticks");
     host.textContent = "";
-    levels.forEach(function (name) {
-      var button = document.createElement("button");
-      button.dataset.level = name;
-      button.appendChild(document.createTextNode(name));
-      var small = document.createElement("small");
-      small.textContent = LEVEL_TEXT[name] || "";
-      button.appendChild(small);
-      button.addEventListener("click", function () {
-        if (button.dataset.current === "1") return;
-        post(SETTINGS_URL, { level: name });
-      });
-      host.appendChild(button);
+    Object.keys(presets || {}).forEach(function (name) {
+      var mark = document.createElement("span");
+      mark.style.left = presets[name] + "%";
+      mark.textContent = name;
+      mark.title = name + " · " + presets[name];
+      host.appendChild(mark);
     });
   }
 
-  function markLevels(current) {
-    Array.prototype.forEach.call(el("levels").children, function (button) {
-      button.dataset.current = button.dataset.level === current ? "1" : "0";
-    });
-  }
+  el("dial-range").addEventListener("input", function () {
+    dialDraft = Number(el("dial-range").value);
+    el("dial-value").textContent = dialDraft <= 0 ? "关" : String(dialDraft);
+    el("dial-words").textContent = dialDraft <= 0 ? LEVEL_TEXT.off : LEVEL_TEXT[nameFor(dialDraft)] || "";
+  });
+  var commitDial = function () {
+    if (dialDraft === null || last === null || dialDraft === last.intensity) { dialDraft = null; return; }
+    var value = dialDraft;
+    dialDraft = null;
+    post(SETTINGS_URL, { intensity: value });
+  };
+  el("dial-range").addEventListener("change", commitDial);
+  el("dial-range").addEventListener("pointerup", commitDial);
+  el("dial-range").addEventListener("blur", commitDial);
 
   el("apply").addEventListener("click", function () {
     var raw = el("budget").value.trim();
@@ -105,7 +125,7 @@
   });
 
   el("restore").addEventListener("click", function () {
-    post(SETTINGS_URL, { budget: null, level: null });
+    post(SETTINGS_URL, { budget: null, intensity: null });
   });
 
   /* ---------------------------------------------------------------- 画 */
@@ -239,18 +259,17 @@
     var on = state.enabled === true;
     el("state").dataset.on = on ? "1" : "0";
     el("state-text").textContent = on
-      ? state.level + " · 已启用"
-      : (state.budget > 0 ? state.level + " · 档位为空，没在工作" : "未启用（budget 是 0）");
+      ? `${String(state.intensity)}% · ${String(state.level)} · 已启用`
+      : (state.budget > 0 ? `${String(state.intensity)}% · 档位为空，没在工作` : "未启用（budget 是 0）");
 
-    buildLevelsIfNeeded(state.levels);
-    markLevels(state.level);
+    paintDial(state);
 
     var over = [];
-    if (state.overridden.level) over.push("档位");
+    if (state.overridden.intensity) over.push("力度");
     if (state.overridden.budget) over.push("预算");
     el("configured").textContent = over.length
-      ? "配置里：" + state.configured.level + " / " + num(state.configured.budget) + "；" + over.join("、") + "已被本页覆盖（重启恢复）"
-      : "配置里：" + state.configured.level + " / " + num(state.configured.budget) + "（没有覆盖）";
+      ? "配置里 力度 " + String(state.configured.intensity) + " · " + num(state.configured.budget) + "；" + over.join("、") + "已被本页覆盖（重启恢复）"
+      : "配置里 力度 " + String(state.configured.intensity) + " · " + num(state.configured.budget) + "（没有覆盖）";
 
     if (document.activeElement !== el("budget")) el("budget").value = String(state.budget);
 
@@ -269,12 +288,19 @@
     }
   }
 
-  var levelsBuilt = "";
-  function buildLevelsIfNeeded(levels) {
-    var key = (levels || []).join(",");
-    if (key === levelsBuilt) return;
-    levelsBuilt = key;
-    buildLevels(levels || [], null);
+  var ticksBuilt = "";
+  /** The dial's own repaint, kept apart from `paint` because a drag must not fight it. */
+  function paintDial(state) {
+    var key = JSON.stringify(state.presets || {});
+    if (key !== ticksBuilt) {
+      ticksBuilt = key;
+      buildTicks(state.presets);
+    }
+    var live = state.intensity || 0;
+    if (dialDraft === null) el("dial-range").value = String(live);
+    var shown = dialDraft === null ? live : dialDraft;
+    el("dial-value").textContent = shown <= 0 ? "关" : String(shown);
+    el("dial-words").textContent = shown <= 0 ? LEVEL_TEXT.off : (LEVEL_TEXT[nameFor(shown)] || "");
   }
 
   function load() {
