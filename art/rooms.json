@@ -1,0 +1,13 @@
+{
+  "note": "角色背景图的声明。每张都是官方的家具套装素材，由 `npm run fetch-rooms` 下载到本机 —— 仓库里一张都不带（art/ 已 gitignore，npm test 也会拦）。character 是 art/index.json 里的角色 id，文件名必须是 room-<id>.<扩展名>，宿主按这个名字找（lib/index.js 的 readRooms）。urls 按顺序尝试，第一个成功的就用。operatorSet: false 表示这套家具不是为这个角色出的，只是同题材。",
+  "rooms": [
+    {
+      "character": "closure",
+      "name": "可露希尔",
+      "set": "可露希尔的万能空间",
+      "operatorSet": true,
+      "source": "https://wiki.biligame.com/arknights/?curid=126577",
+      "urls": []
+    }
+  ]
+}

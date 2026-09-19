@@ -54,7 +54,8 @@
     "verify": "node scripts/verify-profile.mjs",
     "measure:motion": "node scripts/measure-motion.mjs",
     "motion:literal": "node scripts/motion-literal.mjs",
-    "siren:sync": "node scripts/siren-sync.mjs"
+    "siren:sync": "node scripts/siren-sync.mjs",
+    "fetch-rooms": "node scripts/fetch-rooms.mjs"
   },
   "dsh": {
     "client": {

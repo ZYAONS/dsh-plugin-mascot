@@ -497,6 +497,32 @@ yesterday's numbers are not today's.
 
 ---
 
+## The room behind each character
+
+Every character stands somewhere. **No backdrop image is in this repository** — it is either
+a room the plugin draws from gradients, or official furniture art you downloaded yourself.
+
+The drawn room is per character (Closure gets her own workshop: dark blue room, an L-shaped
+white desk, two screens, the cyan strip light under it, posters on the wall, the tentacle-print
+rug on the floor). To use the real furniture art instead:
+
+```
+npm run fetch-rooms            # download what is missing
+npm run fetch-rooms -- --list  # show the declaration, download nothing
+npm run fetch-rooms -- --force # re-download
+```
+
+Images land in `art/room-<character id>.<png|jpg|webp>`. The host finds them by name
+(`readRooms`), so a restart is all it takes — there is no index to rebuild. The declaration
+is `art/rooms.json`: which set, whether it is the operator's own set or a thematic match, and
+the source page.
+
+**This is official Hypergryph artwork — do not commit it.** `art/` is gitignored and
+`npm test` fails if any image is tracked by git, backdrops included. Deleting `art/room-*`
+returns the character to the drawn room.
+
+---
+
 ## Configuration
 
 Every field has a default, so the `config` block is optional.
