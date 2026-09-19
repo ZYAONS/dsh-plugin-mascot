@@ -39,11 +39,12 @@ async function it(label, body) {
  * earlier fake handed back a service object, so every test passed while the real plugin
  * failed every tool call in a session.
  */
-function fakeContext({ projections = true } = {}) {
+function fakeContext({ projections = true, webServer = true } = {}) {
   const listeners = new Map();
   const restrictions = [];
   let total = 0;
   let broken = false;
+  let route;
   const services = projections
     ? {
         sessionProjections: {
@@ -58,6 +59,10 @@ function fakeContext({ projections = true } = {}) {
     /** Make the next service read fail, to prove the hook degrades instead of throwing. */
     break() { broken = true; },
     on(event, handler) { listeners.set(event, handler); },
+    effect(callback) {
+      const dispose = callback();
+      return typeof dispose === "function" ? dispose : () => {};
+    },
     /**
      * The documented way to reach a service you have not injected. Absent services answer
      * undefined here rather than throwing — that is the whole difference from a property
@@ -65,8 +70,13 @@ function fakeContext({ projections = true } = {}) {
      */
     get(service) {
       if (broken) throw new Error("the projection service is unreachable");
+      if (service === "webServer") {
+        return webServer ? { register(entry) { route = entry; return () => {}; } } : undefined;
+      }
       return services[service];
     },
+    /** The route the plugin registered, for tests that drive it. */
+    get route() { return route; },
     /** Fire the post-execute hook the way the harness would. */
     async postExecute(agent, downstream = { kind: "ok" }) {
       const handler = listeners.get("tools/post-execute");
@@ -361,6 +371,158 @@ await it("every level is a name the schema accepts", () => {
     assert.equal(Config({ level }).level, level, `${level} must survive validation`);
   }
   assert.throws(() => Config({ level: "turbo" }), "an unknown level must be rejected, not silently ignored");
+});
+
+/** Drive a registered route the way the web server would, and return its answer. */
+function ask(route, url) {
+  return new Promise((resolve) => {
+    const res = {
+      status: 0,
+      body: "",
+      writeHead(status) { this.status = status; },
+      end(text) { this.body = text; resolve(this); },
+    };
+    route.handler({ url }, res);
+  });
+}
+
+// ---------------------------------------------------------------- the visualiser
+await it("the visualiser route answers with what the coach is doing", async () => {
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 1000, level: "strict" }));
+  assert.equal(ctx.route?.path, "/dsh-token-thrift", "the state route must be claimed");
+  assert.equal(ctx.route?.kind, "prefix");
+
+  ctx.setTotal(600);
+  await ctx.postExecute(ctx.agent());
+
+  const answer = await ask(ctx.route, "/dsh-token-thrift/api/state");
+  assert.equal(answer.status, 200);
+  const payload = JSON.parse(answer.body);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.enabled, true);
+  assert.equal(payload.budget, 1000);
+  assert.equal(payload.level, "strict");
+  assert.equal(payload.maskRatio, 0.55, "strict masks past halfway");
+  assert.deepEqual(payload.tiers, [0.25, 0.5, 0.7, 0.85]);
+
+  assert.equal(payload.reports.length, 1, "one session, one row");
+  const [report] = payload.reports;
+  assert.equal(report.spent, 600);
+  assert.equal(report.ratio, 0.6);
+  assert.equal(report.masked, true, "60% is past strict's mask threshold");
+  // Fired or not is per tier, which is what makes a timeline drawable.
+  assert.deepEqual(report.fired.map((tier) => tier.ratio), [0.25, 0.5, 0.7, 0.85]);
+  assert.deepEqual(report.fired.map((tier) => tier.at !== null), [true, true, false, false]);
+});
+
+await it("a disabled coach still answers, so the panel can say why", async () => {
+  const off = fakeContext();
+  apply(off, config({ budget: 0 }));
+  const payload = JSON.parse((await ask(off.route, "/dsh-token-thrift/api/state")).body);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.enabled, false, "the panel needs to distinguish off from broken");
+  assert.equal(payload.budget, 0);
+  assert.deepEqual(payload.reports, []);
+
+  // And `level: "off"` with a real budget is the same story.
+  const levelled = fakeContext();
+  apply(levelled, config({ budget: 1000, level: "off" }));
+  assert.equal(JSON.parse((await ask(levelled.route, "/dsh-token-thrift/api/state")).body).enabled, false);
+});
+
+await it("the state route is the only thing it serves", async () => {
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 1000 }));
+  assert.equal((await ask(ctx.route, "/dsh-token-thrift/api/state")).status, 200);
+  assert.equal((await ask(ctx.route, "/dsh-token-thrift/api/state?x=1")).status, 200, "a query string is not a different route");
+  assert.equal((await ask(ctx.route, "/dsh-token-thrift/api/secret")).status, 404);
+  assert.equal((await ask(ctx.route, "/dsh-token-thrift/")).status, 404);
+});
+
+await it("a host with no web server still gets a working coach", async () => {
+  const ctx = fakeContext({ webServer: false });
+  apply(ctx, config({ budget: 1000 }));
+  assert.equal(ctx.route, undefined, "no route seam, no route");
+  ctx.setTotal(600);
+  const result = await ctx.postExecute(ctx.agent());
+  assert.ok(result.additionalContexts?.length > 0, "the coach must not depend on being visible");
+});
+
+// ---------------------------------------------------------------- the browser half
+const registrations = [];
+globalThis.window = { __ModuleLoader__: { load(entry) { registrations.push(entry); } } };
+globalThis.document = { createElement: () => ({ dataset: {}, remove() {} }), head: { append() {} } };
+await import("../lib/client.js");
+const React = {
+  createElement: (type, props, ...children) => ({ type, props, children }),
+  useState: () => [undefined, () => {}],
+  useEffect: () => {},
+  Fragment: Symbol.for("react.fragment"),
+};
+const client = registrations[0].factory((spec) => {
+  if (spec === "react") return React;
+  throw new Error(`unexpected require(${spec})`);
+});
+
+await it("the browser half registers under the package name, like the mascot does", () => {
+  assert.equal(registrations.length, 1);
+  assert.equal(registrations[0].id, "dsh-token-thrift", "the registered id must equal the package name");
+  assert.deepEqual(client.inject, ["slots"], "the half depends on the slot registry");
+});
+
+await it("the panel mounts into the overlay list beside the mascot", () => {
+  const injected = [];
+  const registered = [];
+  const ctx = {
+    slots: {
+      /**
+       * The registry takes a generator and drives it: each `yield` hands back a disposer.
+       *
+       * A fake that just called `body()` would get an unstarted generator and assert
+       * nothing at all — which is exactly what this test did before it was fixed.
+       */
+      inject(name, body) {
+        injected.push(name);
+        const iterator = body();
+        if (iterator === undefined || typeof iterator.next !== "function") return;
+        let step = iterator.next();
+        while (step.done !== true) step = iterator.next();
+      },
+      register(declaration = {}, Component) { registered.push({ declaration, Component }); },
+    },
+  };
+  client.apply(ctx);
+  assert.deepEqual(injected, ["shell.overlay"]);
+  assert.equal(registered.length, 1);
+  assert.equal(registered[0].declaration.name, "shell.overlay");
+  assert.equal(registered[0].declaration.id, "token-thrift");
+  // The child slot is what hands the panel a session id, and the report is found by it.
+  assert.deepEqual(Object.keys(registered[0].declaration.children), ["thrift.panel"]);
+  assert.equal(registered[0].declaration.children["thrift.panel"].scope, "session-maybe");
+  assert.equal(registered[0].Component, client.ThriftOverlay);
+});
+
+await it("a report is matched by session, so two windows do not share one number", () => {
+  const payload = { reports: [{ sessionId: "b", spent: 200 }, { sessionId: "a", spent: 100 }] };
+  assert.equal(client.pickReport(payload, "a").spent, 100, "the session on screen wins over the newest");
+  assert.equal(client.pickReport(payload, "b").spent, 200);
+  // An id from somewhere else in the host is a smaller failure than an empty panel.
+  assert.equal(client.pickReport(payload, "zzz").spent, 200, "an unknown id falls back to the newest");
+  assert.equal(client.pickReport(payload, undefined).spent, 200);
+  assert.equal(client.pickReport({ reports: [] }, "a"), undefined);
+  assert.equal(client.pickReport({}, "a"), undefined);
+  assert.equal(client.pickReport(undefined, "a"), undefined);
+});
+
+await it("the bar's colour turns before the number does", () => {
+  assert.equal(client.tone(0), "#4fd6a8");
+  assert.equal(client.tone(0.39), "#4fd6a8");
+  assert.equal(client.tone(0.4), "#ffd34d");
+  assert.equal(client.tone(0.7), "#ffab3d");
+  assert.equal(client.tone(0.9), "#ff5f6d");
+  assert.equal(client.tone(1.4), "#ff5f6d", "over budget is still the alarm colour");
+  assert.equal(client.tone(undefined), "#5aa9e6", "an unknown ratio must not throw");
 });
 
 console.log(`\ntoken-thrift: ${String(passed)} passed, ${String(failed)} failed`);

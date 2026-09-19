@@ -266,6 +266,61 @@ function notice(text, summary) {
   };
 }
 
+/** Where the visualiser reads the coach's state. */
+export const STATE_PATH = "/dsh-token-thrift";
+
+/** How many sessions the visualiser keeps. A GUI shows one; the rest are for looking back. */
+const REPORT_LIMIT = 8;
+
+/**
+ * Publish what the coach knows, and answer the browser's questions about it.
+ *
+ * The coach's state lives in a `WeakMap` keyed on the agent, which is the right shape for
+ * the coach and useless to a GUI — nothing outside this module can reach it. So each step
+ * also writes a plain snapshot into a small bounded map keyed by session id, and a route
+ * hands those to the browser half.
+ *
+ * Registered even when the coach is off: a panel that says "disabled, budget is 0" is
+ * worth more than a panel that looks broken.
+ *
+ * @param ctx - plugin context.
+ * @param meta - `{ enabled, budget, level, maskRatio, tiers }`, what the coach is doing.
+ * @returns the publish function the coach calls after each step.
+ */
+function serveState(ctx, meta) {
+  /** session id -> the last snapshot for it. Insertion-ordered, oldest evicted first. */
+  const reports = new Map();
+
+  const publish = (sessionId, report) => {
+    reports.delete(sessionId);
+    reports.set(sessionId, report);
+    while (reports.size > REPORT_LIMIT) reports.delete(reports.keys().next().value);
+  };
+
+  const webServer = ctx.get("webServer");
+  if (webServer === undefined || typeof webServer.register !== "function") return publish;
+
+  const handler = (req, res) => {
+    const path = String(req.url ?? "/").split("?")[0].replace(/\/+$/u, "");
+    // A browser asks for the snapshot; anything else is a 404 rather than a guess.
+    if (path !== `${STATE_PATH}/api/state`) {
+      res.writeHead(404, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "not_found" }));
+      return;
+    }
+    res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+    res.end(JSON.stringify({ ok: true, ...meta, reports: [...reports.values()].reverse() }));
+  };
+
+  try {
+    ctx.effect(() => webServer.register({ kind: "prefix", path: STATE_PATH, handler }));
+  } catch {
+    // No route seam, or the context is already disposed. The coach is unaffected: this
+    // whole function exists only to draw it.
+  }
+  return publish;
+}
+
 /**
  * Install the coach.
  *
@@ -274,17 +329,11 @@ function notice(text, summary) {
  */
 export function apply(ctx, config) {
   const budget = Number.isFinite(config.budget) ? config.budget : 0;
-  // Off is off: no budget means no ratios, no reminders, no masking, no listeners that
-  // could surprise someone who mounted the plugin and left it at its defaults.
-  if (budget <= 0) return;
-
   const preset = LEVELS[config.level] ?? LEVELS.standard;
   const wanted = Array.isArray(config.tiers) && config.tiers.length > 0 ? config.tiers : preset.tiers;
   const tiers = [...wanted]
     .filter((tier) => Number.isFinite(tier.ratio) && tier.ratio > 0 && typeof tier.text === "string" && tier.text !== "")
     .sort((a, b) => a.ratio - b.ratio);
-  // `level: "off"`, or a custom tier list that filtered down to nothing.
-  if (tiers.length === 0) return;
 
   // `Infinity` for "never": `ratio >= Infinity` is false for every real ratio, so the
   // mask simply never fires, and the comparison below stays a single expression.
@@ -292,13 +341,32 @@ export function apply(ctx, config) {
     ? config.maskRatio
     : (preset.maskRatio ?? Number.POSITIVE_INFINITY);
 
+  const enabled = budget > 0 && tiers.length > 0;
+  const publish = serveState(ctx, {
+    enabled,
+    budget,
+    level: config.level,
+    // `Infinity` does not survive JSON; null is the wire's word for "never".
+    maskRatio: Number.isFinite(maskRatio) ? maskRatio : null,
+    tiers: tiers.map((tier) => tier.ratio),
+    maskTools: config.maskTools,
+    countCache: config.countCache,
+    maxReminders: config.maxReminders,
+  });
+
+  // Off is off: no budget means no ratios, no reminders, no masking, no listeners that
+  // could surprise someone who mounted the plugin and left it at its defaults.
+  if (!enabled) return;
+
   /** Per-agent progress. A WeakMap so a finished agent's record goes away with it. */
   const spoken = new WeakMap();
 
   const stateOf = (agent) => {
     let state = spoken.get(agent);
     if (state === undefined) {
-      state = { delivered: new Set(), masked: false, reminders: 0 };
+      // `firedAt` is for the visualiser only: the coach itself just needs to know that a
+      // tier has been delivered, but "when" is what makes a timeline readable.
+      state = { delivered: new Set(), firedAt: new Map(), masked: false, reminders: 0 };
       spoken.set(agent, state);
     }
     return state;
@@ -319,7 +387,9 @@ export function apply(ctx, config) {
     const spent = spentTokens(ctx, exec.session ?? agent.session ?? agent, config.countCache);
     const ratio = spent / budget;
     const state = stateOf(agent);
-    if (state.reminders >= config.maxReminders) return downstream;
+    // The id the GUI can match on. Falls back rather than throwing: a host without a
+    // session id still gets a working coach, just an unlabelled row in the visualiser.
+    const sessionId = String(exec?.session?.id ?? agent?.session?.id ?? agent?.id ?? "current");
 
     // Masking first: it changes what the next step may call, and doing it after a reminder
     // would let one more fan-out start before the mask lands.
@@ -335,10 +405,29 @@ export function apply(ctx, config) {
       }
     }
 
-    const due = tiers.filter((tier) => ratio >= tier.ratio && !state.delivered.has(tier.ratio));
+    // The cap is checked here rather than with an early return above, so that a capped
+    // session still reports where it got to.
+    const due = state.reminders >= config.maxReminders
+      ? []
+      : tiers.filter((tier) => ratio >= tier.ratio && !state.delivered.has(tier.ratio));
+    for (const tier of due) {
+      state.delivered.add(tier.ratio);
+      state.firedAt.set(tier.ratio, Date.now());
+    }
+    if (due.length > 0) state.reminders += 1;
+
+    publish(sessionId, {
+      sessionId,
+      at: Date.now(),
+      spent,
+      ratio: Math.round(ratio * 10000) / 10000,
+      masked: state.masked,
+      reminders: state.reminders,
+      // Every configured tier, fired or not, so the GUI can draw what is still ahead.
+      fired: tiers.map((tier) => ({ ratio: tier.ratio, at: state.firedAt.get(tier.ratio) ?? null })),
+    });
+
     if (due.length === 0) return downstream;
-    for (const tier of due) state.delivered.add(tier.ratio);
-    state.reminders += 1;
 
     // One message even when several tiers came due at once: spending the remaining budget
     // on three near-identical reminders would be its own joke.
