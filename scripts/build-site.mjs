@@ -213,7 +213,10 @@ const rigModule = [
   "  return lastRigError ?? null;",
   "}",
   "",
-  "export { RIG, findNeck, buildRig, createSkinner, poseRig, sampleBlink, stepJelly, BODY_MESH, EYE_MESH, speakLine, setVoiceUrls, voiceStatus, rigStatus };",
+  // `summonBlend` and `SUMMON` are here because the console's own preview harness drives the
+  // gesture directly, the same way it drives `poseRig`. Leaving a function out of this list does
+  // not fail a build — it fails at the moment someone calls it, with "is not a function".
+  "export { RIG, findNeck, buildRig, createSkinner, poseRig, sampleBlink, stepJelly, summonBlend, SUMMON, BODY_MESH, EYE_MESH, speakLine, setVoiceUrls, voiceStatus, rigStatus };",
   "",
 ].join("\n");
 const rigTarget = join(root, "docs", "site", "rig.js");

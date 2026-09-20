@@ -1170,4 +1170,4 @@ function rigStatus() {
   return lastRigError ?? null;
 }
 
-export { RIG, findNeck, buildRig, createSkinner, poseRig, sampleBlink, stepJelly, BODY_MESH, EYE_MESH, speakLine, setVoiceUrls, voiceStatus, rigStatus };
+export { RIG, findNeck, buildRig, createSkinner, poseRig, sampleBlink, stepJelly, summonBlend, SUMMON, BODY_MESH, EYE_MESH, speakLine, setVoiceUrls, voiceStatus, rigStatus };
