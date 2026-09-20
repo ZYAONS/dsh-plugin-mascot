@@ -181,6 +181,27 @@ await it("a character whose greeting deforms says so, and the others do not", ()
   // A character borrowing the default must not inherit the lender's flag by accident.
   assert.notEqual(exports_.motionFor("nobody")?.suppressGreet, true, "borrowing must not smuggle the flag in");
 });
+
+await it("结城理 is drawn as a picture, and nobody else was made static along with him", () => {
+  // His chibi folded in half under the rig — the measurements are fine, so the fault is in
+  // the rig or the skinning, and that is still unfound. Displaying him as static art is the
+  // same path the portraits already take: no mesh, no bones, nothing to fold.
+  //
+  // The second half of this test is the part that matters. `still` is per *look*, set from a
+  // declaration, and the cheapest wrong fix would have been to turn it on for everything —
+  // which would look like a fix and quietly stop the mascot animating at all.
+  const index = JSON.parse(readFileSync(join(root, "art", "index.json"), "utf8"));
+  const stillFor = (character) =>
+    index.looks.filter((look) => look.character === character).map((look) => look.frames?.[0]?.still === true);
+
+  assert.ok(stillFor("makoto").every((still) => still), "every 结城理 look must be static");
+  assert.ok(stillFor("makoto").length >= 2, "and there is more than one of them to check");
+
+  for (const id of ["closure", "yuno", "muelsyse", "miuyin", "yuyuan", "dusk", "wang", "sakiko"]) {
+    const looks = index.looks.filter((look) => look.character === id);
+    assert.ok(looks.some((look) => look.frames?.[0]?.still === false), `${id} still has a figure that has to move`);
+  }
+});
 //#endregion
 await it("every look is drawn in a box big enough to hold it", () => {
   // This is the check that was missing for the whole life of the project, and its absence

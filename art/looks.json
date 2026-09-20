@@ -368,7 +368,9 @@
       "urls": [
         "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_4217_makoto.png"
       ],
-      "cors": true
+      "cors": true,
+      "still": true,
+      "stillReason": "他的 Q 版小人走骨架会折成一团（上身折下去、大衣被拖成长条），实测数据本身没问题，问题在骨架/蒙皮那一段，还没找到。所以按静态立绘显示 —— 和精二立绘走同一条路，不建网格、不驱动骨骼。找到原因后把这一行删掉即可恢复。"
     },
     {
       "id": "makoto-p3r",
@@ -380,7 +382,9 @@
       "urls": [
         "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_4217_makoto_p3r-1.png"
       ],
-      "cors": true
+      "cors": true,
+      "still": true,
+      "stillReason": "他的 Q 版小人走骨架会折成一团（上身折下去、大衣被拖成长条），实测数据本身没问题，问题在骨架/蒙皮那一段，还没找到。所以按静态立绘显示 —— 和精二立绘走同一条路，不建网格、不驱动骨骼。找到原因后把这一行删掉即可恢复。"
     },
     {
       "id": "wang-chibi",

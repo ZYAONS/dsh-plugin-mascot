@@ -2980,7 +2980,7 @@
               0
             ]
           ],
-          "still": false,
+          "still": true,
           "arms": {
             "halfWidth": 0.055,
             "y": 0.5744,
@@ -3123,7 +3123,7 @@
               0
             ]
           ],
-          "still": false,
+          "still": true,
           "arms": {
             "halfWidth": 0.055,
             "y": 0.5744,

@@ -2903,7 +2903,7 @@
             ]
           ],
           "blinkable": true,
-          "still": false,
+          "still": true,
           "localOnly": false,
           "arms": {
             "halfWidth": 0.055,
@@ -3036,7 +3036,7 @@
             ]
           ],
           "blinkable": true,
-          "still": false,
+          "still": true,
           "localOnly": false,
           "arms": {
             "halfWidth": 0.055,
