@@ -388,6 +388,9 @@ function blink(animation, step) {
 }
 
 const STEP = 0.08;
+
+/** What the per-character file says about itself. */
+const MOTION_NOTE = "每个角色一份实测曲线，取自方舟官方 Spine 小人（Ark-Models）。键是 art/index.json 里的角色 id，不是模型 id —— 两者不是一回事（结城理的小人 PNG 是 char_4217_makoto，Spine 模型是 118_yuki）。由 npm run measure:motion 生成。";
 const motion = {
   source: `Arknights Spine ${data.version} · ${MODEL.id} · Ark-Models`,
   step: STEP,
@@ -431,9 +434,40 @@ for (const [key, name] of Object.entries(ANIMATIONS)) {
   console.log(`  ${key} (${name}, ${animation.duration.toFixed(2)}s): ${summary}${propSummary === "" ? "" : `  |  ${propSummary}`}`);
 }
 
-const target = typeof flag("out") === "string" ? join(root, flag("out")) : join(root, "art", "motion.json");
-writeFileSync(target, `${JSON.stringify(motion, null, 2)}\n`);
-console.log(`measure-motion: 写入 ${target}`);
+/**
+ * Where the measurement goes.
+ *
+ * `art/motion.json` is keyed by **character**, not by model, because that is the key the client
+ * has when it draws — it knows which character is on screen and nothing about Spine models. The
+ * model id and the character id are not the same thing: 结城理's chibi PNG is `char_4217_makoto`
+ * while his Spine model is `118_yuki`, so neither can be derived from the other.
+ *
+ * Merging rather than replacing: measuring one character must not wipe the others.
+ *
+ * `--out` writes the bare measurement somewhere else instead, for looking at rather than using.
+ */
+if (typeof flag("out") === "string") {
+  const target = join(root, flag("out"));
+  writeFileSync(target, `${JSON.stringify(motion, null, 2)}\n`);
+  console.log(`measure-motion: 写入 ${target}`);
+} else {
+  const character = typeof flag("character") === "string" ? flag("character") : "closure";
+  const target = join(root, "art", "motion.json");
+  let existing = { note: MOTION_NOTE, characters: {} };
+  try {
+    const parsed = JSON.parse(readFileSync(target, "utf8"));
+    // The file used to be a single character's measurement with no wrapper. Reading it as one
+    // character's entry is the migration, and it only has to happen once.
+    existing = parsed.characters === undefined
+      ? { note: MOTION_NOTE, characters: { closure: parsed } }
+      : { note: parsed.note ?? MOTION_NOTE, characters: parsed.characters ?? {} };
+  } catch {
+    // No file yet, or an unreadable one: this measurement becomes the first entry.
+  }
+  existing.characters[character] = motion;
+  writeFileSync(target, `${JSON.stringify(existing, null, 2)}\n`);
+  console.log(`measure-motion: 写入 ${target}（${character}，共 ${String(Object.keys(existing.characters).length)} 位角色）`);
+}
 // `--out` means "measure this other character": the anatomy file holds this project's own
 // ratios for the character the dock is drawn from, and overwriting it with a different
 // model's proportions would silently change how every character is drawn.
