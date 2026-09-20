@@ -24,29 +24,55 @@ import vm from "node:vm";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const cache = join(root, "art", ".motion-cache");
 
-/** 要量的模型：可露希尔的小人，方舟里代号 4228_closur。 */
+/**
+ * 要量的模型：可露希尔的小人，方舟里代号 4228_closur。
+ *
+ * `--model=<id>` 换成任意一个 Ark-Models 里的模型。骨骼名与动画名是方舟统一的，
+ * 所以换模型不用换别的配置；但动画名每个角色不一样，`--list` 就是用来先看一眼的。
+ */
+const argv = process.argv.slice(2);
+const flag = (name) => {
+  const hit = argv.find((entry) => entry === `--${name}` || entry.startsWith(`--${name}=`));
+  if (hit === undefined) return undefined;
+  return hit.includes("=") ? hit.slice(hit.indexOf("=") + 1) : true;
+};
+const MODEL_ID = flag("model") ?? "4228_closur";
 const MODEL = {
-  id: "4228_closur",
-  base: "https://raw.githubusercontent.com/isHarryh/Ark-Models/main/models/4228_closur",
-  files: ["build_char_4228_closur.skel", "build_char_4228_closur.atlas"],
+  id: MODEL_ID,
+  base: `https://raw.githubusercontent.com/isHarryh/Ark-Models/main/models/${MODEL_ID}`,
+  files: [`build_char_${MODEL_ID}.skel`, `build_char_${MODEL_ID}.atlas`],
 };
 const RUNTIME = "https://raw.githubusercontent.com/EsotericSoftware/spine-runtimes/3.8/spine-ts/build/spine-core.js";
 
-/** 要抽的骨头，用方舟的命名。键是我们这边的语义名。 */
-const CHANNELS = {
-  waist: "F_Waist_I",
-  chest: "F_Chest_I",
-  head: "F_Head_I",
-  forearm: "F_L_Forearm_I",
-  upperArm: "F_L_Arm_II",
-  leg: "F_L_Leg_I",
+/**
+ * 要抽的骨头，用方舟的命名。键是我们这边的语义名。
+ *
+ * 每项是一串候选名，按顺序取第一个存在的。方舟的小人骨架有两代命名：老一代带 `_I`
+ * 后缀（可露希尔那批，`F_Waist_I`），新一代去掉了（`F_Waist`）。写死一个名字的后果不是
+ * 报错，而是**通道静默为空** —— 看起来就像这个角色根本不动。
+ */
+const CHANNEL_NAMES = {
+  waist: ["F_Waist_I", "F_Waist"],
+  chest: ["F_Chest_I", "F_Chest"],
+  head: ["F_Head_I", "F_Head", "F_Face"],
+  // 三代骨架三套叫法：老 `F_L_Forearm_I` / `F_L_Arm_II`、新 `F_L_Arm_A` / `F_L_Arm_B`、
+  // 联动那种最简的 `F_L_Forearm` / `F_L_Arm`。`F_L_HandHold` 是新骨架的握持点。
+  forearm: ["F_L_Forearm_I", "F_L_Arm_B", "F_L_Forearm"],
+  upperArm: ["F_L_Arm_II", "F_L_Arm_I", "F_L_Arm_A", "F_L_Arm"],
+  leg: ["F_L_Leg_I", "F_L_Leg_A", "F_L_Leg"],
 };
 
-/** 要量的动画：键是我们这边的语义名。 */
-const ANIMATIONS = {
-  idle: "Relax",
-  greet: "Interact",
-};
+/** 要量的动画：键是我们这边的语义名。`--anims=idle:Relax,greet:Interact` 可以覆盖。 */
+const ANIMATIONS = (() => {
+  const override = flag("anims");
+  if (typeof override !== "string" || override === "") return { idle: "Relax", greet: "Interact" };
+  const map = {};
+  for (const pair of override.split(",")) {
+    const [key, name] = pair.split(":");
+    if (key !== undefined && name !== undefined && key !== "" && name !== "") map[key] = name;
+  }
+  return Object.keys(map).length > 0 ? map : { idle: "Relax", greet: "Interact" };
+})();
 
 /** 下载到缓存目录，已存在就跳过。 */
 async function fetchCached(url, file) {
@@ -103,7 +129,41 @@ const skelPath = modelPaths.find((path) => path.endsWith(".skel"));
 const data = new spine.SkeletonBinary(attachmentLoader(spine)).readSkeletonData(new Uint8Array(readFileSync(skelPath)));
 console.log(`  模型 ${String(data.bones.length)} 根骨头，${String(data.animations.length)} 段动画`);
 
-/** 抽一根骨头在某段动画里的旋转关键帧，线性重采样到固定密度。 */
+/** 这份骨架里实际存在的骨头名，语义键 → 骨头名。缺失的会被报出来而不是悄悄跳过。 */
+const CHANNELS = {};
+for (const [semantic, candidates] of Object.entries(CHANNEL_NAMES)) {
+  const found = candidates.find((name) => data.bones.some((entry) => entry.name === name));
+  if (found === undefined) {
+    console.warn(`  警告：${semantic} 一个候选都没有 —— ${candidates.join(" / ")}`);
+    continue;
+  }
+  CHANNELS[semantic] = found;
+}
+
+// `--bones` is the other half of `--list`: a model's bone names are as unguessable as its
+// animation names, and a channel that silently finds nothing looks exactly like a character
+// who does not move.
+if (flag("bones") !== undefined) {
+  for (const [semantic, candidates] of Object.entries(CHANNEL_NAMES)) {
+    console.log(`  ${semantic in CHANNELS ? "ok  " : "MISS"} ${semantic.padEnd(9)} ${candidates.join(" | ")}`);
+  }
+  const interesting = data.bones.map((entry) => entry.name).filter((name) => /Arm|Forearm|Hand|Leg|Waist|Chest|Head/i.test(name));
+  console.log(`\n相关的骨头（${String(interesting.length)}）:\n  ${interesting.join(", ")}`);
+  process.exit(0);
+}
+
+// `--list` stops here: which animations a model has is the one thing you cannot guess, and
+// picking the two worth measuring is a job for a person looking at the names.
+if (flag("list") !== undefined) {
+  console.log(`\n${MODEL_ID} 的动画（时长秒）:`);
+  for (const animation of data.animations) {
+    console.log(`  ${animation.name.padEnd(28)} ${animation.duration.toFixed(2)}`);
+  }
+  process.exit(0);
+}
+
+/**
+ * 抽一根骨头在某段动画里的旋转关键帧，线性重采样到固定密度。 */
 function channel(animation, boneName, step) {
   const boneIndex = data.bones.findIndex((bone) => bone.name === boneName);
   if (boneIndex < 0) return null;
@@ -197,9 +257,16 @@ for (const [key, name] of Object.entries(ANIMATIONS)) {
   console.log(`  ${key} (${name}, ${animation.duration.toFixed(2)}s): ${summary}`);
 }
 
-const target = join(root, "art", "motion.json");
+const target = typeof flag("out") === "string" ? join(root, flag("out")) : join(root, "art", "motion.json");
 writeFileSync(target, `${JSON.stringify(motion, null, 2)}\n`);
 console.log(`measure-motion: 写入 ${target}`);
+// `--out` means "measure this other character": the anatomy file holds this project's own
+// ratios for the character the dock is drawn from, and overwriting it with a different
+// model's proportions would silently change how every character is drawn.
+if (typeof flag("out") === "string") {
+  console.log("measure-motion: 指定了 --out，跳过解剖比例（那是给主形象用的）");
+  process.exit(0);
+}
 
 /**
  * 解剖比例：眼睛、胯、胸、颈各在身高的几分之几处。
