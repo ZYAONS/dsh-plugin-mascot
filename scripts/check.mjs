@@ -857,27 +857,37 @@ await it("the summoned hand arrives at the temple, on the real artwork's geometr
   const distance = (pose) => {
     const hand = apply(pose[6], handHome);
     const base = toImage(rig.bones[2].pivot);
-    // The temple. `findNeck` gives the base of the head; on these chibis the head is about 39% of
-    // the body box, so the temple is roughly 0.23 of the body height above it.
-    const head = apply(pose[2], { x: base.x, y: base.y - 0.23 * box[3] });
+    // The temple, taken from the artwork's own verified eye box rather than from a rule about how
+    // much of a chibi is head.
+    //
+    // `art/eyes.json` lists the looks whose eye boxes were checked by rendering the blink and
+    // looking at it, and makoto-chibi is one: its eye box sits at 0.240..0.315 of the body box,
+    // image y 181..221 with the neck at 261. So the eye level is 0.113 of the body height above the
+    // neck. The 0.23 this test used for three rounds put the target 63 pixels higher — up in the
+    // hair — and the 0.13 before that was nearly right, "corrected" away by reasoning about head
+    // proportions instead of reading the boxes that had already been verified against the art.
+    const head = apply(pose[2], { x: base.x, y: base.y - 0.113 * box[3] });
     return Math.hypot(hand.x - head.x, hand.y - head.y);
   };
 
   const rest = distance(at(0));
   const held = distance(at(1));
   assert.ok(
-    held < rest * 0.1,
-    // 314.5 at rest → 7.6 summoned in a 220x536 box: 98% of the way, the hand within 1.4% of the
-    // body height of the temple.
+    held < rest * 0.05,
+    // 251.9 at rest → 1.1 summoned in a 220x536 box: the hand arrives at eye level, which on this
+    // chibi is where a temple is.
     //
-    // Four rounds of this test measured four different things, and the render disagreed with every
-    // one of them until the last:
-    //   0.13-of-the-height target → the chin, not the temple;
-    //   0.23 on a synthetic profile → geometry the artwork does not have;
-    //   hand taken from `arms.hand` → a point part-way down the forearm, since buildRig lengthens
-    //     the arm past the value measured off a bent-arm pose.
-    // It now uses the real look's silhouette, box and shoulders, and takes the hand from the rig's
-    // own bones. That is the only version whose number has matched the picture.
+    // Five rounds of this test measured five different things, and the render disagreed with every
+    // one until the last. In order: a target on the chin (0.13 of the body above the neck, image
+    // y 192); the same 0.13 "corrected" to 0.23 by reasoning about how much of a chibi is head —
+    // which put the target 63 px above the eyes, in the hair; a synthetic silhouette rather than
+    // the artwork's; and a hand point taken from `arms.hand`, which records where the hand is drawn
+    // on a bent-arm pose rather than how long the arm is.
+    //
+    // What settled it was reading data instead of deriving it: `art/eyes.json` holds eye boxes that
+    // were verified by rendering the blink and looking at it, and makoto-chibi is one of them. Its
+    // eye level is 0.113 of the body height above the neck. Everything above is downstream of not
+    // looking that up first.
     `the gesture must bring the hand to the head (${rest.toFixed(1)} → ${held.toFixed(1)} in a ${box[2]}x${box[3]} box)`,
   );
 });

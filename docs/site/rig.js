@@ -921,8 +921,8 @@ const SUMMON = Object.freeze({ raise: 0.34, hold: 0.86, total: 1.54 });
  * The sum is close to the 158 the single bone used, because the total travel is the same
  * journey — the difference is that it now bends in the middle rather than sweeping.
  */
-const SUMMON_UPPER = 160;
-const SUMMON_FOLD = 60;
+const SUMMON_UPPER = 140;
+const SUMMON_FOLD = 120;
 
 /**
  * Advance the jelly spring by `dt` seconds toward a lid position.
