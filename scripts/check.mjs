@@ -141,6 +141,36 @@ await it("apply() registers into shell.overlay and declares its own session-scop
 });
 //#endregion
 
+//#region 3b — the box each look is drawn in
+await it("every look is drawn in a box big enough to hold it", () => {
+  // This is the check that was missing for the whole life of the project, and its absence
+  // showed up as a screenshot: the chibi sliced off by a hard vertical edge, with the room
+  // still visible beside it. The seat was the constant 104×172, measured from Yuno's chibi
+  // (which needs 102×170, so she always looked right) while every character added afterwards
+  // is drawn bigger — `dusk-chibi` needs 195×250.
+  const index = JSON.parse(readFileSync(join(root, "art", "index.json"), "utf8"));
+  let checked = 0;
+  for (const look of index.looks) {
+    const frame = look.frames?.[0];
+    const framing = frame?.seat?.sprite;
+    const box = frame?.measured?.box;
+    if (framing === undefined || !Array.isArray(box) || !(frame.measured.width > 0)) continue;
+    checked += 1;
+
+    const scale = framing.width / frame.measured.width;
+    const needW = Math.ceil(framing.left + (box[0] + box[2]) * scale);
+    const needH = Math.ceil(framing.top + (box[1] + box[3]) * scale);
+    const seat = exports_.seatFor(look);
+    assert.ok(seat.width >= needW, `${look.id}: box is ${String(seat.width)} wide but the drawing needs ${String(needW)}`);
+    assert.ok(seat.height >= needH, `${look.id}: box is ${String(seat.height)} tall but the drawing needs ${String(needH)}`);
+  }
+  assert.ok(checked >= 8, `only ${String(checked)} looks had the measurements to check`);
+  // And a look whose measurements are missing falls back rather than throwing.
+  assert.deepEqual(exports_.seatFor(undefined), { width: 104, height: 172 });
+  assert.deepEqual(exports_.seatFor({ id: "x" }), { width: 104, height: 172 });
+});
+//#endregion
+
 //#region 3 — statistics, themes and the fallback catalogue
 const { deriveStats, THEMES, FALLBACK_LOOKS, PLACEHOLDER_SVG } = exports_;
 
