@@ -143,8 +143,6 @@ A 2D bone and skinned-mesh renderer in WebGL2.
 - The texture is uploaded with `UNPACK_PREMULTIPLY_ALPHA_WEBGL`.
 - A click adds a decaying oscillation that ends within 1.6 s.
 
-This is not Live2D or Spine. *Arknights* uses a modified Spine 3.8 format that the stock runtime cannot read. There is no pre-authored skeleton to load; the rig is inferred from a still image. It has no wrist bones.
-
 If WebGL2 is unavailable, a shader fails to compile, or the image taints the canvas, it renders a plain `<img>`. The rig can only add motion. The preview script prints `rig: ON (canvas 140x232)` to report which path ran.
 
 ### Measured motion
