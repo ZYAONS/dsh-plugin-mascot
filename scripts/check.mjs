@@ -825,7 +825,7 @@ await it("skin weights are a partition: every vertex sums to one, none negative"
   assert.ok(bottom.w[0] > 0.95, `the feet should be root, got ${String(bottom.w[0])}`);
 });
 
-await it("the summoned hand gets a little over half way to the temple", () => {
+await it("the summoned hand arrives at the temple", () => {
   // What the render showed, as a number. Measuring the hand against the temple — not the neck,
   // which `findNeck` gives and which sits at the base of the head — puts the resting hand 83.9
   // units away in a 100x200 box and the summoned hand 31.6. So the arm does most of the journey
@@ -869,19 +869,20 @@ await it("the summoned hand gets a little over half way to the temple", () => {
   const held = distance(at(1));
   // 83.9 at rest → 24.9 with the elbow, against 31.6 when the arm was one bone. The threshold sits
   // between those two numbers on purpose: a regression back to a single-bone arm fails here.
-  // 103.8 at rest → 42.2 summoned: a little over half way, and no further. The 42.2 is the real
-  // gap, and it is roughly the distance from a chin to a temple — which is exactly what the render
-  // showed, a forearm folded across the chest with the hand at collar height.
+  // 103.8 at rest → 4.4 summoned, in a 200-unit figure: 2% of the body height, which is the hand
+  // at the temple.
   //
-  // This test said 22.3 for two rounds because its target was 0.13 of the body height above the
-  // neck, and on these chibis that is the chin: the head is 39% of the body, so the temple is
-  // nearer 0.23. The number looked better than the picture and I believed the number. The guard
-  // below is set to catch a regression to the single-bone arm (54.4 at this reference), not to
-  // claim the pose works — it does not.
-  assert.ok(held < rest * 0.5, `the gesture must at least halve the distance (${rest.toFixed(1)} → ${held.toFixed(1)})`);
-  // And it must not overshoot into the far side of the head, which is what "turn it further"
-  // would do with one bone.
-  assert.ok(held > 12, `the hand overshot the head (${held.toFixed(1)})`);
+  // Three rounds of this test measured something else. It said 22.3 because its target sat 0.13 of
+  // the body height above the neck and on these chibis that is the chin; corrected to 0.23 it said
+  // 42.2, and a sweep of 693 poses could not beat 42.1. The pose was not mistuned, it was
+  // unreachable: `arms.hand` is measured off the artwork and these chibis stand with bent arms, so
+  // the rig's arm was 0.157 of the body height while the shoulder-to-temple span is 0.359 — 44% of
+  // the distance it had to cover. Lengthening the arm to something that could hang past the hip is
+  // what made the gesture possible at all, and the sweep's plateau disappeared with it.
+  assert.ok(held < rest * 0.1, `the gesture must put the hand at the temple (${rest.toFixed(1)} → ${held.toFixed(1)})`);
+  // Not exactly zero: a hand that lands on the reference point to the digit would mean the pose
+  // and the target are the same expression, which measures nothing.
+  assert.ok(held > 0.5, `the hand is suspiciously exactly on the target (${held.toFixed(2)})`);
 });
 
 await it("the summoning gesture turns the right arm by an angle, and only that arm", () => {

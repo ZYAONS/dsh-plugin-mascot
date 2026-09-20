@@ -120,7 +120,23 @@ function buildRig(profile, options = {}) {
 		const dx = arms.halfWidth / aspect;
 		const shoulderY = 1 - arms.y;
 		const handY = 1 - arms.hand;
-		const armLength = Math.max(0.08, handY - shoulderY);
+		/**
+		 * How long the arm is, which is not the same as how far the hand happens to be from
+		 * the shoulder in the artwork.
+		 *
+		 * `arms.hand` is measured off the art, and these chibis stand with their arms bent —
+		 * so it records the *posed* reach, not the arm. For 结城理's chibi that is 0.157 of
+		 * the body height while the shoulder-to-temple span his gesture has to cover is
+		 * 0.359: the arm was 44% of the distance it needed, and no combination of joint
+		 * angles could close it. A sweep over elbow, upper arm and fold confirmed that — the
+		 * best of 693 poses landed within two units of the straight-arm ceiling.
+		 *
+		 * A hanging arm reaches past the hip, so that is the floor used here. The measured
+		 * value still wins when it is longer, which is the case for a figure already drawn
+		 * with its arms out.
+		 */
+		const hanging = Math.max(0.2, RIG.hip + 0.06 - shoulderY);
+		const armLength = Math.max(handY - shoulderY, hanging);
 		// Two segments per arm, not one. A single shoulder rotation carries the whole arm
 		// mass with it, so turning it further sweeps the arm further across the body
 		// instead of folding it — measured, that put the summoned hand 31.6 units short of
@@ -128,7 +144,7 @@ function buildRig(profile, options = {}) {
 		// How far down the arm the elbow sits, 0 at the shoulder and 1 at the hand. An arm
 		// is not halved: the upper arm is the longer of the two, and where the joint sits
 		// decides how much of the reach the fold can add. Overridable so it can be searched.
-		const elbowAt = Number.isFinite(options.elbow) ? options.elbow : 0.4;
+		const elbowAt = Number.isFinite(options.elbow) ? options.elbow : 0.8;
 		const elbowY = shoulderY + armLength * elbowAt;
 		bones.push({ id: "armL", pivot: { x: 0.5 - dx, y: shoulderY } });
 		bones.push({ id: "armR", pivot: { x: 0.5 + dx, y: shoulderY } });
@@ -906,7 +922,7 @@ const SUMMON = Object.freeze({ raise: 0.34, hold: 0.86, total: 1.54 });
  * journey — the difference is that it now bends in the middle rather than sweeping.
  */
 const SUMMON_UPPER = 175;
-const SUMMON_FOLD = 30;
+const SUMMON_FOLD = -120;
 
 /**
  * Advance the jelly spring by `dt` seconds toward a lid position.
