@@ -41,6 +41,39 @@ window.__ModuleLoader__.load({
 .dsh-thrift-root { position: absolute; left: 20px; bottom: 20px; z-index: 30; pointer-events: none;
   font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, monospace;
   font-size: 11px; line-height: 1.5; color: #e8eef7; font-variant-numeric: tabular-nums; }
+/* ---------- 坐进看板娘面板里的卡片 ----------
+   它借别人的面板住，所以只用自己的强调色（青），不碰背景、不碰圆角 ——
+   那些是房主的。中间那条分隔线是唯一的"我在这儿"的表示。 */
+.dsh-thrift-card { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--dsh-mascot-hairline, rgba(255,255,255,.08));
+  display: grid; gap: 7px; }
+.dsh-thrift-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dsh-thrift-card-head b { font-size: 12px; letter-spacing: .03em; color: var(--dsh-mascot-text, #e4edf4); }
+.dsh-thrift-card-power { font: inherit; font-size: 10.5px; cursor: pointer; padding: 4px 10px;
+  border-radius: 999px; background: transparent; color: var(--dsh-mascot-dim, rgba(228,237,244,.6));
+  border: 1px solid var(--dsh-mascot-hairline, rgba(255,255,255,.14)); }
+.dsh-thrift-card-power:hover { color: var(--dsh-mascot-text, #e4edf4); }
+.dsh-thrift-card-power[data-off="1"] { color: #ffab3d; border-color: rgba(255, 171, 61, .55);
+  background: rgba(255, 171, 61, .12); }
+.dsh-thrift-card-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; }
+.dsh-thrift-card-bar > i { display: block; height: 100%; border-radius: 999px; transition: width .3s ease, background .3s ease; }
+.dsh-thrift-card-note { font-size: 11px; color: var(--dsh-mascot-dim, rgba(228,237,244,.6)); font-variant-numeric: tabular-nums; }
+.dsh-thrift-card-dial { -webkit-appearance: none; appearance: none; width: 100%; height: 20px;
+  background: none; cursor: pointer; margin: 0; }
+.dsh-thrift-card-dial::-webkit-slider-runnable-track { height: 6px; border-radius: 999px;
+  background: linear-gradient(90deg, rgba(79,214,168,.55), #ffd34d 45%, #ff5f6d);
+  border: 1px solid rgba(255,255,255,.12); }
+.dsh-thrift-card-dial::-moz-range-track { height: 6px; border-radius: 999px;
+  background: linear-gradient(90deg, rgba(79,214,168,.55), #ffd34d 45%, #ff5f6d); }
+.dsh-thrift-card-dial::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
+  width: 14px; height: 14px; margin-top: -5px; border-radius: 50%;
+  background: #0b0e13; border: 2px solid #4fd6a8; box-shadow: 0 0 8px rgba(0,0,0,.5); }
+.dsh-thrift-card-dial::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%;
+  background: #0b0e13; border: 2px solid #4fd6a8; }
+.dsh-thrift-card-dial:focus-visible { outline: 2px solid #4fd6a8; outline-offset: 3px; }
+.dsh-thrift-card-label { display: flex; align-items: baseline; gap: 8px; }
+.dsh-thrift-card-label b { font-size: 13px; color: #4fd6a8; font-variant-numeric: tabular-nums; }
+.dsh-thrift-card-label span { font-size: 10.5px; color: var(--dsh-mascot-dim, rgba(228,237,244,.6)); }
+
 .dsh-thrift-chip { pointer-events: auto; display: inline-flex; align-items: center; gap: 8px;
   padding: 4px 11px 4px 9px; border-radius: 999px; cursor: pointer; user-select: none;
   /* Translucent on purpose: it sits over whatever the user is reading, and an opaque pill
@@ -500,6 +533,138 @@ window.__ModuleLoader__.load({
 		}
 		//#endregion
 
+		//#region card
+		/** 力度位置对应的说法，和面板、控制台同一套。 */
+		const LEVEL_WORDS = {
+			off: "不劝也不遮",
+			light: "只劝一次，永不遮工具",
+			standard: "两三档劝告，临界才遮",
+			strict: "四档劝告，五成半起遮",
+		};
+
+		/** 离当前力度最近的那个名字。 */
+		function nameFor(intensity, presets) {
+			const value = typeof intensity === "number" && Number.isFinite(intensity) ? intensity : 0;
+			if (value <= 0) return "off";
+			let best = "light";
+			let distance = Number.POSITIVE_INFINITY;
+			for (const [name, stop] of Object.entries(presets ?? {})) {
+				if (name === "off") continue;
+				const gap = Math.abs(stop - value);
+				if (gap < distance) {
+					distance = gap;
+					best = name;
+				}
+			}
+			return best;
+		}
+
+		/**
+		 * 坐在看板娘面板里的那张小卡片。
+		 *
+		 * 这是这个插件的主界面 —— 点角色就看得见。控制台页面留着，但那是拿来
+		 * **查**的（每一档的完整台词、每个会话、原始 JSON），不是拿来随手调的。
+		 *
+		 * 组件自己不注册槽位：谁渲染它由 `apply` 决定，这样同一张卡片既能坐进
+		 * 看板娘的面板，也能在没装看板娘时退回自己那颗胶囊。
+		 */
+		function ThriftCard(props) {
+			const [state, setState] = React.useState(undefined);
+			/** 拖动中的值，松手才提交。 */
+			const [dial, setDial] = React.useState(undefined);
+
+			React.useEffect(() => {
+				let cancelled = false;
+				const load = () => {
+					fetch(STATE_ENDPOINT, { headers: { accept: "application/json" } })
+						.then((response) => (response.ok ? response.json() : { ok: false }))
+						.then((payload) => {
+							if (!cancelled) setState(payload);
+						})
+						.catch(() => {
+							if (!cancelled) setState({ ok: false });
+						});
+				};
+				load();
+				const timer = window.setInterval(load, POLL_MS);
+				return () => {
+					cancelled = true;
+					window.clearInterval(timer);
+				};
+			}, []);
+
+			const send = (body) => {
+				fetch(SETTINGS_ENDPOINT, {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify(body),
+				})
+					.then((response) => response.json())
+					.then((payload) => {
+						if (payload.ok === true) {
+							setState(payload);
+							setDial(undefined);
+						}
+					})
+					.catch(() => {});
+			};
+
+			// 读不到状态时**什么都不画**，而不是画一张"不可用"的卡片：它坐在别人的面板里，
+			// 一张报错的卡片会把那个面板变成关于这个插件的一页。
+			if (state === undefined || state.ok !== true) return null;
+
+			const report = pickReport(state, props?.sessionId);
+			const ratio = report?.ratio ?? 0;
+			const live = typeof state.intensity === "number" ? state.intensity : 0;
+			const shown = dial ?? live;
+			const enabled = state.enabled === true;
+			const back = Number.isFinite(state.configured?.intensity) && state.configured.intensity >= 0
+				? state.configured.intensity
+				: 55;
+			const name = nameFor(shown, state.presets);
+
+			return h("div", { className: "dsh-thrift-card" },
+				h("div", { className: "dsh-thrift-card-head" },
+					h("b", null, "Token 节流"),
+					h("button", {
+						type: "button",
+						className: "dsh-thrift-card-power",
+						"data-off": enabled ? "0" : "1",
+						title: enabled ? "把力度归零：不劝、不遮、不占一个 token" : "恢复力度",
+						onClick: () => send({ intensity: enabled ? 0 : back }),
+					}, enabled ? "全力工作" : "恢复力度")),
+				h("div", { className: "dsh-thrift-card-bar" },
+					h("i", { style: { width: `${String(Math.min(100, Math.round(ratio * 100)))}%`, background: tone(ratio) } })),
+				h("div", { className: "dsh-thrift-card-note" },
+					report === undefined
+						? (enabled ? "还没有会话在花 token" : "没在工作")
+						: `已花 ${count(report.spent)} / ${count(state.budget)} · ${String(Math.round(ratio * 100))}%`),
+				h("input", {
+					type: "range",
+					min: "0",
+					max: "100",
+					step: "1",
+					className: "dsh-thrift-card-dial",
+					"aria-label": "节流力度",
+					value: String(shown),
+					onChange: (event) => setDial(Number(event.target.value)),
+					onPointerUp: () => {
+						if (dial !== undefined && dial !== live) send({ intensity: dial });
+					},
+					onKeyUp: () => {
+						if (dial !== undefined && dial !== live) send({ intensity: dial });
+					},
+					onBlur: () => {
+						if (dial !== undefined && dial !== live) send({ intensity: dial });
+					},
+				}),
+				h("div", { className: "dsh-thrift-card-label" },
+					h("b", null, shown <= 0 ? "关" : String(shown)),
+					h("span", null, shown <= 0 ? LEVEL_WORDS.off : LEVEL_WORDS[name] ?? "")),
+			);
+		}
+		//#endregion
+
 		//#region plugin
 		/** Required service: the UI slot registry. */
 		const inject = ["slots"];
@@ -529,6 +694,36 @@ window.__ModuleLoader__.load({
 				 * 占位者。少了这一句，胶囊照常出现（它在 overlay 里），点开却什么都没有。
 				 */
 				yield ctx.slots.register({ name: "thrift.panel" }, ThriftPanel);
+				/**
+				 * 坐进看板娘面板里的那张卡片 —— 如果看板娘在的话。
+				 *
+				 * 槽是**对方**声明的，而两个插件谁先加载不由这里决定（profile 里
+				 * token-thrift 就排在 mascot 前面）。一次性的 try/catch 是不够的：
+				 * 抢在前面失败之后就再也不会重试，卡片永远不出现，而且**没有任何声音**。
+				 *
+				 * 所以隔一会儿再试，直到坐进去为止。没装看板娘的话就一直试不到 ——
+				 * 那也没关系，左下角那颗胶囊照常工作，这才是"可选依赖"该有的样子。
+				 */
+				yield ctx.effect(() => {
+					let seated = false;
+					let release;
+					let timer;
+					const attempt = () => {
+						if (seated) return;
+						try {
+							release = ctx.slots.register({ name: "mascot.thrift" }, ThriftCard);
+							seated = true;
+						} catch {
+							timer = window.setTimeout(attempt, 250);
+						}
+					};
+					attempt();
+					return () => {
+						seated = true;
+						if (timer !== undefined) window.clearTimeout(timer);
+						if (typeof release === "function") release();
+					};
+				});
 			});
 		}
 		//#endregion
@@ -538,6 +733,7 @@ window.__ModuleLoader__.load({
 		// Exported so the self-test can drive the real components instead of a copy.
 		exports.ThriftOverlay = ThriftOverlay;
 		exports.ThriftPanel = ThriftPanel;
+		exports.ThriftCard = ThriftCard;
 		exports.pickReport = pickReport;
 		exports.tone = tone;
 		exports.compact = compact;

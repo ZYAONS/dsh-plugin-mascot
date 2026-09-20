@@ -699,7 +699,12 @@ await it("a host with no web server still gets a working coach", async () => {
 
 // ---------------------------------------------------------------- the browser half
 const registrations = [];
-globalThis.window = { __ModuleLoader__: { load(entry) { registrations.push(entry); } } };
+globalThis.window = {
+  __ModuleLoader__: { load(entry) { registrations.push(entry); } },
+  // The client retries the mascot's seat on a timer; browsers have these, Node does not.
+  setTimeout: (fn, ms) => setTimeout(fn, ms),
+  clearTimeout: (id) => clearTimeout(id),
+};
 globalThis.document = { createElement: () => ({ dataset: {}, remove() {} }), head: { append() {} } };
 await import("../lib/client.js");
 const React = {
@@ -739,17 +744,55 @@ await it("the panel mounts into the overlay list beside the mascot", () => {
       },
       register(declaration = {}, Component) { registered.push({ declaration, Component }); },
     },
+    // Real Cordis runs an effect's callback and keeps its disposer; the retry for the
+    // mascot's seat goes through one, so the stub has to have it.
+    effect(callback) {
+      const dispose = callback();
+      return typeof dispose === "function" ? dispose : () => {};
+    },
   };
   client.apply(ctx);
   assert.deepEqual(injected, ["shell.overlay"]);
-  // Two registrations, not one: declaring the child slot and occupying it are separate
-  // calls, and for a long time this file only did the first — the chip rendered and the
-  // panel it opened did not. A count of one is the bug, so the count is asserted.
-  assert.equal(registered.length, 2, "the overlay, and the panel that fills the slot it declares");
+  // Three registrations: the overlay, the panel that fills the slot it declares, and the
+  // card that sits in the mascot's panel. Declaring a slot and occupying it are separate
+  // calls, and this file used to do only the first — the chip rendered and the panel it
+  // opened did not. A count is the only thing that catches that, so the count is asserted.
+  assert.equal(registered.length, 3, "overlay + own panel + the card in someone else's panel");
   assert.equal(registered[0].declaration.name, "shell.overlay");
   assert.equal(registered[1].declaration.name, "thrift.panel", "the declared child slot must be occupied");
   assert.equal(registered[1].Component, client.ThriftPanel, "by the panel itself");
   assert.equal(registered[0].declaration.children["thrift.panel"].scope, "session-maybe", "and it is declared before it is filled");
+  assert.equal(registered[2].declaration.name, "mascot.thrift", "the card asks for the mascot's seat");
+  assert.equal(registered[2].Component, client.ThriftCard, "with the same component the console would use");
+
+  // The seat belongs to the other plugin and the load order is not this file's to decide,
+  // so the ask has to survive not being answerable yet.
+  const late = [];
+  const lateCtx = {
+    slots: {
+      inject(key, callback) {
+        const iterator = callback();
+        let step = iterator.next();
+        while (step.done !== true) step = iterator.next();
+      },
+      // The first three succeed; the fourth (the mascot's seat) is not declared yet.
+      register(options, component) {
+        if (options.name === "mascot.thrift") throw new Error("not declared");
+        late.push(options.name);
+        return () => {};
+      },
+    },
+    effect(callback) {
+      const dispose = callback();
+      // Dispose at once: the retry would otherwise keep rescheduling and the test process
+      // would never exit. The first attempt has already happened, which is what is
+      // being asserted.
+      if (typeof dispose === "function") dispose();
+      return () => {};
+    },
+  };
+  client.apply(lateCtx);
+  assert.deepEqual(late, ["shell.overlay", "thrift.panel"], "an undeclared seat must not take the whole plugin down");
   assert.equal(registered[0].declaration.id, "token-thrift");
   // The child slot is what hands the panel a session id, and the report is found by it.
   assert.deepEqual(Object.keys(registered[0].declaration.children), ["thrift.panel"]);
