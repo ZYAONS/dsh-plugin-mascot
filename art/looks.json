@@ -105,6 +105,16 @@
       "tagline": "女神异闻录3 Reload",
       "taglineEn": "Persona 3 Reload",
       "theme": "makoto"
+    },
+    {
+      "id": "wang",
+      "name": "望",
+      "latin": "Wang",
+      "role": "岁 · 棋手",
+      "roleEn": "Sui · Go player",
+      "tagline": "天镜阁",
+      "taglineEn": "Sky Mirror Pavilion",
+      "theme": "wang"
     }
   ],
   "looks": [
@@ -354,6 +364,20 @@
       "rights": "《明日方舟》×《女神异闻录3 Reload》© 鹰角网络 / ATLUS — 联动造型 Q 版小人",
       "urls": [
         "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_4217_makoto_p3r-1.png"
+      ],
+      "cors": true
+    },
+    {
+      "id": "wang-chibi",
+      "character": "wang",
+      "name": "基建小人",
+      "nameEn": "Base sprite",
+      "file": "wang-chibi.png",
+      "rights": "《明日方舟》© 上海鹰角网络 — 官方 Q 版干员小人 (char_2027_wang)",
+      "sha256": "a6bf6ea041a708974b23172e6669b3b6f449fa97f49de77c85fce569e53634ab",
+      "urls": [
+        "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_2027_wang.png",
+        "https://cdn.jsdelivr.net/gh/Light-milk-tea/ArknightsChibi@main/chibi/char_2027_wang.png"
       ],
       "cors": true
     }

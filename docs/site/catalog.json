@@ -220,6 +220,20 @@
         "makoto-chibi",
         "makoto-p3r"
       ]
+    },
+    {
+      "id": "wang",
+      "name": "望",
+      "nameEn": "Wang",
+      "latin": "Wang",
+      "role": "岁 · 棋手",
+      "roleEn": "Sui · Go player",
+      "tagline": "天镜阁",
+      "taglineEn": "Sky Mirror Pavilion",
+      "theme": "wang",
+      "looks": [
+        "wang-chibi"
+      ]
     }
   ],
   "looks": [
@@ -2876,6 +2890,140 @@
           },
           "skin": null,
           "eyesFrom": "measured",
+          "crop": null,
+          "local": false
+        }
+      ]
+    },
+    {
+      "id": "wang-chibi",
+      "character": "wang",
+      "name": "基建小人",
+      "nameEn": "Base sprite",
+      "animated": false,
+      "accent": "#8a7748",
+      "sources": [
+        "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_2027_wang.png",
+        "https://cdn.jsdelivr.net/gh/Light-milk-tea/ArknightsChibi@main/chibi/char_2027_wang.png"
+      ],
+      "cors": true,
+      "frames": [
+        {
+          "file": "wang-chibi.png",
+          "seat": {
+            "sprite": {
+              "width": 141,
+              "left": 1,
+              "top": 28
+            },
+            "face": {
+              "width": 52,
+              "left": 0,
+              "top": 15
+            }
+          },
+          "box": [
+            43,
+            151,
+            374,
+            424
+          ],
+          "profile": [
+            0.561,
+            0.858,
+            0.548,
+            0.864,
+            0.545,
+            0.901,
+            0.527,
+            0.893,
+            0.529,
+            0.898,
+            0.412,
+            0.901,
+            0.422,
+            0.901,
+            0.497,
+            0.941,
+            0.46,
+            0.976,
+            0.436,
+            0.997,
+            0.428,
+            0.944,
+            0.537,
+            0.939,
+            0.492,
+            0.922,
+            0.34,
+            0.901,
+            0.39,
+            0.904,
+            0.12,
+            0.874,
+            0.032,
+            0.864,
+            0.027,
+            0.882,
+            0.027,
+            0.885,
+            0.016,
+            0.882,
+            0.016,
+            0.882,
+            0,
+            0.896,
+            0.021,
+            0.912,
+            0.029,
+            0.981,
+            0.072,
+            0.976,
+            0.238,
+            0.968,
+            0.246,
+            0.976,
+            0.259,
+            0.952,
+            0.273,
+            0.904,
+            0.291,
+            0.906,
+            0.321,
+            0.909,
+            0.377,
+            0.914
+          ],
+          "body": {
+            "x": 48,
+            "y": 152,
+            "w": 368,
+            "h": 422
+          },
+          "eyes": [
+            [
+              0.376,
+              0.239,
+              0.085,
+              0.062
+            ],
+            [
+              0.539,
+              0.239,
+              0.085,
+              0.062
+            ]
+          ],
+          "blinkable": false,
+          "still": false,
+          "localOnly": false,
+          "arms": {
+            "halfWidth": 0.055,
+            "y": 0.5744,
+            "hand": 0.4169
+          },
+          "skin": null,
+          "eyesFrom": "anatomy",
           "crop": null,
           "local": false
         }

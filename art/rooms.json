@@ -42,6 +42,16 @@
       "urls": ["https://torappu.prts.wiki/assets/furniture_preview/messengerCottage_2026_6.png"]
     },
     {
+      "character": "wang",
+      "name": "望",
+      "set": "天镜阁会客堂",
+      "setLatin": "Sky Mirror Pavilion Reception Hall",
+      "operatorSet": true,
+      "source": "https://arknights.wiki.gg/wiki/Sky_Mirror_Pavilion_Reception_Hall",
+      "note": "本人套装 —— 随他上线的春节活动「辞岁行」（2026-02-10 ~ 03-10）出，官方描述里点名了围棋：「通常用于会谈、调解、募资、贸易商谈、下围棋与讲学」。wiki.gg 上只有 226×169 的图，没有 477px 的横幅；比例反而更接近取景框，缩放后清晰度足够。",
+      "urls": ["https://arknights.wiki.gg/images/Sky_Mirror_Pavilion_Reception_Hall.png"]
+    },
+    {
       "character": "dusk",
       "name": "夕",
       "set": "丹青阁",
