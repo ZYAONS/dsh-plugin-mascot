@@ -780,7 +780,7 @@ await it("the browser half falls back to the placeholder when the official file 
 //#endregion
 
 //#region 5 — the bone rig
-const { buildRig, findNeck, poseRig, RIG, summonBlend, SUMMON, SUMMON_ARM } = exports_;
+const { buildRig, findNeck, poseRig, RIG, summonBlend, SUMMON, SUMMON_UPPER, SUMMON_FOLD } = exports_;
 
 /** A synthetic silhouette: a wide head, a pinched neck, then a wide body. */
 function syntheticProfile(headWidth, neckWidth, bodyWidth, neckRow) {
@@ -849,7 +849,9 @@ await it("the summoned hand travels most of the way to the head, and no further"
   const handHome = { x: shoulder.x, y: shoulder.y + armLength * box[3] };
   const at = (summon) => poseRig(rig, box, { time: 1.0, summon });
   const distance = (pose) => {
-    const hand = apply(pose[4], handHome);
+    // The forearm's matrix, not the upper arm's: the hand sits at the far end of the forearm,
+    // and since the elbow arrived its position is the forearm's business.
+    const hand = apply(pose[6], handHome);
     const base = toImage(rig.bones[2].pivot);
     const temple = apply(pose[2], { x: base.x, y: base.y - 0.13 * box[3] });
     return Math.hypot(hand.x - temple.x, hand.y - temple.y);
@@ -857,7 +859,9 @@ await it("the summoned hand travels most of the way to the head, and no further"
 
   const rest = distance(at(0));
   const held = distance(at(1));
-  assert.ok(held < rest * 0.5, `the gesture must bring the hand most of the way (${rest.toFixed(1)} → ${held.toFixed(1)})`);
+  // 83.9 at rest → 24.9 with the elbow, against 31.6 when the arm was one bone. The threshold sits
+  // between those two numbers on purpose: a regression back to a single-bone arm fails here.
+  assert.ok(held < rest * 0.32, `the gesture must bring the hand most of the way (${rest.toFixed(1)} → ${held.toFixed(1)})`);
   // And it must not overshoot into the far side of the head, which is what "turn it further"
   // would do with one bone.
   assert.ok(held > 12, `the hand overshot the head (${held.toFixed(1)})`);
@@ -869,7 +873,7 @@ await it("the summoning gesture turns the right arm by an angle, and only that a
   // of his head, against 75.6 at rest — so it is written rather than measured, and a written
   // pose is exactly the kind of thing that is silently wrong.
   const rig = buildRig(syntheticProfile(0.6, 0.18, 0.8, 10), { arms: { halfWidth: 0.055, y: 0.5744, hand: 0.4169 } });
-  assert.equal(rig.bones.length, 5, "the gesture needs arms; a three-bone rig cannot hold anything to its head");
+  assert.equal(rig.bones.length, 7, "the gesture needs a shoulder and an elbow: seven bones, up from five");
   const box = [0, 0, 100, 200];
   // `time` fixed and nothing else varying, so the only difference between the two poses is the
   // summon itself. `rig2d` builds its linear part as [cos, sin, ...], so atan2 recovers the turn.
@@ -880,8 +884,8 @@ await it("the summoning gesture turns the right arm by an angle, and only that a
   const held = at(1);
   const turned = angleOf(held[4]) - angleOf(rest[4]);
   assert.ok(
-    Math.abs(Math.abs(turned) - SUMMON_ARM) < 2,
-    `the arm turned ${turned.toFixed(1)}°, expected about ${String(SUMMON_ARM)}`,
+    Math.abs(Math.abs(turned) - SUMMON_UPPER) < 2,
+    `the upper arm turned ${turned.toFixed(1)}°, expected about ${String(SUMMON_UPPER)}`,
   );
   // The direction matters as much as the size: the same angle the other way is the arm behind
   // his back, which is the classic way a sign error hides behind a magnitude assertion.
