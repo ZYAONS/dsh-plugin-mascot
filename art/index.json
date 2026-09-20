@@ -142,6 +142,7 @@
       "tagline": "女神异闻录3 Reload",
       "taglineEn": "Persona 3 Reload",
       "theme": "makoto",
+      "gesture": "evoker",
       "looks": [
         "makoto-portrait",
         "makoto-chibi",

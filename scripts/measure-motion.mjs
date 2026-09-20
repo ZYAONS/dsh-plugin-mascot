@@ -190,14 +190,67 @@ if (flag("moves") !== undefined) {
 }
 
 /**
+ * `--trace=<骨头>[,<骨头>]` —— 骨头最终**落在哪儿**。
+ *
+ * 旋转通道和位移通道各答一半问题。"手有没有抬到头边" 问的是世界坐标，而两种通道里都没有
+ * 世界坐标：一个存的是相对父骨头的角度，一个存的是相对静止位的位移。所以这个开关把骨架摆到
+ * 某一帧、算出世界变换、把坐标打出来 —— 两根骨头时还会给出它们的距离，那正是
+ * "举到耳边" 与 "垂在手边" 的区别。
+ *
+ *   node scripts/measure-motion.mjs --model=118_yuki --trace=F_R_Weapon,F_Head --anim=Relax
+ */
+if (typeof flag("trace") === "string") {
+  const wanted = flag("trace").split(",").filter((name) => name !== "");
+  const animationName = typeof flag("anim") === "string" ? flag("anim") : "Relax";
+  const animation = data.animations.find((entry) => entry.name === animationName);
+  if (animation === undefined) {
+    console.error(`模型里没有 ${animationName}`);
+    process.exit(1);
+  }
+  const skeleton = new spine.Skeleton(data);
+  // Through `AnimationState` rather than `animation.apply` directly: the direct call needs a
+  // `lastTime` on the right side of `time` to interpolate at all, and handing it 0 makes every
+  // frame come back as the setup pose — a still skeleton that looks exactly like a character
+  // who does not move. This is the path the runtime itself uses.
+  const track = new spine.AnimationState(new spine.AnimationStateData(data));
+  track.setAnimation(0, animationName, false);
+  const bones = wanted.map((name) => ({ name, bone: skeleton.findBone(name) }));
+  for (const entry of bones) {
+    if (entry.bone === null || entry.bone === undefined) console.warn(`  警告：找不到骨头 ${entry.name}`);
+  }
+  const frames = Number(flag("frames") ?? 24);
+  console.log(`\n${MODEL_ID} · ${animationName} (${animation.duration.toFixed(2)}s) 的世界坐标，骨架单位:`);
+  for (let index = 0; index <= frames; index++) {
+    const time = (index / frames) * animation.duration;
+    skeleton.setToSetupPose();
+    track.update(time - (index === 0 ? 0 : animation.duration / frames));
+    track.apply(skeleton);
+    skeleton.updateWorldTransform();
+    const row = bones
+      .map(({ name, bone }) => (bone === null || bone === undefined ? `${name} n/a` : `${name} ${bone.worldX.toFixed(1)},${bone.worldY.toFixed(1)}`))
+      .join("   ");
+    let distance = "";
+    const [first, second] = bones;
+    if (bones.length === 2 && first.bone != null && second.bone != null) {
+      distance = `  → ${Math.hypot(first.bone.worldX - second.bone.worldX, first.bone.worldY - second.bone.worldY).toFixed(1)}`;
+    }
+    console.log(`  t=${time.toFixed(2).padStart(5)}  ${row}${distance}`);
+  }
+  process.exit(0);
+}
+
+/**
  * 道具通道：用**位移**驱动的骨头。
  *
  * 望的招牌动作是他手里那颗悬浮的黑棋，而它是一根叫 `C_Chess_Black` 的骨头，靠位移动 ——
  * 六个旋转通道里完全看不见（他的上臂整段动画只转 1.8°）。只量旋转的话，这个角色看起来
  * 就是站着不动，而实际上他最有辨识度的那一下就在数据里。
+ *
+ * 结城理的召唤器同理：它是他的武器，骨头叫 `F_R_Weapon`，而它在 Relax 里是位移最多的那根。
  */
 const PROP_CHANNELS = {
   chess: ["C_Chess_Black", "C_Chess_White"],
+  weapon: ["F_R_Weapon"],
 };
 
 /** 这份骨架里实际存在的道具骨头。 */

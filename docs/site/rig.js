@@ -560,6 +560,30 @@ function greetBlend(greetAge, loop) {
 }
 
 /**
+ * The summoning gesture: raise, hold, lower.
+ *
+ * 结城理 holds his Evoker to his temple and pulls the trigger. His official collab chibi
+ * does not contain that pose — every one of its six animations was traced and the hand
+ * never comes within 68.8 units of the head, against 75.6 at rest, so it moves *away* —
+ * which is why this one is written rather than measured.
+ *
+ * Three phases rather than a curve, because the gesture is three phases: the arm comes
+ * up, it stays there while the trigger is pulled, and it comes down. The hold is the
+ * longest part and the only part that reads as *aiming*; a single sine would spend most
+ * of its time at an angle the pose is never at.
+ *
+ * @param age - seconds since the click, or `undefined` when there was none.
+ * @returns 0..1 — how far into the pose the arm is.
+ */
+function summonBlend(age) {
+	if (typeof age !== "number" || age < 0) return 0;
+	if (age >= SUMMON.total) return 0;
+	if (age < SUMMON.raise) return smooth(0, SUMMON.raise, age);
+	if (age < SUMMON.raise + SUMMON.hold) return 1;
+	return 1 - smooth(SUMMON.raise + SUMMON.hold, SUMMON.total, age);
+}
+
+/**
  * How shut the eyes are at a moment: 0 open, 1 shut.
  *
  * The measured channel is a lid angle rather than an openness — it sits at
@@ -588,6 +612,25 @@ function sampleBlink(time, greetAge) {
  * that one belongs to the shader, and this one to the clock.
  */
 const JELLY = Object.freeze({ stiffness: 86, damping: 10.5 });
+
+/**
+ * The summoning gesture's timing, in seconds.
+ *
+ * The whole thing has to fit inside the poke's own 1.6 s life, or the arm would still be
+ * coming down when the impulse that raised it is thrown away.
+ */
+const SUMMON = Object.freeze({ raise: 0.34, hold: 0.86, total: 1.54 });
+
+/**
+ * How far the arm swings, in degrees, and which way.
+ *
+ * An arm hanging at the side is about 165 degrees from an elbow raised to the temple, and
+ * this rig has one bone per arm rather than a shoulder and an elbow — so all of it has to
+ * come out of one rotation. The sign is negative because that is the direction the right
+ * arm already turns in: `armLocalR` is built as `-arm`, and the measured greeting turns it
+ * 35 degrees that way. Raising is the same direction, much further.
+ */
+const SUMMON_ARM = 158;
 
 /**
  * Advance the jelly spring by `dt` seconds toward a lid position.
@@ -758,7 +801,11 @@ function poseRig(rig, box, state) {
 	const armPivotR = toImage(rig.bones[4].pivot);
 	// The hand kick is the click impulse: a small swing, not a full gesture.
 	const armLocalL = rig2d(armPivotL, arm + headKick * 0.4, 1, 1, 0, 0);
-	const armLocalR = rig2d(armPivotR, -arm - headKick * 0.4, 1, 1, 0, 0);
+	// The summoning gesture rides on the right arm, and only on it: the left arm keeps
+	// doing whatever the measured idle says, which is what stops the pose from reading
+	// as the whole body flinching.
+	const summon = state.summon ?? 0;
+	const armLocalR = rig2d(armPivotR, -arm - headKick * 0.4 - summon * SUMMON_ARM * rad, 1, 1, 0, 0);
 	return [root, spine, neck, mul(spine, armLocalL), mul(spine, armLocalR)];
 }
 
