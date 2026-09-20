@@ -233,7 +233,8 @@
       "taglineEn": "Sky Mirror Pavilion",
       "theme": "wang",
       "looks": [
-        "wang-chibi"
+        "wang-chibi",
+        "wang-portrait"
       ]
     }
   ],
@@ -3155,6 +3156,139 @@
           ],
           "blinkable": false,
           "still": false,
+          "localOnly": false,
+          "arms": {
+            "halfWidth": 0.055,
+            "y": 0.5744,
+            "hand": 0.4169
+          },
+          "skin": null,
+          "eyesFrom": "anatomy",
+          "crop": null,
+          "local": false
+        }
+      ]
+    },
+    {
+      "id": "wang-portrait",
+      "character": "wang",
+      "name": "立绘",
+      "nameEn": "Portrait",
+      "animated": false,
+      "accent": "#957c4c",
+      "sources": [
+        "https://mzh.moegirl.org.cn/Special:FilePath/%E6%98%8E%E6%97%A5%E6%96%B9%E8%88%9F%E7%AB%8B%E7%BB%98%20%E6%9C%9B%201.png"
+      ],
+      "cors": true,
+      "frames": [
+        {
+          "file": "wang-portrait.png",
+          "seat": {
+            "sprite": {
+              "width": 133,
+              "left": 1,
+              "top": 20
+            },
+            "face": {
+              "width": 49,
+              "left": 0,
+              "top": 14
+            }
+          },
+          "box": [
+            169,
+            11,
+            1140,
+            1459
+          ],
+          "profile": [
+            0.532,
+            0.679,
+            0.535,
+            0.687,
+            0.54,
+            0.69,
+            0.489,
+            0.73,
+            0.489,
+            0.694,
+            0.426,
+            0.741,
+            0.332,
+            0.771,
+            0.299,
+            0.787,
+            0.296,
+            0.798,
+            0.284,
+            0.806,
+            0.268,
+            0.811,
+            0.251,
+            0.804,
+            0.123,
+            0.82,
+            0.096,
+            0.831,
+            0.066,
+            0.841,
+            0.035,
+            0.84,
+            0.032,
+            0.83,
+            0,
+            0.873,
+            0.017,
+            0.939,
+            0.026,
+            0.946,
+            0.096,
+            0.951,
+            0.104,
+            0.967,
+            0.211,
+            0.978,
+            0.192,
+            0.979,
+            0.176,
+            0.995,
+            0.173,
+            0.995,
+            0.172,
+            0.999,
+            0.148,
+            0.978,
+            0.168,
+            0.967,
+            0.181,
+            0.937,
+            0.304,
+            0.882,
+            0.596,
+            0.715
+          ],
+          "body": {
+            "x": 180,
+            "y": 16,
+            "w": 1120,
+            "h": 1444
+          },
+          "eyes": [
+            [
+              0.361,
+              0.239,
+              0.095,
+              0.062
+            ],
+            [
+              0.544,
+              0.239,
+              0.095,
+              0.062
+            ]
+          ],
+          "blinkable": false,
+          "still": true,
           "localOnly": false,
           "arms": {
             "halfWidth": 0.055,

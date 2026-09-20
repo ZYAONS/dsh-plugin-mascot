@@ -395,6 +395,19 @@
         "https://cdn.jsdelivr.net/gh/Light-milk-tea/ArknightsChibi@main/chibi/char_2027_wang.png"
       ],
       "cors": true
+    },
+    {
+      "id": "wang-portrait",
+      "character": "wang",
+      "name": "立绘",
+      "nameEn": "Portrait",
+      "file": "wang-portrait.png",
+      "still": true,
+      "rights": "《明日方舟》© 上海鹰角网络 — 官方立绘",
+      "sha256": "78bd7c522a20fc5867195b6d93d5a013b805c4c277419ad8439aaf09fe7edb66",
+      "urls": [
+        "https://mzh.moegirl.org.cn/Special:FilePath/%E6%98%8E%E6%97%A5%E6%96%B9%E8%88%9F%E7%AB%8B%E7%BB%98%20%E6%9C%9B%201.png"
+      ]
     }
   ]
 }
