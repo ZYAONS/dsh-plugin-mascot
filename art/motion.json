@@ -12264,7 +12264,9 @@
             }
           }
         }
-      }
+      },
+      "suppressGreet": true,
+      "suppressGreetReason": "他的 greet（Interact）从骨架里出来是一团形变，不是动作：上身会折下去、大衣被拖成长条。 实测数据没问题（waist 4.9° chest 10.2° upperArm 33.1°，和别的角色同量级），所以问题在骨架/蒙皮那一段，还没找到。先不播 —— 站着不动比折成两半小一号的错。 等量身定做的新动作做好，把这个旗标拿掉即可。"
     },
     "sakiko": {
       "source": "Arknights Spine 3.8.99 · 4182_oblvns_avemujica#1 · Ark-Models",

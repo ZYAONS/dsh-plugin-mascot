@@ -168,6 +168,19 @@ await it("a character nobody measured borrows the rhythm of the idle, not its am
   // And the original is not mutated by having been borrowed.
   assert.equal(span(own.idle.waist), ownSpan, "borrowing must not change the lender");
 });
+
+await it("a character whose greeting deforms says so, and the others do not", () => {
+  // The flag lives in the measurement rather than in a list of exceptions inside the
+  // client: it is a fact about what the rig does with that character, so it belongs next to
+  // the numbers it is a fact about. When a hand-made greeting replaces it, the flag goes and
+  // nothing else has to change.
+  assert.equal(exports_.motionFor("makoto")?.suppressGreet, true, "结城理's greeting folds him in half — it must not play");
+  for (const id of ["closure", "yuno", "muelsyse", "dusk", "wang", "sakiko"]) {
+    assert.notEqual(exports_.motionFor(id)?.suppressGreet, true, `${id} has a greeting worth playing`);
+  }
+  // A character borrowing the default must not inherit the lender's flag by accident.
+  assert.notEqual(exports_.motionFor("nobody")?.suppressGreet, true, "borrowing must not smuggle the flag in");
+});
 //#endregion
 await it("every look is drawn in a box big enough to hold it", () => {
   // This is the check that was missing for the whole life of the project, and its absence

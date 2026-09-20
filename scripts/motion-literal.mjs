@@ -67,6 +67,10 @@ lines.push("\t\tconst SPINE_MOTION = {");
 
 for (const [character, bundle] of Object.entries(characters)) {
   lines.push(`\t\t\t${character}: {`);
+  // A character whose measured greeting deforms rather than gestures says so here, and the
+  // client plays nothing. It is a property of the measurement, so it lives with the
+  // measurement — not in a list of exceptions inside the client.
+  if (bundle.suppressGreet === true) lines.push("\t\t\t\tsuppressGreet: true,");
   for (const [key, strideFor] of Object.entries(stride)) {
     const animation = bundle.animations[key];
     if (animation === undefined) continue;

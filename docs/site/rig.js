@@ -715,6 +715,7 @@ const SPINE_MOTION = {
 		},
 	},
 	makoto: {
+		suppressGreet: true,
 		idle: {
 			loop: 3,
 			step: 0.24,
