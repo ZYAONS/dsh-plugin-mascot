@@ -163,7 +163,90 @@ if (flag("list") !== undefined) {
 }
 
 /**
- * 抽一根骨头在某段动画里的旋转关键帧，线性重采样到固定密度。 */
+ * `--moves` answers "where is the character-specific bit?".
+ *
+ * The six rotation channels above cover the body, and a character whose arms barely move in
+ * them is not necessarily a character who does nothing — a prop (a floating stone, a
+ * summoning device) is usually a bone animated by **translation**, or an attachment that
+ * hangs off one. Neither shows up in a rotate-only measurement.
+ */
+if (flag("moves") !== undefined) {
+  for (const animation of data.animations) {
+    const rotating = [];
+    const translating = [];
+    const scaling = [];
+    for (const timeline of animation.timelines ?? []) {
+      const name = data.bones[timeline.boneIndex]?.name ?? `#${String(timeline.boneIndex)}`;
+      if (timeline instanceof spine.RotateTimeline) rotating.push(name);
+      else if (timeline instanceof spine.TranslateTimeline) translating.push(name);
+      else if (timeline instanceof spine.ScaleTimeline) scaling.push(name);
+    }
+    console.log(`\n${animation.name} (${animation.duration.toFixed(2)}s)`);
+    console.log(`  位移 ${String(translating.length)}: ${translating.slice(0, 14).join(", ")}`);
+    console.log(`  缩放 ${String(scaling.length)}: ${scaling.slice(0, 8).join(", ")}`);
+    console.log(`  旋转 ${String(rotating.length)}`);
+  }
+  process.exit(0);
+}
+
+/**
+ * 道具通道：用**位移**驱动的骨头。
+ *
+ * 望的招牌动作是他手里那颗悬浮的黑棋，而它是一根叫 `C_Chess_Black` 的骨头，靠位移动 ——
+ * 六个旋转通道里完全看不见（他的上臂整段动画只转 1.8°）。只量旋转的话，这个角色看起来
+ * 就是站着不动，而实际上他最有辨识度的那一下就在数据里。
+ */
+const PROP_CHANNELS = {
+  chess: ["C_Chess_Black", "C_Chess_White"],
+};
+
+/** 这份骨架里实际存在的道具骨头。 */
+const PROPS = {};
+for (const [semantic, candidates] of Object.entries(PROP_CHANNELS)) {
+  const found = candidates.find((name) => data.bones.some((entry) => entry.name === name));
+  if (found !== undefined) PROPS[semantic] = found;
+}
+
+/**
+ * 一根骨头在某段动画里的**位移**关键帧，重采样到与旋转相同的密度。
+ *
+ * TranslateTimeline 每帧是 `[时间, x, y]`，所以一圈下来是两条序列。返回 `{ x, y }`，
+ * 单位是骨架自己的单位（方舟小人的骨架按像素走），不是度 —— 调用方要清楚这一点。
+ */
+function translations(animation, boneName, step) {
+  const boneIndex = data.bones.findIndex((bone) => bone.name === boneName);
+  if (boneIndex < 0) return null;
+  for (const timeline of animation.timelines ?? []) {
+    if (!(timeline instanceof spine.TranslateTimeline) || timeline.boneIndex !== boneIndex) continue;
+    const keys = [];
+    for (let i = 0; i < timeline.frames.length; i += 3) {
+      keys.push([timeline.frames[i], timeline.frames[i + 1], timeline.frames[i + 2]]);
+    }
+    if (keys.length === 0) return null;
+    const count = Math.max(2, Math.round(animation.duration / step));
+    const xs = [];
+    const ys = [];
+    for (let index = 0; index <= count; index++) {
+      const time = (index / count) * animation.duration;
+      let x = keys[keys.length - 1][1];
+      let y = keys[keys.length - 1][2];
+      for (let k = 0; k < keys.length; k++) {
+        if (keys[k][0] <= time) continue;
+        const [t0, x0, y0] = keys[k - 1];
+        const [t1, x1, y1] = keys[k];
+        const ratio = t1 === t0 ? 0 : (time - t0) / (t1 - t0);
+        x = x0 + (x1 - x0) * ratio;
+        y = y0 + (y1 - y0) * ratio;
+        break;
+      }
+      xs.push(Number(x.toFixed(3)));
+      ys.push(Number(y.toFixed(3)));
+    }
+    return { x: xs, y: ys };
+  }
+  return null;
+}
+
 function channel(animation, boneName, step) {
   const boneIndex = data.bones.findIndex((bone) => bone.name === boneName);
   if (boneIndex < 0) return null;
@@ -171,16 +254,34 @@ function channel(animation, boneName, step) {
     if (!(timeline instanceof spine.RotateTimeline) || timeline.boneIndex !== boneIndex) continue;
     const keys = [];
     for (let i = 0; i < timeline.frames.length; i += 2) keys.push([timeline.frames[i], timeline.frames[i + 1]]);
+    /**
+     * 关键帧先解回绕。
+     *
+     * Spine 每个关键帧存的是**绝对角度**，所以动画师写出 ±180 的另一侧时，相邻两帧的数值
+     * 会差一整圈。直接插值的话骨骼会真的转完那一圈 —— 结城理 idle 的上臂因此量出 362.3°，
+     * 而那段动画其实是站着不动。把每一帧挪到离前一帧半圈以内，插值就跟着动画师画的那条
+     * 短路径走了。
+     *
+     * 可露希尔的数字一直很小，所以这个坑在她身上从来没露出来过。
+     */
+    const unwrapped = [keys[0]];
+    for (let k = 1; k < keys.length; k++) {
+      let value = keys[k][1];
+      const previous = unwrapped[k - 1][1];
+      while (value - previous > 180) value -= 360;
+      while (value - previous < -180) value += 360;
+      unwrapped.push([keys[k][0], value]);
+    }
     // 线性重采样：只在需要采样的那一层插值，够用，而且比存贝塞尔简单得多。
     const samples = [];
     const count = Math.max(2, Math.round(animation.duration / step));
     for (let index = 0; index <= count; index++) {
       const time = (index / count) * animation.duration;
-      let value = keys[keys.length - 1][1];
-      for (let k = 0; k < keys.length; k++) {
-        if (keys[k][0] <= time) continue;
-        const [t0, v0] = keys[k - 1];
-        const [t1, v1] = keys[k];
+      let value = unwrapped[unwrapped.length - 1][1];
+      for (let k = 0; k < unwrapped.length; k++) {
+        if (unwrapped[k][0] <= time) continue;
+        const [t0, v0] = unwrapped[k - 1];
+        const [t1, v1] = unwrapped[k];
         const ratio = t1 === t0 ? 0 : (time - t0) / (t1 - t0);
         value = v0 + (v1 - v0) * ratio;
         break;
@@ -245,16 +346,28 @@ for (const [key, name] of Object.entries(ANIMATIONS)) {
     if (samples !== null) channels[semantic] = samples;
   }
   const blinks = blink(animation, STEP);
+  const props = {};
+  for (const [semantic, boneName] of Object.entries(PROPS)) {
+    const moved = translations(animation, boneName, STEP);
+    if (moved !== null) props[semantic] = moved;
+  }
   motion.animations[key] = {
     name,
     duration: Number(animation.duration.toFixed(3)),
     channels,
     blink: blinks,
+    ...(Object.keys(props).length > 0 ? { props } : {}),
   };
   const summary = Object.entries(channels)
     .map(([semantic, samples]) => `${semantic} ${(Math.max(...samples) - Math.min(...samples)).toFixed(1)}°`)
     .join("  ");
-  console.log(`  ${key} (${name}, ${animation.duration.toFixed(2)}s): ${summary}`);
+  const propSummary = Object.entries(props)
+    .map(([semantic, moved]) => {
+      const span = (values) => (Math.max(...values) - Math.min(...values)).toFixed(1);
+      return `${semantic} Δ${span(moved.x)},${span(moved.y)}`;
+    })
+    .join("  ");
+  console.log(`  ${key} (${name}, ${animation.duration.toFixed(2)}s): ${summary}${propSummary === "" ? "" : `  |  ${propSummary}`}`);
 }
 
 const target = typeof flag("out") === "string" ? join(root, flag("out")) : join(root, "art", "motion.json");
