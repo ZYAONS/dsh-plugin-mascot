@@ -62,16 +62,24 @@ const CHANNEL_NAMES = {
   leg: ["F_L_Leg_I", "F_L_Leg_A", "F_L_Leg"],
 };
 
-/** 要量的动画：键是我们这边的语义名。`--anims=idle:Relax,greet:Interact` 可以覆盖。 */
+/**
+ * 要量的动画：键是我们这边的语义名。`--anims=idle:Relax,greet:Interact` 可以覆盖。
+ *
+ * 方舟小人的动画是固定的六段（Default / Interact / Move / Relax / Sit / Sleep），每个角色都是这六段；
+ * 角色自己的东西在 Relax 和 Interact 里面，不在第七段里。这里把六段全量下来 —— 量下来很便宜
+ * （多写一个 json），**贵的是把它内联进 client.js**，所以内联哪些是 motion-literal.mjs 的 stride 决定的，
+ * 不是这个列表决定的。
+ */
 const ANIMATIONS = (() => {
   const override = flag("anims");
-  if (typeof override !== "string" || override === "") return { idle: "Relax", greet: "Interact" };
+  const all = { idle: "Relax", greet: "Interact", move: "Move", sit: "Sit", sleep: "Sleep", pose: "Default" };
+  if (typeof override !== "string" || override === "") return all;
   const map = {};
   for (const pair of override.split(",")) {
     const [key, name] = pair.split(":");
     if (key !== undefined && name !== undefined && key !== "" && name !== "") map[key] = name;
   }
-  return Object.keys(map).length > 0 ? map : { idle: "Relax", greet: "Interact" };
+  return Object.keys(map).length > 0 ? map : all;
 })();
 
 /** 下载到缓存目录，已存在就跳过。 */
