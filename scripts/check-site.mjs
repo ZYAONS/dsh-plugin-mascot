@@ -179,6 +179,40 @@ const yunoTheme = tokensOf('[data-theme="yuno"]');
 const muelsyseTheme = tokensOf('[data-theme="muelsyse"]');
 const named = { neutral: neutralTheme, closure: closureTheme, yuno: yunoTheme, muelsyse: muelsyseTheme };
 
+// The console's theme picker is written out by hand in four separate places, and one of them
+// being missed is silent: the character keeps working everywhere else, and only the page quietly
+// falls back to the neutral theme, so the picker lights "Auto" while the visitor looks at 望.
+//
+// That is exactly what happened when 望 was added — the button, `THEME_COLOURS`, `PAGE_THEME_NAMES`
+// and the stylesheet all had to learn about `wang` and only the client's own theme map did. Nothing
+// failed; the page just attributed one character's palette to nobody.
+const pagesInClient = (() => {
+  const block = /const THEME_COLOURS = \{([\s\S]*?)\n\};/u.exec(readFileSync(join(root, "docs", "site", "site.js"), "utf8"));
+  const map = {};
+  for (const match of (block?.[1] ?? "").matchAll(/^\s{2}([a-z]+):\s*\{[^}]*page:\s*"([a-z]+)"/gmu)) map[match[1]] = match[2];
+  return map;
+})();
+const themeIdsInCss = new Set([...css.matchAll(/\[data-theme="([a-z]+)"\]/gu)].map((match) => match[1]));
+const buttonThemes = new Set([...html.matchAll(/data-theme-choice="([a-z]+)"/gu)].map((match) => match[1]));
+const themeNamesDeclared = new Set((/const PAGE_THEME_NAMES = \{([\s\S]*?)\n\};/u.exec(readFileSync(join(root, "docs", "site", "site.js"), "utf8"))?.[1] ?? "")
+  .split("\n").map((line) => /^\s{2}([a-z]+):/u.exec(line)?.[1]).filter(Boolean));
+const unwired = [];
+for (const character of catalog.characters) {
+  const page = pagesInClient[character.theme];
+  if (page === undefined) {
+    unwired.push(`${character.id}: theme "${character.theme}" is not in THEME_COLOURS, so the page falls back to Auto`);
+    continue;
+  }
+  if (!buttonThemes.has(page)) unwired.push(`${character.id}: no button for "${page}" in index.html`);
+  if (!themeNamesDeclared.has(page)) unwired.push(`${character.id}: "${page}" missing from PAGE_THEME_NAMES`);
+  if (!themeIdsInCss.has(page)) unwired.push(`${character.id}: no [data-theme="${page}"] rule in site.css`);
+}
+ok(
+  "every character has a page theme wired into all four places",
+  unwired.length === 0,
+  unwired.join("; "),
+);
+
 // Silver is defined by being near-neutral: the channels of the signal must sit close
 // together, which is what separates chrome from a hue.
 const silver = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/u.exec(neutralTheme["--signal"] ?? "");

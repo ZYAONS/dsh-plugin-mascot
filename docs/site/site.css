@@ -672,6 +672,21 @@ input[type="file"]::file-selector-button:hover { border-color: var(--signal); co
   border-right: 2px solid var(--signal); border-bottom: 2px solid var(--signal); display: block;
 }
 [data-theme="makoto"] .card[data-on="1"] { box-shadow: 0 0 0 1px var(--signal) inset; }
+[data-theme="wang"] {
+  --ink: #0d0c0a; --panel: #1a1816; --panel-2: #221f1b;
+  --line: rgba(214, 190, 140, 0.14); --line-strong: rgba(214, 190, 140, 0.34);
+  --signal: #e6dfd0; --signal-ink: #14120f; --signal-dim: rgba(230, 223, 208, 0.13);
+  --text: #efe9dd; --dim: #a1968a; --dimmer: #6d6459; --ok: #cfc39f;
+  --radius: 3px; --radius-sm: 2px;
+  --grid: rgba(214, 190, 140, 0.024); --glow: rgba(230, 223, 208, 0.08);
+  --tape-a: #e6dfd0; --tape-b: #0e0d0b;
+  --label-font: "Songti SC", "SimSun", Georgia, serif; --label-spacing: 0.14em; --card-lift: none;
+}
+/* 天镜阁的棋局：直角棋盘格，不加圆角、不加发光，靠线本身说话 */
+[data-theme="wang"] .card { border-radius: 0; }
+[data-theme="wang"] .card::before, [data-theme="wang"] .card::after { display: none; }
+[data-theme="wang"] .card[data-on="1"] { box-shadow: 0 0 0 1px var(--signal) inset; }
+[data-theme="wang"] h1, [data-theme="wang"] .sec-head h2 { font-family: "Songti SC", "SimSun", Georgia, serif; }
 
 /* 塞壬唱片：封面 + 专辑名 + 试听。封面与音源都在官方 CDN 上，这里只做引用。 */
 .siren {

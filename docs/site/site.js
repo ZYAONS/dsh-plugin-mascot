@@ -31,6 +31,7 @@ const THEME_COLOURS = {
   yuyuan: { accent: "#4fd6e8", label: "OPERATOR", page: "yuyuan" },
   dusk: { accent: "#2bb3ae", label: "SUI", page: "dusk" },
   makoto: { accent: "#2f6fe0", label: "P3R", page: "makoto" },
+  wang: { accent: "#e6dfd0", label: "TIANJING", page: "wang" },
 };
 
 /** Human names for the page themes, for the header readout. */
@@ -44,6 +45,7 @@ const PAGE_THEME_NAMES = {
   yuyuan: "水蓝",
   dusk: "青",
   makoto: "P3R 蓝",
+  wang: "棋局",
 };
 
 const state = {
