@@ -8,7 +8,7 @@
       "track": {
         "name": "永恒之春",
         "cid": "697688",
-        "src": "https://res01.hycdn.cn/ef9b98e306a0ffd2f9aa8839f13e6e0c/6AAC4B05/siren/audio/20260503/e835b769aa9df41eba1e0b620e2139d9.wav"
+        "src": "https://res01.hycdn.cn/1f44a026d6aa1557e07426eccce783c7/6AAFD6A2/siren/audio/20260503/e835b769aa9df41eba1e0b620e2139d9.wav"
       },
       "event": "七周年上岛，对应 2026-05-01 的七周年活动专辑"
     },
@@ -20,7 +20,7 @@
       "track": {
         "name": "绿意游曳",
         "cid": "697629",
-        "src": "https://res01.hycdn.cn/a520b4c7e647ec69fc353c9b92a29d7e/6AAC4B06/siren/audio/20230508/10c8ee064eebd19c3b9488da9fce8ad9.wav"
+        "src": "https://res01.hycdn.cn/02ba65a5a8a5bbbfa8f01768d8742535/6AAFD6A2/siren/audio/20230508/10c8ee064eebd19c3b9488da9fce8ad9.wav"
       },
       "event": "登场活动「孤星」（Lone Trail）"
     },
@@ -32,7 +32,7 @@
       "track": {
         "name": "灵魂洄游",
         "cid": "125021",
-        "src": "https://res01.hycdn.cn/d30a7752025124f3ba5d97af9e2aba5a/6AAC4B06/siren/audio/20260710/8d96e7dde9b105d1cf8bab3eb154fb25.wav"
+        "src": "https://res01.hycdn.cn/feae36092f140bb6c99818e8f2d8ebe3/6AAFD6A2/siren/audio/20260710/8d96e7dde9b105d1cf8bab3eb154fb25.wav"
       },
       "event": "登场活动「丛林症结」（SideStory）"
     },
@@ -44,7 +44,7 @@
       "track": {
         "name": "毛茸茸大决战！",
         "cid": "779442",
-        "src": "https://res01.hycdn.cn/5bbe15403b5873729566ee3920fb2bc7/6AAC4B06/siren/audio/20260803/af43865b49798447e64ae7e9a03dde3a.wav"
+        "src": "https://res01.hycdn.cn/2d24d2bb3e9b87781c09907be28c03de/6AAFD6A3/siren/audio/20260803/af43865b49798447e64ae7e9a03dde3a.wav"
       },
       "event": "夏季限定干员，对应 2026 夏日活动专辑"
     },
@@ -56,9 +56,21 @@
       "track": {
         "name": "山水烬尽",
         "cid": "880350",
-        "src": "https://res01.hycdn.cn/376c9a38ab5a095e2ee04b780e41a0da/6AAC4B06/siren/audio/20221229/5b9d8c0a7fc8118487b723c451502d5e.wav"
+        "src": "https://res01.hycdn.cn/40ca67dcfe855c44e6698d872a40caf9/6AAFD6A3/siren/audio/20221229/5b9d8c0a7fc8118487b723c451502d5e.wav"
       },
       "event": "登场活动「画中人」（Who is Real）"
+    },
+    "wang": {
+      "album": "辞岁行OST",
+      "albumCid": "2442",
+      "cover": "https://web.hycdn.cn/siren/pic/20260212/f7770f042ceffd81625333a79c8b34e5.jpg",
+      "tracks": 6,
+      "track": {
+        "name": "阳关已远",
+        "cid": "779455",
+        "src": "https://res01.hycdn.cn/7620081b1691800f7fb0a00d35e331f5/6AAFD6A3/siren/audio/20260212/ed9f2d94bf965746f6b90a40af2b8511.wav"
+      },
+      "event": "登场活动「辞岁行」（2026 春节 SideStory，2026-02-10 ~ 03-10）"
     },
     "makoto": {
       "album": "月行水上",
@@ -68,7 +80,7 @@
       "track": {
         "name": "凡常恩典",
         "cid": "953936",
-        "src": "https://res01.hycdn.cn/0f3908fffd0093ef11c34f3c4a6e1a04/6AAC4B07/siren/audio/20260903/bc5500b0b6789982955cd4eab37b8738.wav"
+        "src": "https://res01.hycdn.cn/0cbe1e6fe6f6d0e8ef674bb4ce38cb6d/6AAFD6A3/siren/audio/20260903/bc5500b0b6789982955cd4eab37b8738.wav"
       },
       "event": "明日方舟 × 女神异闻录3 Reload 联动专辑"
     }

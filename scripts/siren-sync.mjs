@@ -33,6 +33,7 @@ const EVENTS = {
   miuyin: { album: "丛林症结OST", why: "登场活动「丛林症结」（SideStory）" },
   yuyuan: { album: "直到大地变成一颗酸橙OST", why: "夏季限定干员，对应 2026 夏日活动专辑" },
   dusk: { album: "画中人OST", why: "登场活动「画中人」（Who is Real）" },
+  wang: { album: "辞岁行OST", why: "登场活动「辞岁行」（2026 春节 SideStory，2026-02-10 ~ 03-10）" },
   makoto: { album: "月行水上", why: "明日方舟 × 女神异闻录3 Reload 联动专辑" },
 };
 

@@ -40,6 +40,25 @@ const lookIndex = existsSync(join(root, "art", "index.json"))
   ? JSON.parse(readFileSync(join(root, "art", "index.json"), "utf8"))
   : { seats: {}, characters: [], looks: [] };
 
+/**
+ * The music declarations, replayed the same way.
+ *
+ * They are not part of `index.json` — the host adds them to its `/api/looks` payload, and this
+ * harness builds its own payload. Without them here the panel simply has no music row, which
+ * looks exactly like the row being broken.
+ */
+const readJson = (file, key) => {
+  const path = join(root, "art", file);
+  if (!existsSync(path)) return {};
+  try {
+    return JSON.parse(readFileSync(path, "utf8"))[key] ?? {};
+  } catch {
+    return {};
+  }
+};
+lookIndex.siren = readJson("siren.json", "records");
+lookIndex.songs = readJson("songs.json", "songs");
+
 const chrome = findChromium();
 
 const url = (relative) => pathToFileURL(join(root, relative)).href;
