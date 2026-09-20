@@ -905,6 +905,32 @@ await it("the inlined motion matches art/motion.json, character for character", 
   );
 });
 
+await it("a figure walks in when the look changes, and settles where it belongs", () => {
+  // `Move` is the one of the four animations the rig does not otherwise use that has anything in
+  // it. Measuring every bone's translation span across all six of Closure's animations is what
+  // showed that: Move swings `F_IK_L_Foot_I` and `F_IK_R_Foot_I` through 89 units — a real walk —
+  // while Sleep moves three bones by at most 2.2 and Sit's largest translation is an eyeball.
+  const rig = buildRig(syntheticProfile(0.6, 0.18, 0.8, 10));
+  const box = [0, 0, 100, 200];
+  // No `motion` passed, so `poseRig` resolves the default character's bundle — which is the one
+  // that carries a measured `move`.
+  const at = (walkAge) => poseRig(rig, box, { time: 1.0, walkAge });
+  const moved = (a, b) => Array.from(a[2]).reduce((sum, value, index) => sum + Math.abs(value - b[2][index]), 0);
+  const offset = (pose) => pose[0][6];
+
+  const rest = at(undefined);
+  const walking = at(1.0);
+  assert.ok(moved(rest, walking) > 0.05, `the walk barely moves the figure (${moved(rest, walking).toFixed(4)})`);
+
+  // Arriving is a one-way trip: the offset decays, so the figure settles rather than sliding.
+  assert.ok(Math.abs(offset(walking)) > Math.abs(offset(at(5.0))), "the walk-in offset must decay");
+  assert.ok(Math.abs(offset(at(5.0))) > Math.abs(offset(at(7.5))), "and keep decaying");
+  // And once it is over the pose is the idle again — otherwise a mascot left on screen would
+  // walk forever, which is the failure mode of every animation that forgets to end.
+  assert.ok(moved(rest, at(9.0)) < 1e-6, `the walk does not end (${moved(rest, at(9.0)).toFixed(6)})`);
+  assert.ok(Math.abs(offset(at(9.0)) - offset(rest)) < 1e-9, "and the figure is exactly where it started");
+});
+
 await it("the greeting moves the figure, and the idle does not stand still", () => {
   const rig = buildRig(syntheticProfile(0.6, 0.18, 0.8, 10));
   const box = [0, 0, 100, 200];

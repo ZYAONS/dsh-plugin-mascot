@@ -516,6 +516,13 @@ const SPINE_MOTION = {
 			chest: [0, -7.07, -3.28, 4.09, 3.7, 2.26, 1.12, 1.36, 1.59, 2.45, 3.39, 4.32, 4.53, 4.17, 3.81, 3.38, 2.68, 1.99, 1.29, 0.75, 0.38, 0],
 			head: [-3.48, -3.82, -3.13, -0.42, 0.7, -0.02, -0.74, -0.48, 0.09, 0.26, -0.03, -0.31, -0.59, -0.94, -1.29, -1.64, -1.8, -1.93, -2.05, -2.22, -2.85, -3.48],
 		},
+		move: {
+			loop: 8,
+			step: 0.24,
+			waist: [0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03],
+			chest: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			head: [0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74],
+		},
 		/** Zero is open and `peak` is shut: the channel is a lid angle rather than
 		 *  an openness, so it is divided by `peak` before use. */
 		blink: { peak: 20.7,
@@ -535,6 +542,12 @@ const SPINE_MOTION = {
 			step: 0.16,
 			waist: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			head: [-3.16, -4.74, 0.5, 2.61, 2.81, 2.73, 2.65, 0.23, -2.42, -4.45, -3.59, -3.16],
+		},
+		move: {
+			loop: 1.333,
+			step: 0.24,
+			waist: [0, 0, 0, 0, 0, 0],
+			head: [-3.16, -3.41, -3.67, -3.83, -3.58, -3.33, -3.16],
 		},
 		/** Zero is open and `peak` is shut: the channel is a lid angle rather than
 		 *  an openness, so it is divided by `peak` before use. */
@@ -556,6 +569,13 @@ const SPINE_MOTION = {
 			chest: [-0.07, -1.23, -0.97, 2.3, 5.5, 4.74, 3.97, 3.21, 2.45, 1.69, 0.93, 0.17, -0.28, 0.19, 0.66, 1.13, 1.59, 1.39, 0.8, 0.22, -0.07],
 			head: [-1.52, -3.24, -3.58, -1, 1.58, 4.16, 4.99, 2.39, -0.22, -2.82, -5.42, -8.03, -10.63, -10.91, -7.97, -5.03, -2.1, -0.6, -0.97, -1.34, -1.52],
 		},
+		move: {
+			loop: 1.6,
+			step: 0.24,
+			waist: [0, 0, 0, 0, 0, 0, 0],
+			chest: [-0.07, -0.07, -0.07, -0.07, -0.07, -0.07, -0.07],
+			head: [-3.41, -4.84, -3.82, -3.08, -4.41, -4.26, -2.93, -3.41],
+		},
 		/** Zero is open and `peak` is shut: the channel is a lid angle rather than
 		 *  an openness, so it is divided by `peak` before use. */
 		blink: { peak: 0,
@@ -576,6 +596,13 @@ const SPINE_MOTION = {
 			chest: [-0.51, -2.46, -2.48, -0.86, -0.13, -0.46, -0.8, -0.65, -0.35, -0.05, -0.17, -0.55, -0.61, -0.51],
 			head: [0.01, -2.14, -3.05, 4.74, 12.53, 13.36, 12.8, 12.37, 12.84, 13.3, 12.2, 5.17, -0.79, 0.01],
 		},
+		move: {
+			loop: 1.333,
+			step: 0.24,
+			waist: [0, 0, 0, 0, 0, 0],
+			chest: [-0.43, -0.11, 0.12, -0.47, -0.02, 0, -0.43],
+			head: [-2.13, -3.09, -0.67, -3.18, -2.68, -0.95, -2.13],
+		},
 		/** Zero is open and `peak` is shut: the channel is a lid angle rather than
 		 *  an openness, so it is divided by `peak` before use. */
 		blink: { peak: 0,
@@ -593,6 +620,12 @@ const SPINE_MOTION = {
 			step: 0.16,
 			waist: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			head: [3.14, 3.42, 3.69, 3.97, 3.73, 3.42, 3.12, 2.81, 2.5, 2.19, 1.88, 1.57, 1.6, 1.91, 2.22, 2.52, 2.83, 3.14, 3.45, 3.76, 3.94, 3.63, 3.32, 3.01, 2.7, 2.4, 2.09, 1.78, 1.47, 1.72, 2.05, 2.37, 2.7, 3.03, 3.32, 3.6, 3.88, 3.84, 3.53, 3.22, 2.91, 2.6, 2.29, 1.98, 1.68, 1.5, 1.83, 2.15, 2.48, 2.81, 3.14],
+		},
+		move: {
+			loop: 10.667,
+			step: 0.24,
+			waist: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1.26, -2.94, -4.62, -6.06, -6.06, -6.06, -6.06, -6.06, -6.06, -6.06, -6.06, -6.06, -6.06, -5.48, -4.2, -2.91, -1.62, -0.34, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			head: [-0.99, -1.3, -0.51, -1.17, -1.11, -0.56, -1.35, -0.93, -0.74, -1.53, -0.75, -0.93, -1.36, -0.57, -1.11, -1.18, -0.5, -1.29, -1, -0.68, -1.47, -0.82, -0.86, -1.43, -0.64, -1.04, -1.25, -0.46, -1.22, -1.06, -0.61, -1.4, -0.88, -0.79, -1.49, -0.7, -0.97, -1.31, -0.52, -1.16, -1.13, -0.55, -1.34, -0.95, -0.73, -0.99],
 		},
 		/** Zero is open and `peak` is shut: the channel is a lid angle rather than
 		 *  an openness, so it is divided by `peak` before use. */
@@ -613,6 +646,13 @@ const SPINE_MOTION = {
 			waist: [0.82, 0.62, 0.74, 1.12, 0.81, 0.73, 0.73, 0.73, 0.73, 0.7, 0.64, 0.59, 0.79, 1.06, 1.08, 1.1, 1, 0.87, 0.74, 0.73, 0.79, 0.82],
 			chest: [2.88, 2.68, 2.8, 3.18, 2.87, 2.79, 2.79, 2.79, 2.79, 2.76, 2.7, 2.65, 2.85, 3.12, 3.14, 3.16, 3.07, 2.94, 2.81, 2.79, 2.85, 2.88],
 			head: [-3.57, -3.72, -3.81, -3.37, -4.1, -4.57, -4.46, -4.36, -4.26, -4.21, -4.33, -4.46, -4.29, -3.6, -3.58, -3.56, -3.59, -3.7, -3.81, -3.87, -3.67, -3.57],
+		},
+		move: {
+			loop: 4,
+			step: 0.24,
+			waist: [-0.08, -0.08, -0.08, -0.08, -0.08, -0.08, -0.08, -0.08, -0.08, -0.08, -0.08, -0.08, -0.08, -0.08, -0.08, -0.08, -0.08],
+			chest: [2.88, 2.88, 2.88, 2.88, 2.88, 2.88, 2.88, 2.88, 2.88, 2.88, 2.88, 2.88, 2.88, 2.88, 2.88, 2.88, 2.88],
+			head: [-3.57, -3.57, -3.57, -3.57, -3.57, -3.57, -3.57, -3.57, -3.57, -3.57, -3.57, -3.57, -3.57, -3.57, -3.57, -3.57, -3.57],
 		},
 		/** Zero is open and `peak` is shut: the channel is a lid angle rather than
 		 *  an openness, so it is divided by `peak` before use. */
@@ -636,6 +676,13 @@ const SPINE_MOTION = {
 			chest: [-3.83, 3.99, 6.34, 6.34, 6.34, 6.23, -0.48, -3.83],
 			head: [-5.73, -5.73, -5.73, -5.73, -5.73, -5.73, -5.73],
 		},
+		move: {
+			loop: 2.4,
+			step: 0.24,
+			waist: [0.01, -0.74, -0.29, -0.36, -0.59, 0.01, -0.74, -0.29, -0.36, -0.59, 0.01],
+			chest: [2.26, 2.17, 1.84, 2.64, 1.67, 2.26, 2.17, 1.84, 2.64, 1.67, 2.26],
+			head: [-1.71, -2.24, -1.92, -1.98, -2.14, -1.71, -2.24, -1.92, -1.98, -2.14, -1.71],
+		},
 		/** Zero is open and `peak` is shut: the channel is a lid angle rather than
 		 *  an openness, so it is divided by `peak` before use. */
 		blink: { peak: 0,
@@ -655,6 +702,13 @@ const SPINE_MOTION = {
 			waist: [5.3, 3.88, 2.45, 2.35, 2.35, 2.35, 2.35, 2.35, 2.24, 2.05, 1.85, 1.66, 2.78, 5.86, 8.94, 8.61, 4.92, 1.23, -1, -1, -1, -1, -1, -1, -1.13, -1.85, -2.57, -3.28, -3.88, -1.64, 0.59, 2.82, 5.05, 5.63, 5.46, 5.3],
 			chest: [1.5, 1.31, 1.12, 0.92, 0.69, 0.45, 0.22, 0.7, 1.38, -0.21, -2, -3.78, -5.56, -5.58, -5.1, -4.62, -4.76, -4.98, -5.2, -5.25, -5.25, -5.25, -5.25, -5.25, -5.25, -5.52, -5.87, -6.22, -6.57, -5.11, -3.3, -1.48, 0.34, 1.63, 1.57, 1.5],
 			head: [0.36, 0.16, -0.04, -0.24, -0.48, -0.72, -0.97, -0.96, -0.55, -1.23, -2.99, -4.75, -6.51, -7.13, -5.81, -4.49, -3.84, -3.94, -4.04, -4.06, -3.91, -3.76, -3.61, -3.46, -3.32, -3.46, -4.14, -4.82, -5.5, -5.29, -3.85, -2.41, -0.97, 0.36, 0.36, 0.36],
+		},
+		move: {
+			loop: 3.333,
+			step: 0.24,
+			waist: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			chest: [8.17, 8.17, 8.17, 8.17, 8.17, 8.17, 8.17, 8.17, 8.17, 8.17, 8.17, 8.17, 8.17, 8.17, 8.17],
+			head: [-3.09, -3.09, -3.09, -3.09, -3.09, -3.09, -3.09, -3.09, -3.09, -3.09, -3.09, -3.09, -3.09, -3.09, -3.09],
 		},
 		/** Zero is open and `peak` is shut: the channel is a lid angle rather than
 		 *  an openness, so it is divided by `peak` before use. */
@@ -901,12 +955,38 @@ function poseRig(rig, box, state) {
 	// The sway and the breath are still this rig's own: the game spreads them
 	// across a hundred bones, and three cannot reproduce that distribution.
 	const cycles = (count, phase) => Math.sin((Math.PI * 2 * count * t) / idle.loop + (phase ?? 0));
+
+	/**
+	 * Walking in, when the character on screen has just changed.
+	 *
+	 * `Move` is the one of the four animations the rig does not otherwise use that has
+	 * anything in it: measuring every bone's translation span across all six shows
+	 * `F_IK_L_Foot_I` and `F_IK_R_Foot_I` swinging 89 units — a real walk cycle — while
+	 * `Sleep` moves three bones by at most 2.2 and `Sit`'s largest translation is an
+	 * eyeball. So Move is the one worth inlining, and this is where it earns its place:
+	 * a figure that has just been swapped in walks to its spot instead of appearing there.
+	 *
+	 * The channels loop, because Move is a loop; the offset does not, because arriving is
+	 * a one-way trip. It decays to zero so the figure settles rather than sliding forever.
+	 */
+	const move = bundle.move;
+	let walking = 0;
+	let walkShift = 0;
+	const walkAge = state.walkAge;
+	if (move !== undefined && walkAge !== undefined && walkAge >= 0 && walkAge < move.loop) {
+		const blend = greetBlend(walkAge, move.loop);
+		walking = blend * blend * (3 - 2 * blend);
+		waist += (sampleMotion(move, "waist", walkAge, true) - idleWaist) * walking;
+		chest += (sampleMotion(move, "chest", walkAge, true) - idleChest) * walking;
+		head += (sampleMotion(move, "head", walkAge, true) - idleHead) * walking;
+		walkShift = (1 - walkAge / move.loop) * 0.14;
+	}
 	const sway = cycles(3, 0.5) * 0.12 * rad;
 	const breathe = 1 + cycles(4) * 0.006 + cycles(8) * 0.0016;
 	const bounce = cycles(4, Math.PI / 2) * box[3] * 0.003;
 	// The legs carry the weight shift in the game; with no leg bones the hip
 	// moves by a scaled version of the same signal.
-	const shift = sampleMotion(idle, "leg", t, true) * box[2] * 0.0006 + greeting * box[2] * 0.004;
+	const shift = sampleMotion(idle, "leg", t, true) * box[2] * 0.0006 + greeting * box[2] * 0.004 + walkShift * box[2];
 	const shiftLean = sampleMotion(idle, "leg", t, true) * 0.02 * rad;
 	const greetLift = greeting * box[3] * 0.008;
 	// The head's share of that lift, in degrees.

@@ -16,8 +16,16 @@ const END = "\t\t/* MOTION-END */";
 
 const motion = JSON.parse(readFileSync("art/motion.json", "utf8"));
 
-/** 每 n 个采样取一个，够用且省一半以上体积。 */
-const stride = { idle: 3, greet: 2 };
+/**
+ * 每 n 个采样取一个，够用且省一半以上体积。
+ *
+ * `move` 也进来了，其余三段没有 —— 这不是省事，是量出来的结论：方舟小人固定六段，
+ * 但其中 **Sit 和 Sleep 在旋转和位移两条通道上几乎都不动**（Sleep 整段只有 3 根骨头有位移、
+ * 最大 2.2；Sit 最大的位移是眼球，19.5），`Default` 是 0 秒的空动画。把它们内联进单文件包
+ * 只是让包里多一堆画不出东西的数字。真正有内容可搬的是 `Move`：两根 IK 脚骨的 Δx 到 89，
+ * 是一段真正的走路循环。
+ */
+const stride = { idle: 3, greet: 2, move: 3 };
 
 /** 把一串采样按 stride 抽稀，最后一点始终保留，否则循环不闭合。 */
 function thin(values, step) {

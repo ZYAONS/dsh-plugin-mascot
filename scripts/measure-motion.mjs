@@ -180,25 +180,50 @@ if (flag("list") !== undefined) {
  * `--moves` answers "where is the character-specific bit?".
  *
  * The six rotation channels above cover the body, and a character whose arms barely move in
- * them is not necessarily a character who does nothing — a prop (a floating stone, a
- * summoning device) is usually a bone animated by **translation**, or an attachment that
- * hangs off one. Neither shows up in a rotate-only measurement.
+ * them is not necessarily a character who does nothing — a prop (a floating stone, a summoning
+ * device) is usually a bone animated by **translation**, or an attachment that hangs off one.
+ * Neither shows up in a rotate-only measurement.
+ *
+ * Reporting which bones *have* a translation track is useless on its own: every bone in every
+ * Arknights animation carries one — 891 entries in all six of Closure's — so the list is the
+ * whole skeleton and says nothing. What matters is which of them actually **vary**, so this
+ * measures the span and prints only the bones that move.
  */
 if (flag("moves") !== undefined) {
+  const span = (values) => Math.max(...values) - Math.min(...values);
   for (const animation of data.animations) {
-    const rotating = [];
-    const translating = [];
-    const scaling = [];
+    const moved = [];
+    let rotating = 0;
     for (const timeline of animation.timelines ?? []) {
       const name = data.bones[timeline.boneIndex]?.name ?? `#${String(timeline.boneIndex)}`;
-      if (timeline instanceof spine.RotateTimeline) rotating.push(name);
-      else if (timeline instanceof spine.TranslateTimeline) translating.push(name);
-      else if (timeline instanceof spine.ScaleTimeline) scaling.push(name);
+      if (timeline instanceof spine.RotateTimeline) {
+        rotating += 1;
+        continue;
+      }
+      if (!(timeline instanceof spine.TranslateTimeline)) continue;
+      // Translate frames are [time, x, y, ...] triplets.
+      const xs = [];
+      const ys = [];
+      for (let i = 1; i < timeline.frames.length; i += 3) {
+        xs.push(timeline.frames[i]);
+        ys.push(timeline.frames[i + 1]);
+      }
+      if (xs.length < 2) continue;
+      const dx = span(xs);
+      const dy = span(ys);
+      if (dx < 0.01 && dy < 0.01) continue;
+      moved.push({ name, dx, dy, reach: Math.hypot(dx, dy) });
     }
-    console.log(`\n${animation.name} (${animation.duration.toFixed(2)}s)`);
-    console.log(`  位移 ${String(translating.length)}: ${translating.slice(0, 14).join(", ")}`);
-    console.log(`  缩放 ${String(scaling.length)}: ${scaling.slice(0, 8).join(", ")}`);
-    console.log(`  旋转 ${String(rotating.length)}`);
+    moved.sort((a, b) => b.reach - a.reach);
+    console.log(`\n${animation.name} (${animation.duration.toFixed(2)}s)  旋转轨道 ${String(rotating)}`);
+    if (moved.length === 0) {
+      console.log("  没有骨头发生位移");
+      continue;
+    }
+    console.log(`  ${String(moved.length)} 根骨头有位移，最大几根：`);
+    for (const entry of moved.slice(0, 6)) {
+      console.log(`    ${entry.name.padEnd(22)} Δx ${entry.dx.toFixed(1).padStart(7)}  Δy ${entry.dy.toFixed(1).padStart(7)}`);
+    }
   }
   process.exit(0);
 }
