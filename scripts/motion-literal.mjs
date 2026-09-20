@@ -85,7 +85,10 @@ for (const [character, bundle] of Object.entries(characters)) {
   lines.push(`\t\t\t\tblink: { peak: ${String(blinkPeak)},`);
   for (const key of ["idle", "greet"]) {
     const animation = bundle.animations[key];
-    if (animation?.blink === undefined) continue;
+    // `Array.isArray`, not `=== undefined`: a model with no eyelash bones measures `null` for the
+    // blink rather than nothing at all, and `null.map` throws — before the write, so client.js
+    // silently keeps the previous block and the test suite stays green on stale data.
+    if (!Array.isArray(animation?.blink)) continue;
     const values = animation.blink.map((value) => Math.round(value * 1000) / 1000);
     lines.push(`\t\t\t\t\t${key}: { loop: ${String(animation.duration)}, step: ${String(bundle.step)}, close: [${values.join(", ")}] },`);
   }
@@ -114,10 +117,13 @@ client = client.slice(0, start) + block + client.slice(end);
 writeFileSync("lib/client.js", client);
 
 const size = block.length;
-console.log(`motion-literal: 写入 lib/client.js（${String(size)} 字节）`);
+console.log(`motion-literal: 写入 lib/client.js（${String(size)} 字节，${String(Object.keys(characters).length)} 位角色）`);
+// Summarise the default character only — printing all eight would bury the one number worth
+// seeing, which is how much of the bundle this costs.
+const shown = characters[defaultCharacter];
 for (const [key, strideFor] of Object.entries(stride)) {
-  const animation = motion.animations[key];
+  const animation = shown?.animations[key];
   if (animation === undefined) continue;
   const counts = channels.map((channel) => `${channel} ${String(Math.ceil(animation.channels[channel].length / strideFor) + 1)}`).join("  ");
-  console.log(`  ${key} (${animation.name}) step=${String(motion.step * strideFor)}s  ${counts}`);
+  console.log(`  ${defaultCharacter} · ${key} (${animation.name}) step=${String(shown.step * strideFor)}s  ${counts}`);
 }

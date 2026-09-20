@@ -883,6 +883,28 @@ await it("the summon is three phases, and it is over inside the poke that trigge
   }
 });
 
+await it("the inlined motion matches art/motion.json, character for character", () => {
+  // Client.js carries a generated copy of the curves, because the browser half has to be one
+  // self-contained file and cannot fetch art/motion.json. A generator that fails writes nothing
+  // and leaves the previous block in place — so client.js silently draws stale motion while every
+  // other motion test keeps passing, because those tests read the same stale block.
+  //
+  // That is not hypothetical: adding the seventh character made a model with no eyelash bones
+  // measure `null` for its blink, `null.map` threw before the write, and the suite stayed green.
+  const measured = Object.keys(
+    JSON.parse(readFileSync(join(root, "art", "motion.json"), "utf8")).characters ?? {},
+  ).sort();
+  assert.ok(measured.length > 0, "art/motion.json must hold at least one character");
+  const source = read("lib/client.js");
+  const block = source.slice(source.indexOf("/* MOTION-START */"), source.indexOf("/* MOTION-END */"));
+  const inlined = [...block.matchAll(/^\t\t\t([a-z0-9-]+): \{/gmu)].map((match) => match[1]).sort();
+  assert.deepEqual(
+    inlined,
+    measured,
+    "run `npm run motion:literal` — the generated block is out of step with art/motion.json",
+  );
+});
+
 await it("the greeting moves the figure, and the idle does not stand still", () => {
   const rig = buildRig(syntheticProfile(0.6, 0.18, 0.8, 10));
   const box = [0, 0, 100, 200];

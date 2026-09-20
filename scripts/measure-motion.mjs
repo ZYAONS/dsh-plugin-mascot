@@ -37,9 +37,15 @@ const flag = (name) => {
   return hit.includes("=") ? hit.slice(hit.indexOf("=") + 1) : true;
 };
 const MODEL_ID = flag("model") ?? "4228_closur";
+/**
+ * The model id goes into the URL, and some ids contain a `#` — Ark-Models names the Ave Mujica
+ * models `4182_oblvns_avemujica#1`, and a raw `#` in a URL starts the fragment, so the fetch
+ * silently asks for a file without its extension and 404s. The cache filename keeps the real
+ * spelling; only the URL is encoded.
+ */
 const MODEL = {
   id: MODEL_ID,
-  base: `https://raw.githubusercontent.com/isHarryh/Ark-Models/main/models/${MODEL_ID}`,
+  base: `https://raw.githubusercontent.com/isHarryh/Ark-Models/main/models/${encodeURIComponent(MODEL_ID)}`,
   files: [`build_char_${MODEL_ID}.skel`, `build_char_${MODEL_ID}.atlas`],
 };
 const RUNTIME = "https://raw.githubusercontent.com/EsotericSoftware/spine-runtimes/3.8/spine-ts/build/spine-core.js";
@@ -130,7 +136,7 @@ mkdirSync(cache, { recursive: true });
 console.log("measure-motion: 取运行时与模型（缓存于 art/.motion-cache/）");
 const runtimePath = await fetchCached(RUNTIME, "spine-core.js");
 const modelPaths = [];
-for (const file of MODEL.files) modelPaths.push(await fetchCached(`${MODEL.base}/${file}`, file));
+for (const file of MODEL.files) modelPaths.push(await fetchCached(`${MODEL.base}/${encodeURIComponent(file)}`, file));
 
 const spine = loadRuntime(readFileSync(runtimePath, "utf8"));
 const skelPath = modelPaths.find((path) => path.endsWith(".skel"));
