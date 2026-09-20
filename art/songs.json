@@ -2,13 +2,16 @@
   "note": "anime theme songs for characters Siren Records does not cover. Audio is Apple Music's official 30-second preview, hotlinked from Apple's CDN — licensed for preview and never downloaded or redistributed.",
   "songs": {
     "yuno": {
-      "title": "真夜中遊園地",
+      "title": "うちゅうのふしぎ",
+      "titleCn": "宇宙的不可思议",
       "band": "夢限大みゅーたいぷ",
       "kind": "ED",
       "work": "《BanG Dream! YUME∞MITA》",
-      "src": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/eb/8c/18/eb8c1846-54b7-ccf0-4cd9-e97abe6b01a0/mzaf_17279731756265555305.plus.aac.p.m4a",
+      "src": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/9d/31/4c/9d314c94-3ee2-eea2-12a7-ff01fff0b87f/mzaf_11293950619072016545.plus.aac.p.m4a",
       "previewSeconds": 30,
-      "source": "Apple Music 官方试听 · 真夜中遊園地 (TV Size)",
+      "source": "Apple Music 官方试听 · うちゅうのふしぎ",
+      "iTunesTrackId": 6798086544,
+      "released": "2026-08-14",
       "reason": null
     },
     "sakiko": {
