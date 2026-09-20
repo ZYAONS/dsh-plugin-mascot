@@ -861,7 +861,11 @@ await it("the summoned hand travels most of the way to the head, and no further"
   const held = distance(at(1));
   // 83.9 at rest → 24.9 with the elbow, against 31.6 when the arm was one bone. The threshold sits
   // between those two numbers on purpose: a regression back to a single-bone arm fails here.
-  assert.ok(held < rest * 0.32, `the gesture must bring the hand most of the way (${rest.toFixed(1)} → ${held.toFixed(1)})`);
+  // 83.9 at rest → 22.3 now, against 24.9 with the elbow half-way down and 31.6 with no elbow at
+  // all. The threshold sits under the middle of those, so a regression to either earlier shape
+  // fails here. (A sweep over the three numbers found 13.9 on a slightly different silhouette —
+  // the optimum is geometry-dependent, so these are the values for this rig, not a global best.)
+  assert.ok(held < rest * 0.29, `the gesture must bring the hand most of the way (${rest.toFixed(1)} → ${held.toFixed(1)})`);
   // And it must not overshoot into the far side of the head, which is what "turn it further"
   // would do with one bone.
   assert.ok(held > 12, `the hand overshot the head (${held.toFixed(1)})`);

@@ -125,7 +125,11 @@ function buildRig(profile, options = {}) {
 		// mass with it, so turning it further sweeps the arm further across the body
 		// instead of folding it — measured, that put the summoned hand 31.6 units short of
 		// the temple in a 200-unit figure and no larger angle helped.
-		const elbowY = shoulderY + armLength * 0.5;
+		// How far down the arm the elbow sits, 0 at the shoulder and 1 at the hand. An arm
+		// is not halved: the upper arm is the longer of the two, and where the joint sits
+		// decides how much of the reach the fold can add. Overridable so it can be searched.
+		const elbowAt = Number.isFinite(options.elbow) ? options.elbow : 0.4;
+		const elbowY = shoulderY + armLength * elbowAt;
 		bones.push({ id: "armL", pivot: { x: 0.5 - dx, y: shoulderY } });
 		bones.push({ id: "armR", pivot: { x: 0.5 + dx, y: shoulderY } });
 		bones.push({ id: "foreL", pivot: { x: 0.5 - dx, y: elbowY } });
@@ -158,8 +162,8 @@ function buildRig(profile, options = {}) {
 		};
 		// Half the arm each, overlapping a little at the elbow so the two segments blend
 		// rather than leaving a seam the skinning has to bridge in one step.
-		armUpper = (sign) => armAt(sign, shoulderY + armLength * 0.25, Math.max(armLength * 0.6, 0.05));
-		armLower = (sign) => armAt(sign, shoulderY + armLength * 0.75, Math.max(armLength * 0.6, 0.05));
+		armUpper = (sign) => armAt(sign, shoulderY + armLength * elbowAt * 0.5, Math.max(armLength * 0.6, 0.05));
+		armLower = (sign) => armAt(sign, shoulderY + armLength * (elbowAt + (1 - elbowAt) * 0.5), Math.max(armLength * 0.6, 0.05));
 	}
 	const rows = options.rows ?? 26;
 	const cols = options.cols ?? 18;
@@ -901,8 +905,8 @@ const SUMMON = Object.freeze({ raise: 0.34, hold: 0.86, total: 1.54 });
  * The sum is close to the 158 the single bone used, because the total travel is the same
  * journey — the difference is that it now bends in the middle rather than sweeping.
  */
-const SUMMON_UPPER = 158;
-const SUMMON_FOLD = 40;
+const SUMMON_UPPER = 175;
+const SUMMON_FOLD = 30;
 
 /**
  * Advance the jelly spring by `dt` seconds toward a lid position.
@@ -1107,13 +1111,18 @@ function poseRig(rig, box, state) {
 	// doing whatever the measured idle says, which is what stops the pose from reading
 	// as the whole body flinching.
 	const summon = state.summon ?? 0;
-	const armLocalR = rig2d(armPivotR, -arm - headKick * 0.4 - summon * SUMMON_UPPER * rad, 1, 1, 0, 0);
+	// The two angles are constants, but they are overridable so a sweep can search them
+	// against a measured hand-to-head distance instead of one guess per run. The defaults
+	// are what the app uses; nothing at runtime passes these.
+	const upperAngle = (state.summonUpper ?? SUMMON_UPPER) * rad;
+	const foldAngle = (state.summonFold ?? SUMMON_FOLD) * rad;
+	const armLocalR = rig2d(armPivotR, -arm - headKick * 0.4 - summon * upperAngle, 1, 1, 0, 0);
 	// The forearm folds relative to the upper arm. At rest it adds nothing — the game's
 	// measured idle is already a shoulder rotation — so it only contributes to the
 	// summoning gesture, which is the one pose that needs an elbow.
 	const forearmPivotL = toImage(rig.bones[5].pivot);
 	const forearmPivotR = toImage(rig.bones[6].pivot);
-	const fold = summon * SUMMON_FOLD * rad;
+	const fold = summon * foldAngle;
 	const armWorldL = mul(spine, armLocalL);
 	const armWorldR = mul(spine, armLocalR);
 	return [
