@@ -22,9 +22,8 @@
 </header>
 
 <main>
-  <section class="card">
-    <h2>力度</h2>
-    <p class="hint" id="level-hint">一条直线上的两个端点：越往右，劝得越早、越多、也越早开始遮工具。0 是关闭。</p>
+  <section class="card wide">
+    <h2>力度 <span class="count">0–100 · 拖到哪儿，下面立刻显示那一刻它会说什么</span></h2>
     <div class="dial" id="dial">
       <div class="dial-head">
         <b id="dial-value">—</b>
@@ -33,16 +32,27 @@
       <input type="range" id="dial-range" min="0" max="100" step="1" aria-label="节流力度">
       <div class="dial-ticks" id="dial-ticks"></div>
     </div>
+    <div class="configured" id="configured"></div>
+
+    <div class="row sim">
+      <span class="sim-label">如果烧到</span>
+      <input type="number" id="sim" min="0" max="400" step="1" placeholder="—">
+      <span class="sim-label">%</span>
+      <button id="sim-clear">用现在的</button>
+      <span class="sim-note" id="sim-note"></span>
+    </div>
+    <div id="ladder" class="ladder"></div>
+    <div class="maskline" id="maskline"></div>
   </section>
 
-  <section class="card">
+  <section class="card wide">
     <h2>预算</h2>
     <p class="hint">这个 token 数就是 100%。0 表示关闭。</p>
     <div class="row">
       <input type="number" id="budget" min="0" step="100000" placeholder="2000000">
       <button id="apply" class="primary">应用</button>
       <button id="restore">恢复配置</button>
-      <span class="configured" id="configured"></span>
+      <span class="configured" id="configured-budget"></span>
     </div>
   </section>
 
@@ -54,19 +64,6 @@
   <section class="card wide">
     <h2>全部会话 <span class="count" id="count"></span></h2>
     <div id="sessions" class="sessions"></div>
-  </section>
-
-  <section class="card wide">
-    <h2>调试 <span class="count" id="debug-hint">这一档到底会在什么时候、对我说什么</span></h2>
-    <div class="row sim">
-      <span class="sim-label">如果烧到</span>
-      <input type="number" id="sim" min="0" max="400" step="1" placeholder="—">
-      <span class="sim-label">%</span>
-      <button id="sim-clear">用现在的</button>
-      <span class="sim-note" id="sim-note"></span>
-    </div>
-    <div id="ladder" class="ladder"></div>
-    <div class="maskline" id="maskline"></div>
   </section>
 
   <section class="card wide">

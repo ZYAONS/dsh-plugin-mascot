@@ -352,9 +352,12 @@
     var over = [];
     if (state.overridden.intensity) over.push("力度");
     if (state.overridden.budget) over.push("预算");
-    el("configured").textContent = over.length
-      ? "配置里 力度 " + String(state.configured.intensity) + " · " + num(state.configured.budget) + "；" + over.join("、") + "已被本页覆盖（重启恢复）"
-      : "配置里 力度 " + String(state.configured.intensity) + " · " + num(state.configured.budget) + "（没有覆盖）";
+    el("configured").textContent = state.overridden.intensity
+      ? "配置里 力度 " + String(state.configured.intensity) + "，已被本页覆盖（重启恢复）"
+      : "配置里 力度 " + String(state.configured.intensity);
+    el("configured-budget").textContent = state.overridden.budget
+      ? "配置里 " + num(state.configured.budget) + "，已被本页覆盖（重启恢复）"
+      : "配置里 " + num(state.configured.budget) + (over.length === 2 ? "" : "（没有覆盖）");
 
     if (document.activeElement !== el("budget")) el("budget").value = String(state.budget);
 
