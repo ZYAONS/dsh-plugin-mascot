@@ -107,20 +107,37 @@ await it("apply() registers into shell.overlay and declares its own session-scop
         const disposers = [...callback()];
         registrations.push(...disposers.filter((d) => typeof d === "function"));
       },
-      register(options) {
-        registrations.push(options);
+      register(options, component) {
+        registrations.push({ options, component });
         return () => {};
       },
     },
   };
   exports_.apply(ctx);
-  const options = registrations.find((entry) => typeof entry === "object");
+  const options = registrations[0].options;
   assert.deepEqual(injectedKeys, ["shell.overlay"], "the floating surface belongs in the frame-wide overlay");
   assert.equal(options.name, "shell.overlay");
   assert.equal(options.id, "mascot", "a fresh id is what makes the entry additive");
   assert.ok(options.children["mascot.panel"], "the panel seat must be declared as a child");
   assert.equal(options.children["mascot.panel"].scope, "session-maybe", "the panel needs session projections without requiring a session");
   assert.equal(options.children["mascot.panel"].kind, "single");
+  /**
+   * And the seat must actually be taken.
+   *
+   * Declaring a child slot and occupying it are **two registrations** — `children` only
+   * declares the slot, and `renderSlot` renders whoever registered into it. This test used
+   * to check only the declaration, so it passed for as long as the panel was empty: the
+   * dock and the chip rendered (they live in the overlay) while clicking them opened
+   * nothing. The preview harness could not see it either, because it stubs `renderSlot`
+   * with a direct `h(MascotPanel, …)` — the screenshots showed a panel the product never
+   * drew. Only the count catches it.
+   */
+  // The `inject` stub collects yielded disposers alongside the registrations, so count the
+  // ones that are registrations rather than everything the generator handed back.
+  const entries = registrations.filter((entry) => entry.options !== undefined);
+  assert.equal(entries.length, 2, `the overlay, and the panel that fills the slot it declares (saw ${String(entries.length)})`);
+  assert.equal(entries[1].options.name, "mascot.panel", "the declared child slot must be occupied");
+  assert.equal(entries[1].component, exports_.MascotPanel, "by MascotPanel itself, not a copy");
 });
 //#endregion
 

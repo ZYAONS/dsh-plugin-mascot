@@ -522,6 +522,13 @@ window.__ModuleLoader__.load({
 					},
 					ThriftOverlay,
 				);
+				/**
+				 * 填进自己刚声明的那个子槽。
+				 *
+				 * 声明和占位是两次调用 —— `children` 只把槽登记出来，`renderSlot` 渲染的是
+				 * 占位者。少了这一句，胶囊照常出现（它在 overlay 里），点开却什么都没有。
+				 */
+				yield ctx.slots.register({ name: "thrift.panel" }, ThriftPanel);
 			});
 		}
 		//#endregion

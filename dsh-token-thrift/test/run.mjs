@@ -742,8 +742,14 @@ await it("the panel mounts into the overlay list beside the mascot", () => {
   };
   client.apply(ctx);
   assert.deepEqual(injected, ["shell.overlay"]);
-  assert.equal(registered.length, 1);
+  // Two registrations, not one: declaring the child slot and occupying it are separate
+  // calls, and for a long time this file only did the first — the chip rendered and the
+  // panel it opened did not. A count of one is the bug, so the count is asserted.
+  assert.equal(registered.length, 2, "the overlay, and the panel that fills the slot it declares");
   assert.equal(registered[0].declaration.name, "shell.overlay");
+  assert.equal(registered[1].declaration.name, "thrift.panel", "the declared child slot must be occupied");
+  assert.equal(registered[1].Component, client.ThriftPanel, "by the panel itself");
+  assert.equal(registered[0].declaration.children["thrift.panel"].scope, "session-maybe", "and it is declared before it is filled");
   assert.equal(registered[0].declaration.id, "token-thrift");
   // The child slot is what hands the panel a session id, and the report is found by it.
   assert.deepEqual(Object.keys(registered[0].declaration.children), ["thrift.panel"]);
