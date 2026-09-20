@@ -697,6 +697,14 @@ let sirenAudio;
  */
 function paintSiren() {
   const node = $("preview-siren");
+  // Nothing on the neutral theme. An album belongs to a character, and the neutral theme is the
+  // one that declines to name one — showing Closure's record there would attribute it to nobody,
+  // which is the same mistake as the neutral theme lighting a character's button.
+  if (state.autoTheme === true) {
+    node.dataset.on = "0";
+    node.removeAttribute("href");
+    return;
+  }
   const record = state.catalog.siren?.[state.character];
   const song = state.catalog.songs?.[state.character];
   const cover = $("siren-cover");
