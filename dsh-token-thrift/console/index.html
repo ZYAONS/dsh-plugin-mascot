@@ -10,9 +10,14 @@
 <header class="bar">
   <h1>Token 节流</h1>
   <p class="sub">dsh-token-thrift —— 花得聪明，而不只是卡住上限</p>
-  <div class="state" id="state">
-    <span class="dot" id="dot"></span>
-    <span id="state-text">连接中…</span>
+  <div class="bar-right">
+    <button id="fullpower" class="fullpower" title="把力度归零：不劝、不遮、不占一个 token">
+      <span class="fp-dot"></span><b>全力工作</b>
+    </button>
+    <div class="state" id="state">
+      <span class="dot" id="dot"></span>
+      <span id="state-text">连接中…</span>
+    </div>
   </div>
 </header>
 
@@ -49,6 +54,19 @@
   <section class="card wide">
     <h2>全部会话 <span class="count" id="count"></span></h2>
     <div id="sessions" class="sessions"></div>
+  </section>
+
+  <section class="card wide">
+    <h2>调试 <span class="count" id="debug-hint">这一档到底会在什么时候、对我说什么</span></h2>
+    <div class="row sim">
+      <span class="sim-label">如果烧到</span>
+      <input type="number" id="sim" min="0" max="400" step="1" placeholder="—">
+      <span class="sim-label">%</span>
+      <button id="sim-clear">用现在的</button>
+      <span class="sim-note" id="sim-note"></span>
+    </div>
+    <div id="ladder" class="ladder"></div>
+    <div class="maskline" id="maskline"></div>
   </section>
 
   <section class="card wide">

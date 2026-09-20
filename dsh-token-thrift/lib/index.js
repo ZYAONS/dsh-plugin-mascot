@@ -561,6 +561,15 @@ export function apply(ctx, config) {
     // `Infinity` does not survive JSON; null is the wire's word for "never".
     maskRatio: Number.isFinite(settings.maskRatio) ? settings.maskRatio : null,
     tiers: settings.tiers.map((tier) => tier.ratio),
+    /**
+     * The ladder with what each rung would say, for the console's debug view.
+     *
+     * `tiers` alone is enough to draw a timeline, but not to answer the question a person
+     * actually has when they turn the dial: *what is this thing about to say to me, and at
+     * what point*. That needs the text, and the text only exists here.
+     */
+    ladder: settings.tiers.map((tier) => ({ ratio: tier.ratio, text: tier.text })),
+    /** The threshold at which the tool table is touched, in words, for the debug view. */
     maskTools: settings.maskTools,
     countCache: settings.countCache,
     maxReminders: settings.maxReminders,

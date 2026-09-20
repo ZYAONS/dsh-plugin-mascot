@@ -27,6 +27,8 @@
   var last = null;
   /** 拖动中的值。松手才提交 —— 每移动一个像素就 POST 一次等于用一百次请求说一件事。 */
   var dialDraft = null;
+  /** 调试用的模拟比例；null 表示跟着真实用量走。 */
+  var simValue = null;
 
   function num(value) {
     if (typeof value !== "number" || !isFinite(value)) return "—";
@@ -126,6 +128,27 @@
 
   el("restore").addEventListener("click", function () {
     post(SETTINGS_URL, { budget: null, intensity: null });
+  });
+
+  /* 全力工作：一句话把力度归零。
+     这个按钮存在的理由是它对面那句话 ——「我现在要你全力干活，不在乎烧多少」。
+     那件事应该是一次点击，而不是先想清楚 0 是不是等于关闭。 */
+  el("fullpower").addEventListener("click", function () {
+    var off = last !== null && (last.intensity || 0) <= 0;
+    // 从关闭恢复到哪一档：优先用配置里的值，配置也没说过就用 standard。
+    var back = last !== null && last.configured.intensity >= 0 ? last.configured.intensity : 55;
+    post(SETTINGS_URL, { intensity: off ? back : 0 });
+  });
+
+  /* 模拟：不改变任何状态，只回答「烧到 X% 的时候，它会对我说什么」。 */
+  el("sim").addEventListener("input", function () {
+    simValue = el("sim").value.trim() === "" ? null : Number(el("sim").value);
+    if (last !== null) renderLadder(last);
+  });
+  el("sim-clear").addEventListener("click", function () {
+    el("sim").value = "";
+    simValue = null;
+    if (last !== null) renderLadder(last);
   });
 
   /* ---------------------------------------------------------------- 画 */
@@ -253,6 +276,65 @@
     return node;
   }
 
+  /**
+   * 调试视图：这一档会在什么时候、对 agent 说哪一句话。
+   *
+   * 面板和时间轴回答的是「烧到哪了」；这张表回答的是**「它打算说什么」** ——
+   * 那是唯一能判断力度调得对不对的东西，而在此之前它只存在于主驾半边的内存里。
+   *
+   * 模拟框只是把同一个渲染换个比例重跑一遍，不写任何状态：想知道「烧到 80% 会怎样」
+   * 不该需要先真的烧掉 80%。
+   */
+  function renderLadder(state) {
+    var ladder = state.ladder || [];
+    var live = simValue !== null && isFinite(simValue) ? simValue : (state.reports[0] ? state.reports[0].ratio * 100 : 0);
+    var simulating = simValue !== null && isFinite(simValue);
+    el("sim-note").textContent = simulating
+      ? "模拟中 · 不会真的改变任何东西"
+      : (state.reports[0] ? "现在是 " + Math.round(state.reports[0].ratio * 100) + "%" : "还没有会话在花 token");
+
+    var mask = state.maskRatio === null ? null : state.maskRatio * 100;
+    var host = el("ladder");
+    host.textContent = "";
+    if (ladder.length === 0) {
+      var empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "这一档不劝告。力度是 0，或者档位表是空的。";
+      host.appendChild(empty);
+    }
+    ladder.forEach(function (rung, index) {
+      var at = rung.ratio * 100;
+      var reached = live >= at;
+      var row = document.createElement("div");
+      row.className = "rung";
+      row.dataset.on = reached ? "1" : "0";
+      row.dataset.next = !reached && (index === 0 || live >= ladder[index - 1].ratio * 100) ? "1" : "0";
+
+      var head = document.createElement("div");
+      head.className = "rung-head";
+      var pct = document.createElement("b");
+      pct.textContent = String(Math.round(at)) + "%";
+      var tag = document.createElement("span");
+      tag.textContent = reached ? (index === 0 || live >= at ? "会响 / 已响" : "") : "";
+      head.appendChild(pct);
+      head.appendChild(tag);
+      row.appendChild(head);
+
+      var text = document.createElement("p");
+      text.className = "rung-text";
+      text.textContent = rung.text;
+      row.appendChild(text);
+      host.appendChild(row);
+    });
+
+    // 遮罩那一行单独说：它是唯一会动工具表的动作，和「说一句话」不是一回事。
+    el("maskline").textContent = mask === null
+      ? "遮罩：永不 —— 这一档只劝告，不动工具表。"
+      : "遮罩：" + Math.round(mask) + "% 起摘掉 " + (state.maskTools || []).length + " 个会开枝的工具"
+        + (live >= mask ? "（已经过了）" : "（还差 " + Math.round(mask - live) + " 个点）");
+    el("maskline").dataset.on = mask !== null && live >= mask ? "1" : "0";
+  }
+
   function paint(state) {
     el("raw").textContent = JSON.stringify(state, null, 2);
 
@@ -263,6 +345,9 @@
       : (state.budget > 0 ? `${String(state.intensity)}% · 档位为空，没在工作` : "未启用（budget 是 0）");
 
     paintDial(state);
+    renderLadder(state);
+    el("fullpower").dataset.off = on ? "0" : "1";
+    el("fullpower").title = on ? "把力度归零：不劝、不遮、不占一个 token" : "恢复力度";
 
     var over = [];
     if (state.overridden.intensity) over.push("力度");

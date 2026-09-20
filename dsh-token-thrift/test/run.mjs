@@ -506,6 +506,14 @@ await it("the platform route answers with what the coach is doing", async () => 
   assert.equal(payload.level, "strict", "and the old word is derived from it, for labels");
   assert.equal(payload.maskRatio, 0.55, "the harsh end masks past halfway");
   assert.deepEqual(payload.tiers, [0.25, 0.47, 0.68, 0.9]);
+  // The console's debug view needs the words, not just the positions: "what is this about to
+  // say to me, and at what point" is the question the dial raises, and `tiers` cannot answer it.
+  assert.deepEqual(payload.ladder.map((rung) => rung.ratio), [0.25, 0.47, 0.68, 0.9]);
+  for (const rung of payload.ladder) {
+    assert.ok(typeof rung.text === "string" && rung.text.length > 20, `the ${String(rung.ratio)} rung must carry what it would say`);
+  }
+  // And the words are the ones that get spoken, not a generic placeholder.
+  assert.match(payload.ladder[3].text, /wrap up/u, "the last rung of a harsh dial says wrap up");
 
   assert.equal(payload.reports.length, 1, "one session, one row");
   const [report] = payload.reports;
