@@ -825,6 +825,44 @@ await it("skin weights are a partition: every vertex sums to one, none negative"
   assert.ok(bottom.w[0] > 0.95, `the feet should be root, got ${String(bottom.w[0])}`);
 });
 
+await it("the summoned hand travels most of the way to the head, and no further", () => {
+  // What the render showed, as a number. Measuring the hand against the temple — not the neck,
+  // which `findNeck` gives and which sits at the base of the head — puts the resting hand 83.9
+  // units away in a 100x200 box and the summoned hand 31.6. So the arm does most of the journey
+  // and stops at chest height, which is exactly the picture: an arm swept across the torso
+  // rather than a hand at the temple.
+  //
+  // That residual 31.6 is the part one bone cannot cover. A single shoulder rotation carries the
+  // whole arm mass; turning it further sweeps the arm further across rather than folding it up,
+  // which is what flipping the sign and re-rendering confirmed — the two renders were the same
+  // picture. Closing it needs a second segment, and this test is the target for when there is one.
+  const arms = { halfWidth: 0.055, y: 0.5744, hand: 0.4169 };
+  const rig = buildRig(syntheticProfile(0.6, 0.18, 0.8, 10), { arms, aspect: 0.6 });
+  const box = [0, 0, 100, 200];
+  const toImage = (point) => ({ x: box[0] + point.x * box[2], y: box[1] + point.y * box[3] });
+  const apply = (matrix, point) => ({
+    x: matrix[0] * point.x + matrix[3] * point.y + matrix[6],
+    y: matrix[1] * point.x + matrix[4] * point.y + matrix[7],
+  });
+  const armLength = (1 - arms.hand) - (1 - arms.y);
+  const shoulder = toImage({ x: 0.5 + arms.halfWidth / 0.6, y: 1 - arms.y });
+  const handHome = { x: shoulder.x, y: shoulder.y + armLength * box[3] };
+  const at = (summon) => poseRig(rig, box, { time: 1.0, summon });
+  const distance = (pose) => {
+    const hand = apply(pose[4], handHome);
+    const base = toImage(rig.bones[2].pivot);
+    const temple = apply(pose[2], { x: base.x, y: base.y - 0.13 * box[3] });
+    return Math.hypot(hand.x - temple.x, hand.y - temple.y);
+  };
+
+  const rest = distance(at(0));
+  const held = distance(at(1));
+  assert.ok(held < rest * 0.5, `the gesture must bring the hand most of the way (${rest.toFixed(1)} → ${held.toFixed(1)})`);
+  // And it must not overshoot into the far side of the head, which is what "turn it further"
+  // would do with one bone.
+  assert.ok(held > 12, `the hand overshot the head (${held.toFixed(1)})`);
+});
+
 await it("the summoning gesture turns the right arm by an angle, and only that arm", () => {
   // 结城理 raising his Evoker to his temple. No official model has this pose — every one of the
   // six animations of his collab chibi was traced and the hand never comes within 68.8 units
