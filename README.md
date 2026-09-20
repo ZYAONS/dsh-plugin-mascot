@@ -10,14 +10,12 @@ The image above is `lib/client.js` running in Chromium with the built-in placeho
 
 ## What the panel shows
 
-| | |
-|---|---|
-| Token cache-hit rate | cache reads over all billed input |
-| Token breakdown | uncached input, cache read, cache write, output, session total |
-| Context occupancy | current usage against the context window |
-| Account balance | fetched host-side; the API key stays in the host process |
-| Music | the character's Siren Records album, or a 30-second official preview |
-| Character and look | 9 characters, 22 looks |
+- Token cache-hit rate: cache reads over all billed input
+- Token breakdown: uncached input, cache read, cache write, output, session total
+- Context occupancy: current usage against the context window
+- Account balance: fetched host-side, so the API key stays in the host process
+- Music: the character's Siren Records album, or a 30-second official preview
+- Character and look: 9 characters, 22 looks
 
 ## Install
 
@@ -25,7 +23,7 @@ DSH Desktop loads plugins through the profile's `cordis.patch.yml`. `cordis.yml`
 
 The plugin has no runtime dependencies. Two ways in, pick one.
 
-**A — point at the file directly.**
+**Option A: point at the file directly.**
 
 ```yaml
 # ~/.dsh/profiles/desktop/cordis.patch.yml
@@ -36,7 +34,7 @@ The plugin has no runtime dependencies. Two ways in, pick one.
 
 The `file:` URL names a file, not the folder. A relative path also works and resolves against the patch file's directory.
 
-**B — install it as a profile dependency.**
+**Option B: install it as a profile dependency.**
 
 ```bash
 dsh plugin --profile desktop add "/absolute/path/to/dsh-plugin-mascot"
@@ -69,15 +67,15 @@ Configure the plugin in a browser before installing anything:
 
 **https://zyaons.github.io/dsh-plugin-mascot/**
 
-| Section | |
-|---|---|
-| 00 Live preview | the mascot, animated, wearing the look you picked |
-| 01 Plugin | plugin on/off, balance lookup on/off |
-| 02 Character | one card per character |
-| 03 Looks | tick which artwork may appear |
-| 04 Motion | bone rig, multi-frame looks |
-| 05 Output | a `cordis.patch.yml` to copy or download |
-| 06 Install | five steps, including fetching artwork and restarting |
+Seven sections:
+
+- **00 Live preview**: the mascot, animated, wearing the look you picked
+- **01 Plugin**: plugin on/off, balance lookup on/off
+- **02 Character**: one card per character
+- **03 Looks**: tick which artwork may appear
+- **04 Motion**: bone rig, multi-frame looks
+- **05 Output**: a `cordis.patch.yml` to copy or download
+- **06 Install**: five steps, including fetching artwork and restarting
 
 The page is static, runs on GitHub Pages, and reads nothing from your machine. State lives in localStorage. `?theme=` and `?character=` deep-link both, and `?theme=` also selects the character.
 
@@ -87,10 +85,16 @@ Served by the plugin at `/dsh-mascot/console/` it also reads the artwork on your
 
 10 page themes: a neutral one plus one per character.
 
-| | Neutral | Closure | Yuno | Muelsyse | Sakiko | Miuyin | Yuyuan | Dusk | Makoto | Wang |
-|---|---|---|---|---|---|---|---|---|---|---|
-| Signal | silver | blue | magenta | light green | violet | deep green | cyan | teal | P3R blue | bone |
-| Corners | square | square | 14px | 10px | 8px | 14px | 10px | 10px | square | square |
+- 中性 `auto`: silver, square corners
+- 可露希尔: blue, square
+- 千石由乃: magenta, 14px
+- 缪尔赛思: light green, 10px
+- 丰川祥子: violet, 8px
+- 谬因: deep green, 14px
+- 予愿安洁莉娜: cyan, 10px
+- 夕: teal, 10px
+- 结城理: P3R blue, square
+- 望: bone, square
 
 Picking a character's theme selects that character, and picking a character selects its theme. The neutral theme belongs to no character; it is the only one that can disagree with the artwork, and it hides the music row.
 
@@ -107,19 +111,19 @@ npm run fetch-art              # download, cut out where needed, re-index
 npm run fetch-art -- --force   # re-download regardless of hash
 ```
 
-| Character | Looks | Source |
-|---|---|---|
-| 可露希尔 Closure | chibi, portrait | *Arknights* |
-| 千石由乃 Yuno | chibi (2 poses), anime, casual | *BanG Dream!* |
-| 缪尔赛思 Muelsyse | chibi, alt, portrait | *Arknights* |
-| 丰川祥子 Sakiko | anime, casual, chibi | *BanG Dream!* × *Arknights* |
-| 谬因 Miuyin | chibi, portrait | *Arknights* |
-| 予愿安洁莉娜 Yuyuan | chibi, portrait | *Arknights* |
-| 夕 Dusk | chibi, portrait | *Arknights* |
-| 结城理 Makoto | portrait, chibi, P3R | *Arknights* × *Persona 3 Reload* |
-| 望 Wang | chibi, portrait | *Arknights* |
+Nine characters, 22 looks:
 
-`art/looks.json` is hand-written. `art/index.json` is generated. Every entry carries source URLs and a sha256, checked on download.
+- **可露希尔 Closure**: chibi, portrait
+- **千石由乃 Yuno**: chibi in two drawn poses, anime, casual
+- **缪尔赛思 Muelsyse**: chibi, alt, portrait
+- **丰川祥子 Sakiko**: anime, casual, collab chibi
+- **谬因 Miuyin**: chibi, portrait
+- **予愿安洁莉娜 Yuyuan**: chibi, portrait
+- **夕 Dusk**: chibi, portrait
+- **结城理 Makoto**: portrait, collab chibi, P3R
+- **望 Wang**: chibi, portrait
+
+Seven are *Arknights*; Yuno and Sakiko are *BanG Dream!*. Sakiko and Makoto are collab designs. `art/looks.json` is hand-written and `art/index.json` is generated; every entry carries source URLs and a sha256, checked on download.
 
 To add a look, add an entry to `looks` in `art/looks.json` and run `npm run fetch-art`. No code changes.
 
@@ -127,7 +131,7 @@ To add a look, add an entry to `looks` in `art/looks.json` and run `npm run fetc
 
 `npm run art:watch` re-indexes whenever a file lands in `art/`.
 
-A missing file falls back to a neutral placeholder — a dashed box with a generic glyph. It depicts no character.
+A missing file falls back to a neutral placeholder: a dashed box with a generic glyph. It depicts no character.
 
 ## Motion
 
@@ -157,13 +161,11 @@ npm run measure:motion -- --model=4228_closur --moves
 
 Arknights chibi have six animations: `Default`, `Interact`, `Move`, `Relax`, `Sit`, `Sleep`. All six are measured for all 8 characters that have a model; `art/motion.json` is keyed by character. Three are used:
 
-| Animation | Used as | Extent |
-|---|---|---|
-| `Relax` | idle | waist 0.4°, forearm 28.6° |
-| `Interact` | greeting | waist 17.6°, forearm 79.5° |
-| `Move` | walk-in on look change | IK feet ±89 units |
+- `Relax` as the idle: waist 0.4°, forearm 28.6°
+- `Interact` as the greeting: waist 17.6°, forearm 79.5°
+- `Move` as the walk-in on a look change: IK feet ±89 units
 
-`Sit` and `Sleep` carry almost no motion in either channel — `Sleep` moves three bones by at most 2.2 units, `Sit`'s largest translation is an eyeball, and `Default` is a zero-length animation. They are measured and not inlined.
+`Sit` and `Sleep` carry almost no motion in either channel. `Sleep` moves three bones by at most 2.2 units, `Sit`'s largest translation is an eyeball, and `Default` is a zero-length animation. They are measured and not inlined.
 
 ```bash
 npm run motion:literal    # regenerate the inlined block in lib/client.js
@@ -204,25 +206,14 @@ Images go to `art/room-<character id>.<ext>`. The host finds them by filename, s
 
 ## Usage
 
-| Interaction | Result |
-|---|---|
-| Click the sprite | toggle the panel |
-| 角色 row | switch character |
-| 形象 row | switch look (a 动态 badge marks a multi-frame one) |
-| 动效 row | toggle the bone rig |
-| Music row ▶ | play or stop |
-| Click the backdrop or press Esc | close the panel |
-| 刷新 | re-read the balance |
+- Click the sprite to toggle the panel.
+- The 角色 row switches character; the 形象 row switches that character's look. A 动态 badge marks a multi-frame look.
+- The 动效 row toggles the bone rig. The music row's ▶ plays or stops the album.
+- `刷新` re-reads the balance. Click the backdrop or press Esc to close the panel.
 
 The choice is stored in localStorage. With the system's reduce-motion preference set, all animation stops.
 
-The pill under the sprite shows three figures:
-
-| | Source |
-|---|---|
-| 余额 `¥128.42` | the host asks DeepSeek; failures read 点我 Token / 余额 |
-| 命中 `89.0%` | this session's cache hit rate |
-| 今天 `1.2M` | tokens spent today on this machine |
+The pill under the sprite shows three figures. 余额 `¥128.42` is the account balance, fetched host-side; when the lookup fails it reads 点我 Token / 余额 instead. 命中 `89.0%` is this session's cache hit rate. 今天 `1.2M` is the tokens spent today on this machine.
 
 The daily figure needs the host to keep books: a session that ended an hour ago takes its numbers with it. The host keeps `.cache/usage-daily.json`, keyed by session, and stores a high-water mark per session. The browser reports a cumulative total repeatedly, so re-reporting adds nothing; a total that goes backwards never subtracts. Midnight resets it.
 
@@ -276,7 +267,7 @@ dsh-plugin-mascot/
 
 The DSH GUI is a slot registry. This plugin registers one entry:
 
-**`shell.overlay`** — a frame-wide floating layer above every column and outside their scroll containers. It is a `list` slot, so `id: "mascot"` adds an entry. The layer is click-through; the sprite opts back into pointer events.
+**`shell.overlay`**: a frame-wide floating layer above every column and outside their scroll containers. It is a `list` slot, so `id: "mascot"` adds an entry. The layer is click-through; the sprite opts back into pointer events.
 
 `shell.overlay` is `root`-scoped and does not receive `useProjection`, so the entry declares a `session-maybe`-scoped child slot (`mascot.panel`) and renders the panel through `props.renderSlot`. The renderer then supplies `useProjection` / `useSession` / `sessionId`.
 
@@ -296,13 +287,13 @@ GET /dsh-mascot/art/<file>    artwork from the plugin's art/ directory
 
 ## Where the numbers come from
 
-| Shown | Source | Shape |
-|---|---|---|
-| Token breakdown | `useProjection("tokenUsage")` | `{ uncachedInputTokens, outputTokens, cacheReadTokens, cacheWriteTokens }` |
-| Cache-hit rate | derived | `cacheReadTokens ÷ (uncachedInputTokens + cacheReadTokens + cacheWriteTokens)` |
-| Context occupancy | `useProjection("contextPressure")` | `{ contextWindow?, pressureTokens?, projectedTokens? }` |
-| Account balance | `/dsh-mascot/api/balance` | `GET {baseUrl}/user/balance` |
-| Looks, rooms, music | `/dsh-mascot/api/looks` | `art/index.json`, filtered to files on disk |
+Every figure in the panel comes from DSH's own session projections. The plugin does not count tokens itself.
+
+- **Token breakdown**: `useProjection("tokenUsage")`, shaped `{ uncachedInputTokens, outputTokens, cacheReadTokens, cacheWriteTokens }`
+- **Cache-hit rate**: derived: `cacheReadTokens ÷ (uncachedInputTokens + cacheReadTokens + cacheWriteTokens)`
+- **Context occupancy**: `useProjection("contextPressure")`, shaped `{ contextWindow?, pressureTokens?, projectedTokens? }`
+- **Account balance**: `/dsh-mascot/api/balance`, which calls `GET {baseUrl}/user/balance`
+- **Looks, rooms, music**: `/dsh-mascot/api/looks`, reading `art/index.json` filtered to files on disk
 
 Anything unmeasurable renders as `—`, not `0`.
 

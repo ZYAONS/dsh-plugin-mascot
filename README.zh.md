@@ -10,14 +10,12 @@
 
 ## 面板显示什么
 
-| | |
-|---|---|
-| Token 缓存命中率 | 缓存读取 ÷ 全部计费输入 |
-| Token 明细 | 未命中输入、缓存读取、缓存写入、输出、会话合计 |
-| 上下文占用 | 当前用量 ÷ 上下文窗口 |
-| 账户余额 | 主机侧请求，API key 不出主机进程 |
-| 音乐 | 该角色的塞壬唱片专辑，或 30 秒官方试听 |
-| 角色与形象 | 9 位角色，22 个形象 |
+- Token 缓存命中率：缓存读取 ÷ 全部计费输入
+- Token 明细：未命中输入、缓存读取、缓存写入、输出、会话合计
+- 上下文占用：当前用量 ÷ 上下文窗口
+- 账户余额：主机侧请求，API key 不出主机进程
+- 音乐：该角色的塞壬唱片专辑，或 30 秒官方试听
+- 角色与形象：9 位角色，22 个形象
 
 ## 安装
 
@@ -25,7 +23,7 @@ DSH Desktop 通过 profile 的 `cordis.patch.yml` 加载插件。`cordis.yml` �
 
 插件没有运行时依赖。两种装法，选一个。
 
-**A —— 直接指向文件。**
+**方式 A：直接指向文件。**
 
 ```yaml
 # ~/.dsh/profiles/desktop/cordis.patch.yml
@@ -36,7 +34,7 @@ DSH Desktop 通过 profile 的 `cordis.patch.yml` 加载插件。`cordis.yml` �
 
 `file:` URL 指的是**文件**，不是目录。相对路径也可以，相对补丁文件自身所在目录解析。
 
-**B —— 装成 profile 依赖。**
+**方式 B：装成 profile 依赖。**
 
 ```bash
 dsh plugin --profile desktop add "/absolute/path/to/dsh-plugin-mascot"
@@ -69,15 +67,15 @@ dsh plugin --profile desktop add "github:ZYAONS/dsh-plugin-mascot"
 
 **https://zyaons.github.io/dsh-plugin-mascot/**
 
-| 区块 | |
-|---|---|
-| 00 实时预览 | 看板娘动起来，穿你选的形象 |
-| 01 插件 | 插件开关、余额查询开关 |
-| 02 角色 | 每位角色一张卡 |
-| 03 形象 | 勾选允许出现的素材 |
-| 04 动效 | 骨骼动画、多帧形象 |
-| 05 输出 | 可复制、可下载的 `cordis.patch.yml` |
-| 06 安装 | 五步，含拉取素材和重启 |
+七个区块：
+
+- **00 实时预览**：看板娘动起来，穿你选的形象
+- **01 插件**：插件开关、余额查询开关
+- **02 角色**：每位角色一张卡
+- **03 形象**：勾选允许出现的素材
+- **04 动效**：骨骼动画、多帧形象
+- **05 输出**：可复制、可下载的 `cordis.patch.yml`
+- **06 安装**：五步，含拉取素材和重启
 
 页面是纯静态的，跑在 GitHub Pages 上，不读取本机任何东西。状态存在 localStorage。`?theme=` 和 `?character=` 可以深链，`?theme=` 同时会切换角色。
 
@@ -87,10 +85,16 @@ dsh plugin --profile desktop add "github:ZYAONS/dsh-plugin-mascot"
 
 10 套页面主题：一套中性 + 每位角色一套。
 
-| | 中性 | 可露希尔 | 千石由乃 | 缪尔赛思 | 丰川祥子 | 谬因 | 予愿安洁莉娜 | 夕 | 结城理 | 望 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 信号色 | 银 | 蓝 | 品红 | 浅绿 | 紫罗兰 | 深绿 | 青 | 蓝绿 | P3R 蓝 | 米白 |
-| 圆角 | 直角 | 直角 | 14px | 10px | 8px | 14px | 10px | 10px | 直角 | 直角 |
+- 中性 `auto`：银，直角
+- 可露希尔：蓝，直角
+- 千石由乃：品红，14px
+- 缪尔赛思：浅绿，10px
+- 丰川祥子：紫罗兰，8px
+- 谬因：深绿，14px
+- 予愿安洁莉娜：青，10px
+- 夕：蓝绿，10px
+- 结城理：P3R 蓝，直角
+- 望：米白，直角
 
 选某个角色的主题即选中该角色，选角色也切到它的主题。中性主题不属于任何角色，是唯一可以和画面不一致的，也是唯一不显示唱片行的。
 
@@ -107,19 +111,19 @@ npm run fetch-art              # 下载、需要时抠图、重建索引
 npm run fetch-art -- --force   # 忽略哈希重新下载
 ```
 
-| 角色 | 形象 | 出处 |
-|---|---|---|
-| 可露希尔 Closure | 基建小人、立绘 | 明日方舟 |
-| 千石由乃 Yuno | Q 版（两个姿势）、动画、常服 | BanG Dream! |
-| 缪尔赛思 Muelsyse | 基建小人、异格、立绘 | 明日方舟 |
-| 丰川祥子 Sakiko | 动画、常服、联动小人 | BanG Dream! × 明日方舟 |
-| 谬因 Miuyin | 基建小人、立绘 | 明日方舟 |
-| 予愿安洁莉娜 Yuyuan | 基建小人、立绘 | 明日方舟 |
-| 夕 Dusk | 基建小人、立绘 | 明日方舟 |
-| 结城理 Makoto | 立绘、联动小人、P3R | 明日方舟 × P3R |
-| 望 Wang | 基建小人、立绘 | 明日方舟 |
+九位角色，22 个形象：
 
-`art/looks.json` 是手写的，`art/index.json` 是生成的。每条都带源 URL 和 sha256，下载时校验。
+- **可露希尔 Closure**：基建小人、立绘
+- **千石由乃 Yuno**：Q 版（两个姿势）、动画、常服
+- **缪尔赛思 Muelsyse**：基建小人、异格、立绘
+- **丰川祥子 Sakiko**：动画、常服、联动小人
+- **谬因 Miuyin**：基建小人、立绘
+- **予愿安洁莉娜 Yuyuan**：基建小人、立绘
+- **夕 Dusk**：基建小人、立绘
+- **结城理 Makoto**：立绘、联动小人、P3R
+- **望 Wang**：基建小人、立绘
+
+其中七位是明日方舟，由乃和祥子是 BanG Dream!，祥子和结城理是联动形象。`art/looks.json` 是手写的，`art/index.json` 是生成的；每条都带源 URL 和 sha256，下载时校验。
 
 加形象：在 `art/looks.json` 的 `looks` 里加一条，跑 `npm run fetch-art`。不用改代码。
 
@@ -157,13 +161,11 @@ npm run measure:motion -- --model=4228_closur --moves
 
 方舟小人有六段动画：`Default`、`Interact`、`Move`、`Relax`、`Sit`、`Sleep`。有模型的 8 位角色全部量过，`art/motion.json` 按角色分份。用上的是三段：
 
-| 动画 | 用途 | 幅度 |
-|---|---|---|
-| `Relax` | 待机 | 腰 0.4°，前臂 28.6° |
-| `Interact` | 打招呼 | 腰 17.6°，前臂 79.5° |
-| `Move` | 换形象时走过来 | IK 脚骨 ±89 单位 |
+- `Relax` 当待机：腰 0.4°，前臂 28.6°
+- `Interact` 当打招呼：腰 17.6°，前臂 79.5°
+- `Move` 当换形象时走过来：IK 脚骨 ±89 单位
 
-`Sit` 和 `Sleep` 两条通道里都几乎没有运动 —— `Sleep` 整段只有 3 根骨头动、最大 2.2 单位，`Sit` 最大的位移是眼球，`Default` 是 0 秒空动画。量了，没有内联。
+`Sit` 和 `Sleep` 两条通道里都几乎没有运动。`Sleep` 整段只有 3 根骨头动、最大 2.2 单位，`Sit` 最大的位移是眼球，`Default` 是 0 秒空动画。量了，没有内联。
 
 ```bash
 npm run motion:literal    # 重新生成 lib/client.js 里那段内联
@@ -204,25 +206,14 @@ npm run fetch-rooms -- --force # 重新下载
 
 ## 用法
 
-| 操作 | 结果 |
-|---|---|
-| 点小人 | 开关面板 |
-| 角色行 | 换角色 |
-| 形象行 | 换该角色的形象（带「动态」标记的是多帧） |
-| 动效行 | 开关骨骼动画 |
-| 唱片行 ▶ | 播放 / 停止 |
-| 点背景或按 Esc | 关面板 |
-| 刷新 | 立即重查余额 |
+- 点小人开关面板。
+- 「角色」行换角色，「形象」行换该角色的形象。带「动态」标记的是多帧。
+- 「动效」行开关骨骼动画。唱片行的 ▶ 播放或停止专辑。
+- 「刷新」立即重查余额。点背景或按 Esc 关面板。
 
 选择存在 localStorage。系统开了「减弱动态效果」时，所有动画停止。
 
-小人身下那枚胶囊显示三个数：
-
-| | 来源 |
-|---|---|
-| 余额 `¥128.42` | 主机问 DeepSeek；失败时显示「点我 Token / 余额」 |
-| 命中 `89.0%` | 本次会话的缓存命中率 |
-| 今天 `1.2M` | 本机今天的 token 花费 |
+小人身下那枚胶囊显示三个数。余额 `¥128.42` 是账户余额，主机侧查询；查不到时显示「点我 Token / 余额」。命中 `89.0%` 是本次会话的缓存命中率。今天 `1.2M` 是本机今天的 token 花费。
 
 「今天」要主机记账：一小时前结束的会话把数字带走了。主机维护 `.cache/usage-daily.json`，按会话存**高水位**。浏览器反复上报累计值，重复上报不加；倒退的总数不扣。跨零点清零。
 
@@ -276,7 +267,7 @@ dsh-plugin-mascot/
 
 DSH 网页端是插槽注册表。本插件注册一个条目：
 
-**`shell.overlay`** —— 覆盖整个框架的浮层，在所有列之上、在各列滚动容器之外。它是 `list` 插槽，`id: "mascot"` 是新增而不是替换。浮层本身点击穿透，小人自己重新打开指针事件。
+**`shell.overlay`**：覆盖整个框架的浮层，在所有列之上、在各列滚动容器之外。它是 `list` 插槽，`id: "mascot"` 是新增而不是替换。浮层本身点击穿透，小人自己重新打开指针事件。
 
 `shell.overlay` 是 `root` 作用域，拿不到 `useProjection`。所以该条目自己声明一个 `session-maybe` 作用域的子插槽（`mascot.panel`），通过 `props.renderSlot` 渲染面板，渲染器会把 `useProjection` / `useSession` / `sessionId` 一并给进去。
 
@@ -296,13 +287,13 @@ GET /dsh-mascot/art/<file>    插件 art/ 目录里的素材
 
 ## 数字从哪来
 
-| 显示 | 来源 | 形状 |
-|---|---|---|
-| Token 明细 | `useProjection("tokenUsage")` | `{ uncachedInputTokens, outputTokens, cacheReadTokens, cacheWriteTokens }` |
-| 缓存命中率 | 由上一行推出 | `cacheReadTokens ÷ (uncachedInputTokens + cacheReadTokens + cacheWriteTokens)` |
-| 上下文占用 | `useProjection("contextPressure")` | `{ contextWindow?, pressureTokens?, projectedTokens? }` |
-| 账户余额 | `/dsh-mascot/api/balance` | `GET {baseUrl}/user/balance` |
-| 形象、房间、音乐 | `/dsh-mascot/api/looks` | `art/index.json`，过滤到磁盘上有的 |
+面板里每个数都来自 DSH 自己的会话投影。插件不自己数 token。
+
+- **Token 明细**：`useProjection("tokenUsage")`，形状是 `{ uncachedInputTokens, outputTokens, cacheReadTokens, cacheWriteTokens }`
+- **缓存命中率**：由上一行推出：`cacheReadTokens ÷ (uncachedInputTokens + cacheReadTokens + cacheWriteTokens)`
+- **上下文占用**：`useProjection("contextPressure")`，形状是 `{ contextWindow?, pressureTokens?, projectedTokens? }`
+- **账户余额**：`/dsh-mascot/api/balance`，它去调 `GET {baseUrl}/user/balance`
+- **形象、房间、音乐**：`/dsh-mascot/api/looks`，读 `art/index.json` 并过滤到磁盘上有的
 
 量不到的一律显示 `—`，不显示 `0`。
 
