@@ -157,7 +157,8 @@
       "theme": "sakiko",
       "looks": [
         "sakiko-anime",
-        "sakiko-casual"
+        "sakiko-casual",
+        "sakiko-chibi"
       ]
     },
     {
@@ -1699,6 +1700,144 @@
       ]
     },
     {
+      "id": "sakiko-chibi",
+      "character": "sakiko",
+      "name": "基建小人",
+      "nameEn": "Base chibi",
+      "animated": false,
+      "accent": "#8a7757",
+      "sources": [
+        "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_4182_oblvns.png",
+        "https://cdn.jsdelivr.net/gh/Light-milk-tea/ArknightsChibi@main/chibi/char_4182_oblvns.png"
+      ],
+      "cors": true,
+      "frames": [
+        {
+          "file": "sakiko-chibi.png",
+          "seat": {
+            "sprite": {
+              "width": 162,
+              "left": 9,
+              "top": 1
+            },
+            "face": {
+              "width": 72,
+              "left": 0,
+              "top": 8
+            }
+          },
+          "box": [
+            122,
+            52,
+            269,
+            537
+          ],
+          "profile": [
+            0.327,
+            0.777,
+            0.253,
+            0.855,
+            0.204,
+            0.896,
+            0.178,
+            0.922,
+            0.167,
+            0.929,
+            0.156,
+            0.933,
+            0.086,
+            0.933,
+            0.048,
+            0.944,
+            0.056,
+            0.963,
+            0.063,
+            0.963,
+            0.063,
+            0.952,
+            0.045,
+            0.937,
+            0.004,
+            0.941,
+            0,
+            0.952,
+            0,
+            0.993,
+            0.019,
+            0.996,
+            0.063,
+            0.963,
+            0.097,
+            0.922,
+            0.059,
+            0.907,
+            0.086,
+            0.9,
+            0.16,
+            0.952,
+            0.141,
+            0.967,
+            0.126,
+            0.97,
+            0.156,
+            0.97,
+            0.193,
+            0.892,
+            0.193,
+            0.732,
+            0.316,
+            0.743,
+            0.405,
+            0.77,
+            0.394,
+            0.777,
+            0.368,
+            0.743,
+            0.364,
+            0.781,
+            0.368,
+            0.788
+          ],
+          "body": {
+            "x": 124,
+            "y": 54,
+            "w": 266,
+            "h": 534
+          },
+          "eyes": [
+            [
+              0.496,
+              0.283,
+              0.045,
+              0.019
+            ],
+            [
+              0.568,
+              0.288,
+              0.023,
+              0.013
+            ]
+          ],
+          "blinkable": false,
+          "still": false,
+          "localOnly": false,
+          "arms": {
+            "halfWidth": 0.055,
+            "y": 0.5744,
+            "hand": 0.4169
+          },
+          "skin": [
+            249,
+            229,
+            220
+          ],
+          "eyesFrom": "pixels",
+          "crop": null,
+          "local": false
+        }
+      ]
+    },
+    {
       "id": "miuyin-chibi",
       "character": "miuyin",
       "name": "基建小人",
@@ -1805,13 +1944,13 @@
           "eyes": [
             [
               0.453,
-              0.392,
+              0.313,
               0.108,
               0.072
             ],
             [
               0.597,
-              0.392,
+              0.313,
               0.115,
               0.072
             ]

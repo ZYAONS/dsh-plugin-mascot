@@ -257,6 +257,20 @@
       "still": true
     },
     {
+      "id": "sakiko-chibi",
+      "character": "sakiko",
+      "name": "基建小人",
+      "nameEn": "Base chibi",
+      "file": "sakiko-chibi.png",
+      "rights": "《明日方舟》×《BanG Dream! Ave Mujica》© 鹰角网络 / Bushiroad — 联动干员 Q 版小人 (char_4182_oblvns)",
+      "sha256": "170527a60e3e224062a5cbd77f40a04345252334544c2e93b5cb77f0b0104667",
+      "urls": [
+        "https://raw.githubusercontent.com/Light-milk-tea/ArknightsChibi/main/chibi/char_4182_oblvns.png",
+        "https://cdn.jsdelivr.net/gh/Light-milk-tea/ArknightsChibi@main/chibi/char_4182_oblvns.png"
+      ],
+      "cors": true
+    },
+    {
       "id": "miuyin-chibi",
       "character": "miuyin",
       "name": "基建小人",
