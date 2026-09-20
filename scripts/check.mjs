@@ -141,7 +141,34 @@ await it("apply() registers into shell.overlay and declares its own session-scop
 });
 //#endregion
 
-//#region 3b — the box each look is drawn in
+//#region 3c — borrowed motion
+await it("a character nobody measured borrows the rhythm of the idle, not its amplitude", () => {
+  // Every figure is skinned with one character's measured bone angles. Applying those angles
+  // to a body drawn with different proportions does not read as a walk, it reads as a
+  // deformation — and the first version of this damping did nothing at all, because it looked
+  // for the channels under a `channels` key while the generated literal puts them directly on
+  // the animation. A no-op that produces a well-formed object is the failure mode here.
+  const own = exports_.motionFor("closure");
+  const borrowed = exports_.motionFor("nobody-has-measured-this-one");
+  assert.equal(exports_.motionFor(undefined), borrowed, "an absent id borrows too");
+  assert.notEqual(borrowed, own, "a borrowed bundle must not be the original object");
+
+  const span = (samples) => Math.max(...samples) - Math.min(...samples);
+  assert.ok(Array.isArray(own.idle.waist) && own.idle.waist.length > 0, "the default has angle channels to borrow");
+  const ownSpan = span(own.idle.waist);
+  const borrowedSpan = span(borrowed.idle.waist);
+  assert.ok(borrowedSpan < ownSpan, `borrowed waist should swing less (${String(borrowedSpan)} vs ${String(ownSpan)})`);
+  assert.ok(borrowedSpan > 0, "but it must still move, or the figure is dead");
+  assert.deepEqual(borrowed.idle.waist, own.idle.waist.map((value) => value * 0.3), "and by the damping factor, exactly");
+
+  // The things that are not angles must survive untouched.
+  assert.equal(borrowed.idle.loop, own.idle.loop, "the loop length is a schedule, not an angle");
+  assert.equal(borrowed.idle.step, own.idle.step);
+  assert.equal(borrowed.blink, own.blink, "how often it blinks does not depend on whose skeleton swayed");
+  // And the original is not mutated by having been borrowed.
+  assert.equal(span(own.idle.waist), ownSpan, "borrowing must not change the lender");
+});
+//#endregion
 await it("every look is drawn in a box big enough to hold it", () => {
   // This is the check that was missing for the whole life of the project, and its absence
   // showed up as a screenshot: the chibi sliced off by a hard vertical edge, with the room
