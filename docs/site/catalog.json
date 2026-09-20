@@ -1,16 +1,16 @@
 {
   "siren": {
     "closure": {
-      "album": "相变临界OST",
-      "albumCid": "4507",
-      "cover": "https://web.hycdn.cn/siren/pic/20260501/41a1c9bddfb88bc10ab7f131aa956dc2.jpg",
-      "tracks": 7,
+      "album": "All by My Design",
+      "albumCid": "0234",
+      "cover": "https://web.hycdn.cn/siren/pic/20260501/ec1fab7576400e699d76ab022ad4ed2c.jpg",
+      "tracks": 2,
       "track": {
-        "name": "永恒之春",
-        "cid": "697688",
-        "src": "https://res01.hycdn.cn/1f44a026d6aa1557e07426eccce783c7/6AAFD6A2/siren/audio/20260503/e835b769aa9df41eba1e0b620e2139d9.wav"
+        "name": "All by My Design",
+        "cid": "306878",
+        "src": "https://res01.hycdn.cn/425dc96be15d9c3f33a0b37aa67b4a65/6AB064FE/siren/audio/20260501/89ca840e4d3696fa12d000aefc94a089.wav"
       },
-      "event": "七周年上岛，对应 2026-05-01 的七周年活动专辑"
+      "event": "同名专辑「All by My Design」—— 她的角色曲，2026-05-01 与七周年同期"
     },
     "muelsyse": {
       "album": "孤星OST",
@@ -87,13 +87,16 @@
   },
   "songs": {
     "yuno": {
-      "title": "真夜中遊園地",
+      "title": "うちゅうのふしぎ",
+      "titleCn": "宇宙的不可思议",
       "band": "夢限大みゅーたいぷ",
       "kind": "ED",
       "work": "《BanG Dream! YUME∞MITA》",
-      "src": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/eb/8c/18/eb8c1846-54b7-ccf0-4cd9-e97abe6b01a0/mzaf_17279731756265555305.plus.aac.p.m4a",
+      "src": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/9d/31/4c/9d314c94-3ee2-eea2-12a7-ff01fff0b87f/mzaf_11293950619072016545.plus.aac.p.m4a",
       "previewSeconds": 30,
-      "source": "Apple Music 官方试听 · 真夜中遊園地 (TV Size)",
+      "source": "Apple Music 官方试听 · うちゅうのふしぎ",
+      "iTunesTrackId": 6798086544,
+      "released": "2026-08-14",
       "reason": null
     },
     "sakiko": {
