@@ -780,7 +780,7 @@ await it("the browser half falls back to the placeholder when the official file 
 //#endregion
 
 //#region 5 — the bone rig
-const { buildRig, findNeck, poseRig, RIG } = exports_;
+const { buildRig, findNeck, poseRig, RIG, summonBlend, SUMMON, SUMMON_ARM } = exports_;
 
 /** A synthetic silhouette: a wide head, a pinched neck, then a wide body. */
 function syntheticProfile(headWidth, neckWidth, bodyWidth, neckRow) {
@@ -823,6 +823,64 @@ await it("skin weights are a partition: every vertex sums to one, none negative"
   const bottom = rig.vertices.find((vertex) => vertex.y === 1);
   assert.ok(top.w[2] > 0.95, `the top of the figure should be head, got ${String(top.w[2])}`);
   assert.ok(bottom.w[0] > 0.95, `the feet should be root, got ${String(bottom.w[0])}`);
+});
+
+await it("the summoning gesture turns the right arm by an angle, and only that arm", () => {
+  // 结城理 raising his Evoker to his temple. No official model has this pose — every one of the
+  // six animations of his collab chibi was traced and the hand never comes within 68.8 units
+  // of his head, against 75.6 at rest — so it is written rather than measured, and a written
+  // pose is exactly the kind of thing that is silently wrong.
+  const rig = buildRig(syntheticProfile(0.6, 0.18, 0.8, 10), { arms: { halfWidth: 0.055, y: 0.5744, hand: 0.4169 } });
+  assert.equal(rig.bones.length, 5, "the gesture needs arms; a three-bone rig cannot hold anything to its head");
+  const box = [0, 0, 100, 200];
+  // `time` fixed and nothing else varying, so the only difference between the two poses is the
+  // summon itself. `rig2d` builds its linear part as [cos, sin, ...], so atan2 recovers the turn.
+  const at = (summon) => poseRig(rig, box, { time: 1.0, summon });
+  const angleOf = (matrix) => (Math.atan2(matrix[1], matrix[0]) * 180) / Math.PI;
+
+  const rest = at(0);
+  const held = at(1);
+  const turned = angleOf(held[4]) - angleOf(rest[4]);
+  assert.ok(
+    Math.abs(Math.abs(turned) - SUMMON_ARM) < 2,
+    `the arm turned ${turned.toFixed(1)}°, expected about ${String(SUMMON_ARM)}`,
+  );
+  // The direction matters as much as the size: the same angle the other way is the arm behind
+  // his back, which is the classic way a sign error hides behind a magnitude assertion.
+  assert.ok(turned < 0, `the arm turned the wrong way (${turned.toFixed(1)}°)`);
+  assert.ok(Math.abs(turned) < 180, "one gesture cannot turn a single-bone arm past half a circle");
+
+  // And nothing else moved. A summon that also tips the head is the whole body flinching.
+  for (const index of [0, 1, 2, 3]) {
+    const delta = Array.from(held[index]).reduce((sum, value, at_) => sum + Math.abs(value - rest[index][at_]), 0);
+    assert.ok(delta < 1e-9, `bone ${String(index)} moved during the summon (${delta})`);
+  }
+});
+
+await it("the summon is three phases, and it is over inside the poke that triggers it", () => {
+  // Raise, hold, lower — not a sine. The hold is the only part that reads as aiming, so it has
+  // to be the longest, and the whole thing has to finish inside the 1.6 s life of the click
+  // impulse that raised it: an arm still coming down after the impulse is discarded never
+  // reaches the pose at all.
+  assert.equal(summonBlend(undefined), 0, "no click, no gesture");
+  assert.equal(summonBlend(0), 0, "it starts from standing");
+  assert.ok(summonBlend(SUMMON.raise * 0.5) > 0, "the arm is on its way up halfway through the raise");
+  assert.equal(summonBlend(SUMMON.raise), 1, "and it arrives");
+  assert.equal(summonBlend(SUMMON.raise + SUMMON.hold), 1, "and stays for the whole hold");
+  assert.equal(summonBlend(SUMMON.total), 0, "and is back down at the end");
+  assert.equal(summonBlend(SUMMON.total + 1), 0, "and stays down");
+
+  const hold = SUMMON.hold / SUMMON.total;
+  assert.ok(hold > 0.5, `the hold is only ${(hold * 100).toFixed(0)}% of the gesture; aiming should be the longest part`);
+  assert.ok(SUMMON.total <= 1.6, `the gesture runs ${String(SUMMON.total)}s but the poke impulse only lives 1.6s`);
+
+  // Monotone up, monotone down: a curve that dips mid-raise makes the arm stutter.
+  let previous = 0;
+  for (let age = 0; age <= SUMMON.raise; age += SUMMON.raise / 20) {
+    const value = summonBlend(age);
+    assert.ok(value >= previous - 1e-9, `the raise dips at ${age.toFixed(3)}s`);
+    previous = value;
+  }
 });
 
 await it("the greeting moves the figure, and the idle does not stand still", () => {

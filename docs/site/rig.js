@@ -560,6 +560,21 @@ function greetBlend(greetAge, loop) {
 }
 
 /**
+ * Smoothstep between two edges, eased at both ends.
+ *
+ * `buildRig` has one of these too, but it is scoped to that function — so reaching for it
+ * from out here is a `ReferenceError` at the moment the gesture runs, not at the moment
+ * it is written. Which is how the summoning gesture first shipped: it compiled, the
+ * rig-level test passed because it calls `poseRig` directly, and every real click threw
+ * inside the animation frame. The test that caught it was the one that called this
+ * function rather than the thing it feeds.
+ */
+function smoothstep(edge0, edge1, value) {
+	const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+	return t * t * (3 - 2 * t);
+}
+
+/**
  * The summoning gesture: raise, hold, lower.
  *
  * 结城理 holds his Evoker to his temple and pulls the trigger. His official collab chibi
@@ -578,9 +593,9 @@ function greetBlend(greetAge, loop) {
 function summonBlend(age) {
 	if (typeof age !== "number" || age < 0) return 0;
 	if (age >= SUMMON.total) return 0;
-	if (age < SUMMON.raise) return smooth(0, SUMMON.raise, age);
+	if (age < SUMMON.raise) return smoothstep(0, SUMMON.raise, age);
 	if (age < SUMMON.raise + SUMMON.hold) return 1;
-	return 1 - smooth(SUMMON.raise + SUMMON.hold, SUMMON.total, age);
+	return 1 - smoothstep(SUMMON.raise + SUMMON.hold, SUMMON.total, age);
 }
 
 /**
