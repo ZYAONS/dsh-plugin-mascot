@@ -144,7 +144,7 @@ function buildRig(profile, options = {}) {
 		// How far down the arm the elbow sits, 0 at the shoulder and 1 at the hand. An arm
 		// is not halved: the upper arm is the longer of the two, and where the joint sits
 		// decides how much of the reach the fold can add. Overridable so it can be searched.
-		const elbowAt = Number.isFinite(options.elbow) ? options.elbow : 0.8;
+		const elbowAt = Number.isFinite(options.elbow) ? options.elbow : 0.45;
 		const elbowY = shoulderY + armLength * elbowAt;
 		bones.push({ id: "armL", pivot: { x: 0.5 - dx, y: shoulderY } });
 		bones.push({ id: "armR", pivot: { x: 0.5 + dx, y: shoulderY } });
@@ -921,8 +921,8 @@ const SUMMON = Object.freeze({ raise: 0.34, hold: 0.86, total: 1.54 });
  * The sum is close to the 158 the single bone used, because the total travel is the same
  * journey — the difference is that it now bends in the middle rather than sweeping.
  */
-const SUMMON_UPPER = 175;
-const SUMMON_FOLD = -120;
+const SUMMON_UPPER = 160;
+const SUMMON_FOLD = 60;
 
 /**
  * Advance the jelly spring by `dt` seconds toward a lid position.

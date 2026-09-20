@@ -825,64 +825,61 @@ await it("skin weights are a partition: every vertex sums to one, none negative"
   assert.ok(bottom.w[0] > 0.95, `the feet should be root, got ${String(bottom.w[0])}`);
 });
 
-await it("the summoned hand arrives at the temple", () => {
-  // What the render showed, as a number. Measuring the hand against the temple — not the neck,
-  // which `findNeck` gives and which sits at the base of the head — puts the resting hand 83.9
-  // units away in a 100x200 box and the summoned hand 31.6. So the arm does most of the journey
-  // and stops at chest height, which is exactly the picture: an arm swept across the torso
-  // rather than a hand at the temple.
-  //
-  // That residual 31.6 is the part one bone cannot cover. A single shoulder rotation carries the
-  // whole arm mass; turning it further sweeps the arm further across rather than folding it up,
-  // which is what flipping the sign and re-rendering confirmed — the two renders were the same
-  // picture. Closing it needs a second segment, and this test is the target for when there is one.
-  const arms = { halfWidth: 0.055, y: 0.5744, hand: 0.4169 };
-  const rig = buildRig(syntheticProfile(0.6, 0.18, 0.8, 10), { arms, aspect: 0.6 });
-  const box = [0, 0, 100, 200];
+await it("the summoned hand arrives at the temple, on the real artwork's geometry", () => {
+  // Measured on 结城理's actual chibi — its silhouette, its shoulder measurements, its box — and not
+  // on a synthetic figure. That distinction cost three rounds: parameters swept on a synthetic
+  // profile (`aspect` 0.60, neck at 0.297) were then claimed for artwork whose aspect is 0.41 with
+  // its neck at 0.391, and the render kept disagreeing with the number. A test whose geometry is
+  // not the artwork's cannot say anything about what the artwork does.
+  const index = JSON.parse(readFileSync(join(root, "art", "index.json"), "utf8"));
+  const frame = index.looks.find((look) => look.id === "makoto-chibi").frames[0];
+  const box = frame.measured.box;
+  const aspect = box[2] / box[3];
+  const rig = buildRig(frame.profile, { arms: frame.arms, aspect });
+  assert.equal(rig.bones.length, 7, "the gesture needs a shoulder and an elbow: seven bones");
+
   const toImage = (point) => ({ x: box[0] + point.x * box[2], y: box[1] + point.y * box[3] });
   const apply = (matrix, point) => ({
     x: matrix[0] * point.x + matrix[3] * point.y + matrix[6],
     y: matrix[1] * point.x + matrix[4] * point.y + matrix[7],
   });
-  const armLength = (1 - arms.hand) - (1 - arms.y);
-  const shoulder = toImage({ x: 0.5 + arms.halfWidth / 0.6, y: 1 - arms.y });
-  const handHome = { x: shoulder.x, y: shoulder.y + armLength * box[3] };
+  // The hand, taken from the rig's own bones rather than from `arms.hand`.
+  //
+  // `arms.hand` is measured off the artwork and records where the hand is *drawn*, which for a
+  // chibi standing with bent arms is well short of the arm's length — and `buildRig` deliberately
+  // lengthens the arm past that (an arm has to be able to hang past the hip). Using the measured
+  // value here tracked a point part-way down the forearm: the test reported 6.9 while the render
+  // showed the hand at the jaw, and the two were measuring different points.
+  const forearmLength = rig.bones[6].pivot.y - rig.bones[4].pivot.y;
+  const elbowPivot = toImage(rig.bones[6].pivot);
+  const handHome = { x: elbowPivot.x, y: elbowPivot.y + forearmLength * box[3] };
   const at = (summon) => poseRig(rig, box, { time: 1.0, summon });
-  // The temple, not the chin. `findNeck` gives the base of the head, and on these chibis the head
-  // is about 39% of the body box: for makoto-chibi the neck sits at y 261 of a box running 52 to
-  // 588, so the head is 209 tall and the temple is roughly 40% down it — about 0.23 of the body
-  // height above the neck. Measuring at 0.13 put the target on the chin, which is why a hand at
-  // chest height read as "22.3 from the head" while the render plainly showed it was not there.
-  const temple = (pose) => {
-    const base = toImage(rig.bones[2].pivot);
-    return apply(pose[2], { x: base.x, y: base.y - 0.23 * box[3] });
-  };
   const distance = (pose) => {
-    // The forearm's matrix, not the upper arm's: the hand sits at the far end of the forearm,
-    // and since the elbow arrived its position is the forearm's business.
     const hand = apply(pose[6], handHome);
-    const head = temple(pose);
+    const base = toImage(rig.bones[2].pivot);
+    // The temple. `findNeck` gives the base of the head; on these chibis the head is about 39% of
+    // the body box, so the temple is roughly 0.23 of the body height above it.
+    const head = apply(pose[2], { x: base.x, y: base.y - 0.23 * box[3] });
     return Math.hypot(hand.x - head.x, hand.y - head.y);
   };
 
   const rest = distance(at(0));
   const held = distance(at(1));
-  // 83.9 at rest → 24.9 with the elbow, against 31.6 when the arm was one bone. The threshold sits
-  // between those two numbers on purpose: a regression back to a single-bone arm fails here.
-  // 103.8 at rest → 4.4 summoned, in a 200-unit figure: 2% of the body height, which is the hand
-  // at the temple.
-  //
-  // Three rounds of this test measured something else. It said 22.3 because its target sat 0.13 of
-  // the body height above the neck and on these chibis that is the chin; corrected to 0.23 it said
-  // 42.2, and a sweep of 693 poses could not beat 42.1. The pose was not mistuned, it was
-  // unreachable: `arms.hand` is measured off the artwork and these chibis stand with bent arms, so
-  // the rig's arm was 0.157 of the body height while the shoulder-to-temple span is 0.359 — 44% of
-  // the distance it had to cover. Lengthening the arm to something that could hang past the hip is
-  // what made the gesture possible at all, and the sweep's plateau disappeared with it.
-  assert.ok(held < rest * 0.1, `the gesture must put the hand at the temple (${rest.toFixed(1)} → ${held.toFixed(1)})`);
-  // Not exactly zero: a hand that lands on the reference point to the digit would mean the pose
-  // and the target are the same expression, which measures nothing.
-  assert.ok(held > 0.5, `the hand is suspiciously exactly on the target (${held.toFixed(2)})`);
+  assert.ok(
+    held < rest * 0.1,
+    // 314.5 at rest → 7.6 summoned in a 220x536 box: 98% of the way, the hand within 1.4% of the
+    // body height of the temple.
+    //
+    // Four rounds of this test measured four different things, and the render disagreed with every
+    // one of them until the last:
+    //   0.13-of-the-height target → the chin, not the temple;
+    //   0.23 on a synthetic profile → geometry the artwork does not have;
+    //   hand taken from `arms.hand` → a point part-way down the forearm, since buildRig lengthens
+    //     the arm past the value measured off a bent-arm pose.
+    // It now uses the real look's silhouette, box and shoulders, and takes the hand from the rig's
+    // own bones. That is the only version whose number has matched the picture.
+    `the gesture must bring the hand to the head (${rest.toFixed(1)} → ${held.toFixed(1)} in a ${box[2]}x${box[3]} box)`,
+  );
 });
 
 await it("the summoning gesture turns the right arm by an angle, and only that arm", () => {
