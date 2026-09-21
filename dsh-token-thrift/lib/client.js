@@ -708,12 +708,27 @@ window.__ModuleLoader__.load({
 					let seated = false;
 					let release;
 					let timer;
+					let attempts = 0;
 					const attempt = () => {
 						if (seated) return;
+						attempts += 1;
 						try {
 							release = ctx.slots.register({ name: "mascot.thrift" }, ThriftCard);
 							seated = true;
-						} catch {
+						} catch (error) {
+							const message = String(error?.message ?? error);
+							// **Only "not declared yet" is worth retrying.** Catching everything
+							// here is how a real failure — a scope mismatch, a slot already
+							// taken — turns into a silent infinite retry and a card that never
+							// appears, with nothing anywhere saying why.
+							if (!message.includes("is not declared")) {
+								console.error(`[token-thrift] 坐不进看板娘的面板：${message}`);
+								return;
+							}
+							if (attempts > 40) {
+								console.error("[token-thrift] 看板娘一直没有声明 mascot.thrift，放弃。左下角那颗胶囊照常可用。");
+								return;
+							}
 							timer = window.setTimeout(attempt, 250);
 						}
 					};
