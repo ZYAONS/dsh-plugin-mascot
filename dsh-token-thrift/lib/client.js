@@ -38,42 +38,24 @@ window.__ModuleLoader__.load({
 
 		//#region styles
 		const CSS = `
-.dsh-thrift-root { position: absolute; left: 20px; bottom: 20px; z-index: 30; pointer-events: none;
+.dsh-thrift-root { position: fixed; z-index: 40; pointer-events: none;
   font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, monospace;
   font-size: 11px; line-height: 1.5; color: #e8eef7; font-variant-numeric: tabular-nums; }
-/* ---------- 坐进看板娘面板里的卡片 ----------
-   它借别人的面板住，所以只用自己的强调色（青），不碰背景、不碰圆角 ——
-   那些是房主的。中间那条分隔线是唯一的"我在这儿"的表示。 */
-.dsh-thrift-card { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--dsh-mascot-hairline, rgba(255,255,255,.08));
-  display: grid; gap: 7px; }
-.dsh-thrift-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.dsh-thrift-card-head b { font-size: 12px; letter-spacing: .03em; color: var(--dsh-mascot-text, #e4edf4); }
-.dsh-thrift-card-power { font: inherit; font-size: 10.5px; cursor: pointer; padding: 4px 10px;
-  border-radius: 999px; background: transparent; color: var(--dsh-mascot-dim, rgba(228,237,244,.6));
-  border: 1px solid var(--dsh-mascot-hairline, rgba(255,255,255,.14)); }
-.dsh-thrift-card-power:hover { color: var(--dsh-mascot-text, #e4edf4); }
-.dsh-thrift-card-power[data-off="1"] { color: #ffab3d; border-color: rgba(255, 171, 61, .55);
-  background: rgba(255, 171, 61, .12); }
-.dsh-thrift-card-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; }
-.dsh-thrift-card-bar > i { display: block; height: 100%; border-radius: 999px; transition: width .3s ease, background .3s ease; }
-.dsh-thrift-card-note { font-size: 11px; color: var(--dsh-mascot-dim, rgba(228,237,244,.6)); font-variant-numeric: tabular-nums; }
-.dsh-thrift-card-dial { -webkit-appearance: none; appearance: none; width: 100%; height: 20px;
-  background: none; cursor: pointer; margin: 0; }
-.dsh-thrift-card-dial::-webkit-slider-runnable-track { height: 6px; border-radius: 999px;
-  background: linear-gradient(90deg, rgba(79,214,168,.55), #ffd34d 45%, #ff5f6d);
-  border: 1px solid rgba(255,255,255,.12); }
-.dsh-thrift-card-dial::-moz-range-track { height: 6px; border-radius: 999px;
-  background: linear-gradient(90deg, rgba(79,214,168,.55), #ffd34d 45%, #ff5f6d); }
-.dsh-thrift-card-dial::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
-  width: 14px; height: 14px; margin-top: -5px; border-radius: 50%;
-  background: #0b0e13; border: 2px solid #4fd6a8; box-shadow: 0 0 8px rgba(0,0,0,.5); }
-.dsh-thrift-card-dial::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%;
-  background: #0b0e13; border: 2px solid #4fd6a8; }
-.dsh-thrift-card-dial:focus-visible { outline: 2px solid #4fd6a8; outline-offset: 3px; }
-.dsh-thrift-card-label { display: flex; align-items: baseline; gap: 8px; }
-.dsh-thrift-card-label b { font-size: 13px; color: #4fd6a8; font-variant-numeric: tabular-nums; }
-.dsh-thrift-card-label span { font-size: 10.5px; color: var(--dsh-mascot-dim, rgba(228,237,244,.6)); }
-
+/* The floating ball: fixed, and positioned by the component.
+   Dragged in viewport coordinates, so it has to be fixed — an absolutely positioned ball
+   would drift away from the pointer the moment anything scrolled. */
+.dsh-thrift-ball { pointer-events: auto; position: relative; width: 40px; height: 40px; border-radius: 50%;
+  display: grid; place-items: center; cursor: grab; user-select: none; touch-action: none;
+  background: rgba(10, 13, 19, .55); border: 2px solid var(--dsh-thrift-tone);
+  box-shadow: 0 6px 20px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.12);
+  backdrop-filter: blur(14px) saturate(1.25);
+  transition: transform .16s ease, background .16s ease; }
+.dsh-thrift-ball:hover { transform: scale(1.08); background: rgba(10, 13, 19, .75); }
+.dsh-thrift-ball:active { cursor: grabbing; transform: scale(1.02); }
+.dsh-thrift-ball[data-open="1"] { background: rgba(10, 13, 19, .82); }
+.dsh-thrift-ball:focus-visible { outline: 2px solid var(--dsh-thrift-tone); outline-offset: 3px; }
+.dsh-thrift-ball-value { font-size: 13px; font-weight: 700; color: var(--dsh-thrift-tone); font-variant-numeric: tabular-nums; }
+.dsh-thrift-ball-flag { position: absolute; top: -4px; right: -4px; font-size: 11px; font-style: normal; line-height: 1; }
 .dsh-thrift-chip { pointer-events: auto; display: inline-flex; align-items: center; gap: 8px;
   padding: 4px 11px 4px 9px; border-radius: 999px; cursor: pointer; user-select: none;
   /* Translucent on purpose: it sits over whatever the user is reading, and an opaque pill
@@ -89,7 +71,9 @@ window.__ModuleLoader__.load({
   background: rgba(255,255,255,.13); }
 .dsh-thrift-bar > i { display: block; height: 100%; width: 0; background: var(--dsh-thrift-tone);
   border-radius: 999px; transition: width .35s ease; }
-.dsh-thrift-panel { pointer-events: auto; position: absolute; left: 0; bottom: calc(100% + 10px);
+/* Opens downward, because the ball lives at the top. Centred on the ball and pulled back
+   by half its own width, so a ball dragged to either edge still opens a panel on screen. */
+.dsh-thrift-panel { pointer-events: auto; position: absolute; left: 50%; margin-left: -170px; top: calc(100% + 10px);
   width: 340px; padding: 13px 14px 12px; border-radius: 13px;
   /* See the chip: translucent, and blurring what is behind it rather than hiding it. */
   background: rgba(11, 14, 21, .55); border: 1px solid rgba(255,255,255,.15);
@@ -228,8 +212,45 @@ window.__ModuleLoader__.load({
 		const RESET_ENDPOINT = STATE_ENDPOINT.replace(/\/api\/state$/u, "/api/reset");
 		const CONSOLE_HREF = STATE_ENDPOINT.replace(/\/api\/state$/u, "/console/");
 
+		//#region ball
+		/** Where the ball sits, if the user has moved it. */
+		const BALL_KEY = "dsh-thrift.ball";
+		const BALL_SIZE = 40;
+		/** Movement under this many pixels is a click, not a drag. */
+		const BALL_SLOP = 4;
+
+		/** The stored position, or `undefined` when nobody has moved it yet. */
+		function readBall() {
+			try {
+				const raw = window.localStorage.getItem(BALL_KEY);
+				if (raw === null) return undefined;
+				const parsed = JSON.parse(raw);
+				if (typeof parsed?.x === "number" && typeof parsed?.y === "number") return parsed;
+			} catch {
+				// Private mode, a hostile storage — the default position is fine either way.
+			}
+			return undefined;
+		}
+
+		/** Top centre, which is what "上方" means before anyone drags it somewhere better. */
+		function defaultBall() {
+			const width = window.innerWidth || 1200;
+			return { x: Math.round(width / 2 - BALL_SIZE / 2), y: 6 };
+		}
+
+		/** Keep it on screen: a ball dragged past the edge is a ball you cannot get back. */
+		function clampBall(position) {
+			const width = window.innerWidth || 1200;
+			const height = window.innerHeight || 800;
+			return {
+				x: Math.max(0, Math.min(width - BALL_SIZE, Math.round(position.x))),
+				y: Math.max(0, Math.min(height - BALL_SIZE, Math.round(position.y))),
+			};
+		}
+		//#endregion
+
 		/**
-		 * The panel and its chip.
+		 * The panel and its ball.
 		 *
 		 * Session-scoped, because the coach's budget is per session: a root-scoped entry
 		 * would have no session id to look a report up by and would end up showing whichever
@@ -249,6 +270,12 @@ window.__ModuleLoader__.load({
 			const [draft, setDraft] = React.useState(undefined);
 			/** The dial while it is being dragged. Also `undefined` when it is not. */
 			const [dial, setDial] = React.useState(undefined);
+			/** Where the ball sits. Read once, then owned by this component. */
+			const [ball, setBall] = React.useState(() => clampBall(readBall() ?? defaultBall()));
+			/** The live position during a drag: state would lag a frame behind the pointer. */
+			const ballRef = React.useRef(ball);
+			ballRef.current = ball;
+			const drag = React.useRef(undefined);
 
 			React.useEffect(() => {
 				let cancelled = false;
@@ -296,13 +323,46 @@ window.__ModuleLoader__.load({
 
 			if (state === undefined) return null;
 
-			const chip = (tone_, label, extra) => h("div", {
-				className: "dsh-thrift-chip",
+			/**
+			 * The floating ball: drag it to move, click it to open.
+			 *
+			 * One gesture does both, and the difference is distance — four pixels. A separate
+			 * drag handle on a 40px circle would leave nowhere to click.
+			 */
+			const ballNode = (tone_, label, extra) => h("div", {
+				className: "dsh-thrift-ball",
 				"data-open": open ? "1" : "0",
 				role: "button",
 				tabIndex: 0,
 				"aria-label": label,
-				onClick: () => setOpen((value) => !value),
+				title: `${label} · 拖动可以换位置`,
+				onPointerDown: (event) => {
+					if (event.button !== undefined && event.button !== 0) return;
+					event.currentTarget.setPointerCapture?.(event.pointerId);
+					drag.current = { dx: event.clientX - ballRef.current.x, dy: event.clientY - ballRef.current.y, moved: 0 };
+				},
+				onPointerMove: (event) => {
+					const held = drag.current;
+					if (held === undefined) return;
+					const next = clampBall({ x: event.clientX - held.dx, y: event.clientY - held.dy });
+					held.moved += Math.abs(next.x - ballRef.current.x) + Math.abs(next.y - ballRef.current.y);
+					setBall(next);
+				},
+				onPointerUp: () => {
+					const moved = drag.current?.moved ?? 0;
+					drag.current = undefined;
+					if (moved < BALL_SLOP) {
+						setOpen((value) => !value);
+						return;
+					}
+					// Only a real move is worth remembering: a click that nudged the ball by a
+					// pixel should not rewrite the saved position.
+					try {
+						window.localStorage.setItem(BALL_KEY, JSON.stringify(ballRef.current));
+					} catch {
+						// Not being able to remember it is not a reason to refuse to move it.
+					}
+				},
 				onKeyDown: (event) => {
 					if (event.key === "Enter" || event.key === " ") setOpen((value) => !value);
 				},
@@ -412,15 +472,15 @@ window.__ModuleLoader__.load({
 			// expands for the same reason — this is the state most likely to be seen, and
 			// "unreachable" on its own does not tell anyone what to do about it.
 			if (state.ok !== true) {
-				return h("div", { className: "dsh-thrift-root", style: { "--dsh-thrift-tone": "#8b93a7" } },
+				return h("div", { className: "dsh-thrift-root", style: { left: `${String(ball.x)}px`, top: `${String(ball.y)}px`, "--dsh-thrift-tone": "#8b93a7" } },
 					open ? h("div", { className: "dsh-thrift-panel", role: "dialog", "aria-label": "Token 节流不可用" },
 						header("不可用"),
 						h("div", { className: "dsh-thrift-off" },
 							"读不到状态接口（",
 							h("b", null, STATE_ENDPOINT),
 							"）。可能的原因：主驾半边是旧版本、插件没被加载，或者面板和宿主不在同一个源。")) : null,
-					chip("#8b93a7", "Token 节流不可用",
-						h(React.Fragment, null, h("b", null, "thrift"), h("em", null, "状态接口不可达"))));
+					ballNode("#8b93a7", "Token 节流不可用",
+						h("span", { className: "dsh-thrift-ball-value" }, "!")));
 			}
 
 			const report = state.enabled === true ? pickReport(state, sessionId) : undefined;
@@ -434,7 +494,7 @@ window.__ModuleLoader__.load({
 			const overMask = report !== undefined && !report.masked && state.maskRatio !== null
 				&& (state.maskTools ?? []).length > 0 && ratio >= state.maskRatio;
 
-			return h("div", { className: "dsh-thrift-root", style: { "--dsh-thrift-tone": colour } },
+			return h("div", { className: "dsh-thrift-root", style: { left: `${String(ball.x)}px`, top: `${String(ball.y)}px`, "--dsh-thrift-tone": colour } },
 				open ? h("div", { className: "dsh-thrift-panel", role: "dialog", "aria-label": "Token 节流" },
 					header(state.enabled === true ? "运行中" : "未启用"),
 
@@ -510,15 +570,12 @@ window.__ModuleLoader__.load({
 						}, "重置本会话"),
 						h("a", { className: "dsh-thrift-link", href: CONSOLE_HREF, target: "_blank", rel: "noreferrer" }, "全部会话 ↗")),
 					h("div", { className: "dsh-thrift-session" }, report?.sessionId ?? "")) : null,
-				chip(colour, `Token 节流 ${String(state.level ?? "")} ${String(Math.round(ratio * 100))}%`,
+				ballNode(colour, `Token 节流 ${String(state.level ?? "")} ${String(Math.round(ratio * 100))}%`,
 					h(React.Fragment, null,
-						h("b", null, String(state.level ?? "thrift")),
-						state.enabled === true
-							? h("div", { className: "dsh-thrift-bar" }, h("i", { style: { width: `${String(Math.min(100, Math.round(ratio * 100)))}%` } }))
-							: null,
-						h("em", null, state.enabled === true ? `${String(Math.round(ratio * 100))}%` : "未启用"),
-						report?.masked === true ? h("em", { title: "会开枝的工具已被遮罩" }, "⛔") : null,
-						overMask ? h("em", { title: "已过遮罩阈值，下一次工具调用时遮罩" }, "!") : null)));
+						h("span", { className: "dsh-thrift-ball-value" },
+							state.enabled === true ? `${String(Math.round(ratio * 100))}` : "—"),
+						report?.masked === true ? h("i", { className: "dsh-thrift-ball-flag", title: "会开枝的工具已被遮罩" }, "⛔") : null,
+						overMask ? h("i", { className: "dsh-thrift-ball-flag", title: "已过遮罩阈值，下一次工具调用时遮罩" }, "!") : null)));
 		}
 
 		/**
@@ -533,137 +590,6 @@ window.__ModuleLoader__.load({
 		}
 		//#endregion
 
-		//#region card
-		/** 力度位置对应的说法，和面板、控制台同一套。 */
-		const LEVEL_WORDS = {
-			off: "不劝也不遮",
-			light: "只劝一次，永不遮工具",
-			standard: "两三档劝告，临界才遮",
-			strict: "四档劝告，五成半起遮",
-		};
-
-		/** 离当前力度最近的那个名字。 */
-		function nameFor(intensity, presets) {
-			const value = typeof intensity === "number" && Number.isFinite(intensity) ? intensity : 0;
-			if (value <= 0) return "off";
-			let best = "light";
-			let distance = Number.POSITIVE_INFINITY;
-			for (const [name, stop] of Object.entries(presets ?? {})) {
-				if (name === "off") continue;
-				const gap = Math.abs(stop - value);
-				if (gap < distance) {
-					distance = gap;
-					best = name;
-				}
-			}
-			return best;
-		}
-
-		/**
-		 * 坐在看板娘面板里的那张小卡片。
-		 *
-		 * 这是这个插件的主界面 —— 点角色就看得见。控制台页面留着，但那是拿来
-		 * **查**的（每一档的完整台词、每个会话、原始 JSON），不是拿来随手调的。
-		 *
-		 * 组件自己不注册槽位：谁渲染它由 `apply` 决定，这样同一张卡片既能坐进
-		 * 看板娘的面板，也能在没装看板娘时退回自己那颗胶囊。
-		 */
-		function ThriftCard(props) {
-			const [state, setState] = React.useState(undefined);
-			/** 拖动中的值，松手才提交。 */
-			const [dial, setDial] = React.useState(undefined);
-
-			React.useEffect(() => {
-				let cancelled = false;
-				const load = () => {
-					fetch(STATE_ENDPOINT, { headers: { accept: "application/json" } })
-						.then((response) => (response.ok ? response.json() : { ok: false }))
-						.then((payload) => {
-							if (!cancelled) setState(payload);
-						})
-						.catch(() => {
-							if (!cancelled) setState({ ok: false });
-						});
-				};
-				load();
-				const timer = window.setInterval(load, POLL_MS);
-				return () => {
-					cancelled = true;
-					window.clearInterval(timer);
-				};
-			}, []);
-
-			const send = (body) => {
-				fetch(SETTINGS_ENDPOINT, {
-					method: "POST",
-					headers: { "content-type": "application/json" },
-					body: JSON.stringify(body),
-				})
-					.then((response) => response.json())
-					.then((payload) => {
-						if (payload.ok === true) {
-							setState(payload);
-							setDial(undefined);
-						}
-					})
-					.catch(() => {});
-			};
-
-			// 读不到状态时**什么都不画**，而不是画一张"不可用"的卡片：它坐在别人的面板里，
-			// 一张报错的卡片会把那个面板变成关于这个插件的一页。
-			if (state === undefined || state.ok !== true) return null;
-
-			const report = pickReport(state, props?.sessionId);
-			const ratio = report?.ratio ?? 0;
-			const live = typeof state.intensity === "number" ? state.intensity : 0;
-			const shown = dial ?? live;
-			const enabled = state.enabled === true;
-			const back = Number.isFinite(state.configured?.intensity) && state.configured.intensity >= 0
-				? state.configured.intensity
-				: 55;
-			const name = nameFor(shown, state.presets);
-
-			return h("div", { className: "dsh-thrift-card" },
-				h("div", { className: "dsh-thrift-card-head" },
-					h("b", null, "Token 节流"),
-					h("button", {
-						type: "button",
-						className: "dsh-thrift-card-power",
-						"data-off": enabled ? "0" : "1",
-						title: enabled ? "把力度归零：不劝、不遮、不占一个 token" : "恢复力度",
-						onClick: () => send({ intensity: enabled ? 0 : back }),
-					}, enabled ? "全力工作" : "恢复力度")),
-				h("div", { className: "dsh-thrift-card-bar" },
-					h("i", { style: { width: `${String(Math.min(100, Math.round(ratio * 100)))}%`, background: tone(ratio) } })),
-				h("div", { className: "dsh-thrift-card-note" },
-					report === undefined
-						? (enabled ? "还没有会话在花 token" : "没在工作")
-						: `已花 ${count(report.spent)} / ${count(state.budget)} · ${String(Math.round(ratio * 100))}%`),
-				h("input", {
-					type: "range",
-					min: "0",
-					max: "100",
-					step: "1",
-					className: "dsh-thrift-card-dial",
-					"aria-label": "节流力度",
-					value: String(shown),
-					onChange: (event) => setDial(Number(event.target.value)),
-					onPointerUp: () => {
-						if (dial !== undefined && dial !== live) send({ intensity: dial });
-					},
-					onKeyUp: () => {
-						if (dial !== undefined && dial !== live) send({ intensity: dial });
-					},
-					onBlur: () => {
-						if (dial !== undefined && dial !== live) send({ intensity: dial });
-					},
-				}),
-				h("div", { className: "dsh-thrift-card-label" },
-					h("b", null, shown <= 0 ? "关" : String(shown)),
-					h("span", null, shown <= 0 ? LEVEL_WORDS.off : LEVEL_WORDS[name] ?? "")),
-			);
-		}
-		//#endregion
 
 		//#region plugin
 		/** Required service: the UI slot registry. */
@@ -694,51 +620,6 @@ window.__ModuleLoader__.load({
 				 * 占位者。少了这一句，胶囊照常出现（它在 overlay 里），点开却什么都没有。
 				 */
 				yield ctx.slots.register({ name: "thrift.panel" }, ThriftPanel);
-				/**
-				 * 坐进看板娘面板里的那张卡片 —— 如果看板娘在的话。
-				 *
-				 * 槽是**对方**声明的，而两个插件谁先加载不由这里决定（profile 里
-				 * token-thrift 就排在 mascot 前面）。一次性的 try/catch 是不够的：
-				 * 抢在前面失败之后就再也不会重试，卡片永远不出现，而且**没有任何声音**。
-				 *
-				 * 所以隔一会儿再试，直到坐进去为止。没装看板娘的话就一直试不到 ——
-				 * 那也没关系，左下角那颗胶囊照常工作，这才是"可选依赖"该有的样子。
-				 */
-				yield ctx.effect(() => {
-					let seated = false;
-					let release;
-					let timer;
-					let attempts = 0;
-					const attempt = () => {
-						if (seated) return;
-						attempts += 1;
-						try {
-							release = ctx.slots.register({ name: "mascot.thrift" }, ThriftCard);
-							seated = true;
-						} catch (error) {
-							const message = String(error?.message ?? error);
-							// **Only "not declared yet" is worth retrying.** Catching everything
-							// here is how a real failure — a scope mismatch, a slot already
-							// taken — turns into a silent infinite retry and a card that never
-							// appears, with nothing anywhere saying why.
-							if (!message.includes("is not declared")) {
-								console.error(`[token-thrift] 坐不进看板娘的面板：${message}`);
-								return;
-							}
-							if (attempts > 40) {
-								console.error("[token-thrift] 看板娘一直没有声明 mascot.thrift，放弃。左下角那颗胶囊照常可用。");
-								return;
-							}
-							timer = window.setTimeout(attempt, 250);
-						}
-					};
-					attempt();
-					return () => {
-						seated = true;
-						if (timer !== undefined) window.clearTimeout(timer);
-						if (typeof release === "function") release();
-					};
-				});
 			});
 		}
 		//#endregion
@@ -748,7 +629,6 @@ window.__ModuleLoader__.load({
 		// Exported so the self-test can drive the real components instead of a copy.
 		exports.ThriftOverlay = ThriftOverlay;
 		exports.ThriftPanel = ThriftPanel;
-		exports.ThriftCard = ThriftCard;
 		exports.pickReport = pickReport;
 		exports.tone = tone;
 		exports.compact = compact;

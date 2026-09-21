@@ -711,6 +711,8 @@ const React = {
   createElement: (type, props, ...children) => ({ type, props, children }),
   useState: () => [undefined, () => {}],
   useEffect: () => {},
+  // The panel keeps the ball's live position in a ref during a drag; state would lag the pointer.
+  useRef: (initial) => ({ current: initial }),
   Fragment: Symbol.for("react.fragment"),
 };
 const client = registrations[0].factory((spec) => {
@@ -753,17 +755,20 @@ await it("the panel mounts into the overlay list beside the mascot", () => {
   };
   client.apply(ctx);
   assert.deepEqual(injected, ["shell.overlay"]);
-  // Three registrations: the overlay, the panel that fills the slot it declares, and the
-  // card that sits in the mascot's panel. Declaring a slot and occupying it are separate
-  // calls, and this file used to do only the first — the chip rendered and the panel it
-  // opened did not. A count is the only thing that catches that, so the count is asserted.
-  assert.equal(registered.length, 3, "overlay + own panel + the card in someone else's panel");
+  // Two registrations: the overlay, and the panel that fills the slot it declares. Declaring
+  // a slot and occupying it are separate calls, and this file used to do only the first — the
+  // ball rendered and the panel it opened did not. A count is the only thing that catches
+  // that, so the count is asserted.
+  //
+  // It used to be three: a card also sat inside the mascot's panel. That is gone — the
+  // floating ball is the one surface now, and two places showing the same dial is how you end
+  // up tuning the wrong one.
+  assert.equal(registered.length, 2, "the overlay, and the panel that fills the slot it declares");
   assert.equal(registered[0].declaration.name, "shell.overlay");
   assert.equal(registered[1].declaration.name, "thrift.panel", "the declared child slot must be occupied");
   assert.equal(registered[1].Component, client.ThriftPanel, "by the panel itself");
   assert.equal(registered[0].declaration.children["thrift.panel"].scope, "session-maybe", "and it is declared before it is filled");
-  assert.equal(registered[2].declaration.name, "mascot.thrift", "the card asks for the mascot's seat");
-  assert.equal(registered[2].Component, client.ThriftCard, "with the same component the console would use");
+  assert.equal(client.ThriftCard, undefined, "the mascot-hosted card is gone, not merely unregistered");
 
   // The seat belongs to the other plugin and the load order is not this file's to decide,
   // so the ask has to survive not being answerable yet.
@@ -777,7 +782,9 @@ await it("the panel mounts into the overlay list beside the mascot", () => {
       },
       // The first three succeed; the fourth (the mascot's seat) is not declared yet.
       register(options, component) {
-        if (options.name === "mascot.thrift") throw new Error("not declared");
+        // The real registry's wording, verbatim: the retry only retries on *this* message, so
+        // a stub that says something else is testing a path the product never takes.
+        if (options.name === "mascot.thrift") throw new Error('slot "mascot.thrift" is not declared (a parent entry\'s children table must declare it)');
         late.push(options.name);
         return () => {};
       },
@@ -848,6 +855,9 @@ await it("the panel is a control surface, not a read-out", () => {
     }),
     useState: (initial) => [queue.length > 0 ? queue.shift() : initial, () => {}],
     useEffect: () => {},
+    // Seeded from the queue too: the ball's position is a hook, and rendering the panel
+    // without one would exercise a component the product never builds.
+    useRef: (initial) => ({ current: queue.length > 0 && initial !== undefined ? queue.shift() : initial }),
     Fragment: Symbol.for("react.fragment"),
   };
   const rendered = registrations[0]
