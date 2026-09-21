@@ -202,7 +202,34 @@ await it("结城理 is drawn as a picture, and nobody else was made static along
     assert.ok(looks.some((look) => look.frames?.[0]?.still === false), `${id} still has a figure that has to move`);
   }
 });
+
+await it("a dragged figure stays on screen, and a stored seat is only read when it is usable", () => {
+  // Dragged off the edge, the figure is gone with no way to bring it back — and the size has
+  // to come from the element, because it is per character: a constant here would be wrong for
+  // eight of the nine.
+  const node = { getBoundingClientRect: () => ({ width: 140, height: 210 }) };
+  const storage = { value: null };
+  globalThis.window = {
+    innerWidth: 1000,
+    innerHeight: 800,
+    localStorage: { getItem: () => storage.value, setItem: () => {} },
+  };
+
+  assert.deepEqual(exports_.clampSeat({ x: 500, y: 400 }, node), { x: 500, y: 400 }, "a position inside stays put");
+  assert.deepEqual(exports_.clampSeat({ x: -80, y: -40 }, node), { x: 0, y: 0 }, "the left and top edges are walls");
+  assert.deepEqual(exports_.clampSeat({ x: 5000, y: 5000 }, node), { x: 860, y: 590 }, "and so are the right and bottom, by the figure's own size");
+  assert.deepEqual(exports_.clampSeat({ x: 10, y: 10 }, undefined), { x: 10, y: 10 }, "no element yet must not put it at NaN");
+
+  assert.equal(exports_.readSeat(), undefined, "nothing stored means the default corner");
+  storage.value = "not json";
+  assert.equal(exports_.readSeat(), undefined, "unreadable storage is not a crash");
+  storage.value = JSON.stringify({ x: "left", y: 2 });
+  assert.equal(exports_.readSeat(), undefined, "and neither is a stored value of the wrong shape");
+  storage.value = JSON.stringify({ x: 12, y: 34 });
+  assert.deepEqual(exports_.readSeat(), { x: 12, y: 34 });
+});
 //#endregion
+
 await it("every look is drawn in a box big enough to hold it", () => {
   // This is the check that was missing for the whole life of the project, and its absence
   // showed up as a screenshot: the chibi sliced off by a hard vertical edge, with the room
