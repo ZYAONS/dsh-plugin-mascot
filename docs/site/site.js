@@ -440,13 +440,6 @@ const EN = {
   "preview.title": "Live preview",
   "preview.sub": "your own artwork",
   "preview.status": "Not connected",
-  "preview.note":
-    "The mascot is official game art, so it is published nowhere — not here, not in the repository. "
-    + "This preview reads it from the one place it exists: the DSH on your own machine, which also "
-    + "serves <em>this very page</em> at <code>/dsh-mascot/console/</code>. Open it from there and "
-    + "the frame below fills in with the artwork you installed, animated by the same skeleton the "
-    + "plugin runs. On the neutral theme, <em>Show the skeleton</em> draws the rig itself — three "
-    + "bones derived from the silhouette, and the mesh they deform.",
   "preview.boot": "Looking for the plugin on this origin…",
   "preview.showSkeleton": "Show the skeleton",
   "preview.orFile": "…or preview an image of your own",
@@ -461,9 +454,6 @@ const EN = {
   "character.sub": "who appears",
   "looks.title": "Looks",
   "looks.sub": "which artwork may appear",
-  "looks.note":
-    "An unticked look is written into the config's allowlist, so the plugin will not even offer it. "
-    + "The artwork itself is not in the repository — run <code>npm run fetch-art</code> to download it onto your machine.",
   "motion.title": "Motion",
   "motion.sub": "how it animates",
   "motion.skeleton.title": "Skeletal animation",

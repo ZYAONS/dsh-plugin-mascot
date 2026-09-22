@@ -65,14 +65,6 @@
       <span class="rule"></span>
       <span class="status" id="s-preview"><i></i><span data-i18n="preview.status">未连接</span></span>
     </div>
-    <p class="sec-note" data-i18n="preview.note">
-      立绘是官方游戏素材，所以这里不发布它 —— 这个页面不发布，仓库里也没有。
-      预览从它唯一存在的地方读取：你自己机器上正在运行的 DSH，
-      它同时也在 <code>/dsh-mascot/console/</code> 托管<em>这一页</em>。
-      从那里打开，下面的框里就会填满你装好的素材，用插件同一套骨架驱动。
-      在中性主题下，<em>展示骨骼</em>会直接画出骨架本身 —— 由轮廓推出的三根骨头，
-      以及它们驱动的蒙皮网格。
-    </p>
     <!-- 台词单独一行，放在画面之上：压在图上会盖住角色；放进 .preview 里会占掉一列。 -->
     <p class="preview-say" id="preview-say" data-on="0"></p>
     <div class="preview">
@@ -151,10 +143,6 @@
       <h2><span data-i18n="looks.title">形象</span><span data-i18n="looks.sub">允许出现哪几套</span></h2>
       <span class="rule"></span>
     </div>
-    <p class="sec-note" data-i18n="looks.note">
-      没勾上的形象会被写进配置的 allowlist，插件连列都不会列出来。
-      素材本身不在仓库里 —— 在插件目录跑 <code>npm run fetch-art</code> 才会下载到你机器上。
-    </p>
     <div class="grid three" id="looks"></div>
   </section>
 
