@@ -9,7 +9,7 @@
  */
 
 import assert from "node:assert/strict";
-import { apply, Config, ladderFor, name, PRESETS, presetOf, spentTokens, usageTokens } from "../lib/index.js";
+import { apply, Config, STATE_PATH, ladderFor, name, PRESETS, presetOf, spentTokens, usageTokens } from "../lib/index.js";
 
 let passed = 0;
 let failed = 0;
@@ -686,6 +686,58 @@ await it("the console offers only its own files", async () => {
   // Extensions outside the allowlist never reach the filesystem.
   assert.equal((await ask(ctx.route, "/dsh-token-thrift/console/../../lib/index.js")).status, 404);
   assert.equal((await ask(ctx.route, "/dsh-token-thrift/console/nope.js")).status, 404);
+});
+
+/**
+ * A host whose web server arrives *after* the plugin starts.
+ *
+ * This is the shape of the real bug: `ctx.get("webServer")` at apply time answered
+ * `undefined`, the plugin returned, and the route was never registered — so the panel said
+ * "读不到状态接口" for its whole life while everything else looked healthy. Cordis only
+ * guarantees the service is there when the plugin *declares* it in `inject`; this plugin
+ * deliberately does not, so it has to wait.
+ */
+function lateWebServerContext({ delay = 2 } = {}) {
+  const listeners = new Map();
+  const state = { attempts: 0, registered: undefined };
+  const target = {
+    listeners,
+    state,
+    on(event, handler) { listeners.set(event, handler); return () => listeners.delete(event); },
+    effect(callback) {
+      const dispose = callback();
+      return typeof dispose === "function" ? dispose : () => {};
+    },
+    get(service) {
+      if (service === "webServer") {
+        state.attempts += 1;
+        if (state.attempts <= delay) return undefined;
+        return { register(entry) { state.registered = entry; return () => {}; } };
+      }
+      if (service === "sessionProjections") return { snapshot: () => ({}) };
+      return undefined;
+    },
+  };
+  return new Proxy(target, {
+    get(object, property, receiver) {
+      if (typeof property === "symbol" || property in object) return Reflect.get(object, property, receiver);
+      throw new Error(`cannot get property "${String(property)}" without inject`);
+    },
+  });
+}
+
+await it("a web server that arrives late still gets the route", async () => {
+  const ctx = lateWebServerContext({ delay: 2 });
+  apply(ctx, config({ budget: 1000 }));
+  assert.equal(ctx.state.registered, undefined, "not there yet on the first look");
+  assert.equal(ctx.listeners.size, 1, "and the coach is running regardless — that is the point of not injecting");
+
+  // The plugin waits on a timer; give the retries somewhere to land.
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  assert.ok(ctx.state.registered !== undefined, "the route must be claimed once the service exists");
+  assert.equal(ctx.state.registered.kind, "prefix");
+  assert.equal(ctx.state.registered.path, STATE_PATH);
+  assert.equal(typeof ctx.state.registered.handler, "function");
 });
 
 await it("a host with no web server still gets a working coach", async () => {

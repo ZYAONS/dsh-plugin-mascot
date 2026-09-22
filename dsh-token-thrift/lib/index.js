@@ -378,9 +378,62 @@ function settingsFor(config, override) {
  * @returns nothing; the routes are owned by the plugin's effect scope.
  */
 function servePlatform(ctx, deps) {
-  const webServer = ctx.get("webServer");
-  if (webServer === undefined || typeof webServer.register !== "function") return;
+  /**
+   * Wait for the web server, then claim the route.
+   *
+   * This used to be a single `ctx.get("webServer")` with an early `return` — and that is why
+   * the panel spent its life saying "读不到状态接口". A plugin that does not declare
+   * `webServer` in its `inject` list has no guarantee the service exists yet when `apply`
+   * runs, so the lookup came back `undefined`, the function returned, and **no route was
+   * ever registered**. Nothing said so: the coach kept working (it does not need the seam),
+   * the ball kept rendering (a different half), and only the fetch failed.
+   *
+   * The mascot never had this because it declares `inject = ["webServer"]` and Cordis defers
+   * it. Declaring one here would defer the *whole plugin*, and the coach deliberately does
+   * not depend on being visible — so the seam is waited for instead, which keeps both
+   * properties: a host with no web server still gets a working coach, and a host with one
+   * gets the route as soon as it exists.
+   */
+  const handler = buildHandler(ctx, deps);
+  const claim = () => {
+    const webServer = ctx.get("webServer");
+    if (webServer === undefined || typeof webServer.register !== "function") return undefined;
+    return webServer.register({ kind: "prefix", path: STATE_PATH, handler });
+  };
+  ctx.effect(() => {
+    let release;
+    let timer;
+    let attempts = 0;
+    const attempt = () => {
+      if (release !== undefined) return;
+      try {
+        release = claim();
+      } catch (error) {
+        // A refused registration is not "not yet": say so rather than retry into silence.
+        console.warn(`[token-thrift] 状态路由注册失败：${String(error?.message ?? error)}`);
+        return;
+      }
+      if (release !== undefined) return;
+      attempts += 1;
+      if (attempts > 50) {
+        console.warn("[token-thrift] 一直没等到 webServer，状态接口没有注册。教练本身照常工作。");
+        return;
+      }
+      timer = setTimeout(attempt, 200);
+    };
+    attempt();
+    return () => {
+      if (timer !== undefined) clearTimeout(timer);
+      if (typeof release === "function") release();
+    };
+  });
+}
 
+/**
+ * Build the route handler itself. Kept apart from `servePlatform` so the wait above is the
+ * only thing that has to care about when the service arrives.
+ */
+function buildHandler(ctx, deps) {
   const json = (res, status, payload) => {
     const body = JSON.stringify(payload);
     res.writeHead(status, {
@@ -497,12 +550,7 @@ function servePlatform(ctx, deps) {
     json(res, 404, { ok: false, error: "not_found", message: `未知路由 ${path}` });
   };
 
-  try {
-    ctx.effect(() => webServer.register({ kind: "prefix", path: STATE_PATH, handler }));
-  } catch {
-    // No route seam, or the context is already disposed. The coach is unaffected: this
-    // whole function exists only to draw and drive it.
-  }
+  return handler;
 }
 
 /**
