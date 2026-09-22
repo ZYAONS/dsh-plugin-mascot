@@ -1,11 +1,6 @@
 /*
  * dsh-plugin-mascot — configuration console.
  *
- * Two page themes, one per character, and they are not a hue swap: they differ in
- * ground colour, corner language, selection cue, ambient texture and label face.
- * The console is therefore also a preview of what the plugin itself will look
- * like, which is why "follow the character" is the default.
- *
  * Visual language is the general tactical-UI idiom: near-black ground, one signal
  * colour, hairline rules, uppercase Latin labels over Chinese ones. No game
  * asset, logo or typeface is used — the palette and the bracket motif are the
@@ -116,9 +111,8 @@
 [data-theme="muelsyse"] .card[data-on="1"] { box-shadow: 0 0 0 1px var(--signal) inset; }
 
 /* ================= yuno — MEWTYPE live set =================
- * Pink, warm and lit — the character is pink-haired and pink-clad. Purple-black
- * ground, magenta signal, a glow instead of brackets, softer ambient light and a
- * rounded label face. The two themes are the two characters, not two preferences. */
+ * Purple-black ground, magenta signal, a glow instead of brackets, rounded label
+ * face. */
 [data-theme="yuno"] {
   --ink: #0a0610;
   --panel: #150c1c;

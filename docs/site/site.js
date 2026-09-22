@@ -459,9 +459,6 @@ const EN = {
   "plugin.balance.desc": "Shows the account balance in the panel. With this off the browser never contacts the provider at all.",
   "character.title": "Character",
   "character.sub": "who appears",
-  "character.note":
-    "Each character brings its own interface style — colours, shape language, progress bars, ambient "
-    + "motion and typeface — and picking one sets both the artwork and the theme, so the two can never disagree.",
   "looks.title": "Looks",
   "looks.sub": "which artwork may appear",
   "looks.note":
