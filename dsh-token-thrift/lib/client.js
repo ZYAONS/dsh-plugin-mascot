@@ -141,6 +141,11 @@ window.__ModuleLoader__.load({
   opacity: .78; line-height: 1.62; }
 .dsh-thrift-say b { color: var(--dsh-thrift-tone); }
 .dsh-thrift-off { opacity: .62; line-height: 1.65; }
+/* What the request actually got back. */
+.dsh-thrift-why { margin-top: 7px; padding: 6px 9px; border-radius: 6px; opacity: 1;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+  color: #e8eef7; font-variant-numeric: tabular-nums; }
+.dsh-thrift-why b { opacity: .55; font-weight: 400; }
 .dsh-thrift-tools { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 5px; }
 .dsh-thrift-tools code { padding: 1px 6px; border-radius: 4px; background: rgba(255,120,120,.14);
   border: 1px solid rgba(255,120,120,.3); color: #ffb3b3; font-size: 10px; }
@@ -478,7 +483,17 @@ window.__ModuleLoader__.load({
 						h("div", { className: "dsh-thrift-off" },
 							"读不到状态接口（",
 							h("b", null, STATE_ENDPOINT),
-							"）。可能的原因：主驾半边是旧版本、插件没被加载，或者面板和宿主不在同一个源。")) : null,
+							"）。",
+							// What actually came back. Without it the message is a list of guesses,
+							// and the difference between a 404, a 401 and a dead socket is the whole
+							// diagnosis — one means the route is missing, one means the session is,
+							// and one means nothing answered at all.
+							h("div", { className: "dsh-thrift-why" },
+								h("b", null, "返回："),
+								state.error === "unreachable"
+									? "请求根本没到（网络层就失败了）"
+									: String(state.error ?? "没有说明")),
+							"可能的原因：主驾半边是旧版本、插件没被加载，或者面板和宿主不在同一个源。")) : null,
 					ballNode("#8b93a7", "Token 节流不可用",
 						h("span", { className: "dsh-thrift-ball-value" }, "!")));
 			}
