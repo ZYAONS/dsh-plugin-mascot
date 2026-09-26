@@ -373,11 +373,16 @@ window.__ModuleLoader__.load({
 				},
 			}, extra);
 
-			/** The one line that says what the dial is doing, in words. */
+			/**
+			 * The one line that says what the dial is doing, in words.
+			 *
+			 * `standard` has no entry on purpose: that tier shows no sentence, only its position
+			 * between `light` and `strict`. Spelled out here because a missing key reads as an
+			 * oversight, and the next person would helpfully write one back in.
+			 */
 			const LEVEL_WORDS = {
 				off: "不劝也不遮",
 				light: "只劝一次，永不遮工具",
-				standard: "两三档劝告，临界才遮",
 				strict: "四档劝告，五成半起遮",
 			};
 

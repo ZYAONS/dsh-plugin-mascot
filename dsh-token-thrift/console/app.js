@@ -15,11 +15,11 @@
   var RESET_URL = "/dsh-token-thrift/api/reset";
   var POLL_MS = 1500;
 
-  /** 每一档在说人话的时候是什么。键必须和主驾那边的 PRESETS 对齐。 */
+  /** 每一档在说人话的时候是什么。键必须和主驾那边的 PRESETS 对齐。
+   *  `standard` 没有条目：那一档不显示句子。 */
   var LEVEL_TEXT = {
     off: "不劝也不遮",
     light: "只劝一次，永不遮工具",
-    standard: "两三档劝告，临界才遮",
     strict: "四档劝告，五成半起遮",
   };
 
