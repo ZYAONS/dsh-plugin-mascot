@@ -161,34 +161,60 @@ const plugin = registrations[0].factory((spec) => {
 // The default base is the host half's route; over file: this points at art/.
 plugin.setArtBase(${JSON.stringify(artBase)});
 
-// 2. Drive the same ctx.slots surface the runner exposes, and prove the
-//    registration is the one the plugin intends.
+// 2. 用和 runner 一样的 ctx.slots 面驱动它，并确认注册的正是插件想注册的那些。
+//
+//    断言的是**确切的一组**，不是"注册了一次"。插件注册两个槽 —— 一个 overlay，
+//    一个填进它自己声明的子槽；写成"长度必须是 1"会在插件变对的那一刻误报。
+//
+//    更要紧的是下面那个 renderSlot：它必须**按 key 转发**，不能不管三七二十一渲染面板。
+//    原来的写法直接返回 h(Panel, ...)，于是"子槽声明了却没人填"这种毛病在预览里
+//    永远看不出来 —— 截图里面板一直好好的，装到机器上点开却是空的。
 const registered = [];
+const components = {};
 plugin.apply({
   effect: (callback) => callback(),
   slots: {
     inject: (key, callback) => [...callback()],
-    register: (options, component) => { registered.push({ options, component }); return () => {}; },
+    register: (options, component) => {
+      registered.push({ options, component });
+      components[options.name] = component;
+      return () => {};
+    },
   },
 });
-if (registered.length !== 1 || registered[0].options.id !== "mascot") {
+const declared = registered.map((entry) => entry.options.name).sort();
+if (registered[0]?.options?.id !== "mascot" || declared.join(",") !== "mascot.panel,shell.overlay") {
   throw new Error("preview: unexpected registration " + JSON.stringify(registered.map((r) => r.options)));
+}
+if (components["mascot.panel"] === undefined) {
+  throw new Error("preview: the overlay declares mascot.panel but nothing fills it — the panel would open empty");
 }
 
 const Overlay = plugin.MascotOverlay;
-const Panel = plugin.MascotPanel;
+
+/**
+ * 按 key 转发渲染，并且**把 renderSlot 自己往下传**。
+ *
+ * 子槽是嵌套的：overlay 里坐着面板，面板里还可能坐着别人（节流卡片就是）。
+ * 只给最外层传 renderSlot，里面那层一调就是 "renderSlot is not a function" ——
+ * 这跟产品里 runner 的行为是一致的，所以这里也必须一致，否则预览又变成"看着好好的"。
+ */
+function renderSlot(key, owner) {
+  const Component = components[key];
+  if (Component === undefined) return null;
+  return h(Component, Object.assign({}, owner, {
+    renderSlot,
+    useProjection: (name) => name === "tokenUsage" ? FIXTURES.usage : FIXTURES.pressure,
+    sessionId: FIXTURES.sessionId,
+  }));
+}
 
 /** One column of the sheet: mock shell chrome plus a live overlay instance. */
 function Frame({ spec }) {
   const host = useRef(null);
   useEffect(() => {
     const root = ReactDOM.createRoot(host.current);
-    root.render(h(Overlay, {
-      renderSlot: (key, owner) => h(Panel, Object.assign({}, owner, {
-        useProjection: (name) => name === "tokenUsage" ? FIXTURES.usage : FIXTURES.pressure,
-        sessionId: FIXTURES.sessionId,
-      })),
-    }));
+    root.render(h(Overlay, { renderSlot }));
     return () => root.unmount();
   }, [spec]);
   return h("div", { className: "col" },
