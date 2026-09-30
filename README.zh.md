@@ -228,9 +228,10 @@ npm run fetch-rooms -- --force # 重新下载
 | `apiKeyRef` | `DEEPSEEK_API_KEY` | `~/.dsh/.credentials.yaml` 里的凭据名 |
 | `cacheTtlMs` | `60000` | 一次余额答复的新鲜度；失败不缓存 |
 | `timeoutMs` | `10000` | 上游请求预算 |
+| `allowForeignBaseUrl` | `false` | 允许把 API Key 发往不是 DeepSeek 自家主机的 `baseUrl` |
 | `artDir` | 插件自己的 `art/` | 素材目录 |
 
-走代理或自建网关时把 `baseUrl` 指过去，需要实现 `GET /user/balance`。
+走代理或自建网关时，把 `baseUrl` 指过去**并设 `allowForeignBaseUrl: true`**。不加这个开关，插件拒绝把 key 发往别的主机，并会说明它拒绝了哪个主机。网关需要实现 `GET /user/balance`。
 
 ## 目录
 

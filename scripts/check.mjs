@@ -688,6 +688,58 @@ await it("concurrent reads collapse onto one upstream request", async () => {
   assert.deepEqual(first.json, second.json);
 });
 
+await it("the API key is never sent to an address that is not the vendor's", async () => {
+  // `baseUrl` is free text and this route puts the key in an Authorization header to whatever it
+  // names. So anything that can rewrite `baseUrl` can have the key delivered to its own server.
+  // A proxy is a legitimate setup, which is why the door exists — but it has to be an explicit
+  // line of config, and it has to fail loudly when it is not.
+  const foreign = hostHarness({ config: { baseUrl: "https://evil.example" } });
+  const refused = await request(foreign, "/dsh-mascot/api/balance");
+  assert.equal(refused.json.ok, false);
+  assert.equal(refused.json.error, "foreign_base_url");
+  assert.match(refused.json.message, /evil\.example/u);
+  assert.match(refused.json.message, /allowForeignBaseUrl/u);
+  // The point of the whole guard: the request was never made.
+  assert.equal(foreign.calls.length, 0, "the key was sent anyway");
+
+  // Explicitly allowing it is the documented way to run behind a gateway, and it has to work.
+  const gateway = hostHarness({ config: { baseUrl: "https://gateway.internal", allowForeignBaseUrl: true } });
+  const allowed = await request(gateway, "/dsh-mascot/api/balance");
+  assert.equal(allowed.json.ok, true);
+  assert.equal(gateway.calls.length, 1);
+  assert.equal(gateway.calls[0].url, "https://gateway.internal/user/balance");
+  assert.equal(gateway.calls[0].init.headers.authorization, "Bearer sk-test-secret");
+
+  // The vendor's own host needs no opt-in.
+  const vendor = hostHarness();
+  assert.equal((await request(vendor, "/dsh-mascot/api/balance")).json.ok, true);
+  assert.equal(vendor.calls.length, 1);
+});
+
+await it("a cross-site request is refused before the session is even consulted", async () => {
+  // The session cookie rides along on same-origin requests, so "a page that can make the browser
+  // call this" is the attack surface — and the server would see a valid session ticket. These two
+  // headers are set by the browser and cannot be forged from script, so they are worth checking
+  // here rather than trusting every deployment to send SameSite.
+  const crossSite = hostHarness({ authenticated: true });
+  const site = await request(crossSite, "/dsh-mascot/api/health", { headers: { "sec-fetch-site": "cross-site" } });
+  assert.equal(site.status, 401);
+
+  const foreignOrigin = hostHarness({ authenticated: true });
+  const origin = await request(foreignOrigin, "/dsh-mascot/api/health", { headers: { origin: "https://evil.example" } });
+  assert.equal(origin.status, 401);
+
+  // A malformed Origin is not something a browser sends; it is a forged request.
+  const bogus = hostHarness({ authenticated: true });
+  const junk = await request(bogus, "/dsh-mascot/api/health", { headers: { origin: "not a url" } });
+  assert.equal(junk.status, 401);
+
+  // And the ordinary case still works: same-origin, with a session.
+  const fine = hostHarness({ authenticated: true });
+  const ok = await request(fine, "/dsh-mascot/api/health", { headers: { origin: "http://127.0.0.1:43120" } });
+  assert.equal(ok.json.ok, true);
+});
+
 await it("every failure mode answers with a human sentence and ok:false", async () => {
   const noKey = hostHarness({ apiKey: null });
   const missing = await request(noKey, "/dsh-mascot/api/balance");
@@ -786,8 +838,7 @@ await it("the art route stays behind the session, and the console is served from
   assert.match(String(page.body), /id="output"/u, "and it is the console page");
   assert.match(String(page.body), /type="module" src="site\/site\.js"/u, "and loads its own module");
 
-  const asset = await request(own, "/dsh-mascot/console/site/preview.js");
-  assert.equal(asset.status, 200, "the console's own scripts are served");
+  const asset = await request(own, "/dsh-mascot/console/site/preview.js");  assert.equal(asset.status, 200, "the console's own scripts are served");
   assert.match(String(asset.headers["content-type"]), /javascript/u, "with a script content type");
 
 //#region 5b — a character's own backdrop
@@ -844,6 +895,32 @@ await it("a backdrop is picked up by character id, and nothing else in the direc
 
   // It is still behind the session, like everything but nothing at all.
   assert.equal((await request(sessionless, "/dsh-mascot/console/")).status, 401, "the console is not public");
+});
+
+await it("an edited console file is served fresh, with no restart", async () => {
+  // 前端改一行要重启才能看到，是最让人不信任工具的一种毛病 —— 因为**没法判断**
+  // 看到的是新代码还是旧代码。所以每读一次都从磁盘读，并且明说不要缓存。
+  //
+  // 借鉴自 dsh-whale-widget：它按 mtime 热读自己的挂件 JS，改完硬刷新即可。
+  // 我们这边控制台走的是普通文件路由，能做到同等效果 —— 但得**证明**它真的每次重读，
+  // 而不是"代码看起来是每次读"。
+  const harness = hostHarness();
+  const probe = join(root, "docs", "__hot-reload-probe.html");
+  try {
+    writeFileSync(probe, "<!doctype html><title>first</title>");
+    const first = await request(harness, "/dsh-mascot/console/__hot-reload-probe.html");
+    assert.equal(first.status, 200);
+    // `body` is the raw Buffer the route wrote, so it is compared as text.
+    assert.match(String(first.body), /first/u);
+    // The header is what makes a browser re-ask at all.
+    assert.equal(first.headers["cache-control"], "no-store", "a cached console file would survive Ctrl+F5");
+
+    writeFileSync(probe, "<!doctype html><title>second</title>");
+    const second = await request(harness, "/dsh-mascot/console/__hot-reload-probe.html");
+    assert.match(String(second.body), /second/u, "the edited file was not re-read");
+  } finally {
+    rmSync(probe, { force: true });
+  }
 });
 await it("the look index is the single source of truth for what is installed", () => {
   const declaration = JSON.parse(read("art/looks.json"));
@@ -915,7 +992,45 @@ await it("the browser half falls back to the placeholder when the official file 
 //#endregion
 
 //#region 5 — the bone rig
-const { buildRig, findNeck, poseRig, RIG, summonBlend, SUMMON, SUMMON_UPPER, SUMMON_FOLD } = exports_;
+const { buildRig, findNeck, poseRig, RIG, summonBlend, SUMMON, SUMMON_UPPER, SUMMON_FOLD, reportUsage, readToday } = exports_;
+
+//#region 5d — 客户端怎么处理「今天的数字」
+await it("a failed daily-spend reading says why instead of quietly keeping the old number", async () => {
+  // The bug this replaces: `reportUsage` returned `undefined` on every failure and the caller was
+  // `if (value !== undefined) setToday(value)` — so a failing report left the previous figure on
+  // screen, unchanged and unexplained. A number that quietly stops updating reads as a correct
+  // number, which is worse than a dash that admits it does not know.
+  const realFetch = globalThis.fetch;
+  const answer = (impl) => {
+    globalThis.fetch = impl;
+  };
+  try {
+    answer(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true, today: 4242 }) }));
+    assert.deepEqual(await reportUsage("s", 1), { today: 4242 });
+
+    answer(() => Promise.resolve({ ok: false, status: 503, json: () => Promise.resolve({}) }));
+    const http = await reportUsage("s", 1);
+    assert.equal(http.today, undefined);
+    assert.match(http.message, /HTTP 503/u);
+
+    answer(() => Promise.reject(new Error("ECONNREFUSED")));
+    const down = await reportUsage("s", 1);
+    assert.match(down.message, /ECONNREFUSED/u);
+
+    // A host that answers but refuses: the host's own sentence travels through.
+    answer(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: false, message: "账本不可用" }) }));
+    assert.match((await reportUsage("s", 1)).message, /账本不可用/u);
+
+    answer(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.reject(new Error("bad json")) }));
+    assert.match((await reportUsage("s", 1)).message, /不是 JSON/u);
+
+    // And the read path behaves the same way — it is the same three failures.
+    answer(() => Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) }));
+    assert.match((await readToday()).message, /HTTP 401/u);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
 
 /** A synthetic silhouette: a wide head, a pinched neck, then a wide body. */
 function syntheticProfile(headWidth, neckWidth, bodyWidth, neckRow) {

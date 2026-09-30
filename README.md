@@ -228,9 +228,10 @@ Every field has a default.
 | `apiKeyRef` | `DEEPSEEK_API_KEY` | credentials reference in `~/.dsh/.credentials.yaml` |
 | `cacheTtlMs` | `60000` | freshness of a balance answer; failures are never cached |
 | `timeoutMs` | `10000` | upstream request budget |
+| `allowForeignBaseUrl` | `false` | allow the API key to go to a `baseUrl` that is not DeepSeek's own host |
 | `artDir` | the plugin's own `art/` | directory holding the artwork |
 
-Behind a proxy or self-hosted gateway, point `baseUrl` at it. It must implement `GET /user/balance`.
+Behind a proxy or self-hosted gateway, point `baseUrl` at it **and set `allowForeignBaseUrl: true`**. Without that flag the plugin refuses to send the key to any other host, and says which host it refused. The gateway must implement `GET /user/balance`.
 
 ## Layout
 
