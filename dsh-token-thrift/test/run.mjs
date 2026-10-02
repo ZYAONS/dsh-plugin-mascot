@@ -249,6 +249,43 @@ await it("several tiers coming due at once speak in one message", async () => {
   assert.match(result.additionalContexts[0].content[0].text, /b/u);
 });
 
+await it("the same words are never injected twice, however many tiers carry them", async () => {
+  // 两个档位可以落在**同一个文案桶**里 —— 真实的一个例子是力度 100：0.25 和 0.47 拿到的是
+  // 逐字相同的一段。只按比例去重的话，同一段话会在历史里出现两遍；而 agent loop 把每一步的
+  // 消息都落盘，重复的话不是"多提醒一次"，是往上下文里灌重复内容 —— 上下文正是这个插件要省的东西。
+  //
+  // 纪律来自 dsh-effort-slider 的策略注入：文本没变就不注入。
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 100, tiers: [{ ratio: 0.25, text: "same" }, { ratio: 0.47, text: "same" }], maskTools: [] }));
+  ctx.setTotal(50);
+  const result = await ctx.postExecute(ctx.agent());
+  assert.equal(result.additionalContexts.length, 1, "the one thing there was to say must still be said");
+  const said = result.additionalContexts[0].content[0].text;
+  assert.equal(said.split("same").length - 1, 1, "and said exactly once, not once per tier");
+
+  // 同样的两档在**不同步**到期时也不能说两遍。一个 agent 用到底 —— 插件把进度挂在
+  // agent 对象上，每次换新的会被当成新会话（这个文件里另一条测试的注释已经记过这个坑）。
+  const later = fakeContext();
+  apply(later, config({ budget: 100, tiers: [{ ratio: 0.25, text: "same" }, { ratio: 0.8, text: "same" }], maskTools: [] }));
+  const one = later.agent();
+  later.setTotal(30);
+  const first = await later.postExecute(one);
+  assert.equal(JSON.stringify(first.additionalContexts ?? []).split("same").length - 1, 1, "said once at the first tier");
+  later.setTotal(90);
+  const second = await later.postExecute(one);
+  // 断言的是"没有再说一遍"，不是"整条结果为空"：downstream 本身可能带着别人的上下文。
+  const repeated = JSON.stringify(second.additionalContexts ?? []).split("same").length - 1;
+  assert.equal(repeated, 0, "the second tier has nothing new to say");
+
+  // 而真正不同的两句话，照常各说各的。
+  const distinct = fakeContext();
+  apply(distinct, config({ budget: 100, tiers: [{ ratio: 0.4, text: "a" }, { ratio: 0.9, text: "b" }], maskTools: [] }));
+  distinct.setTotal(95);
+  const both = await distinct.postExecute(distinct.agent());
+  assert.match(both.additionalContexts[0].content[0].text, /a/u);
+  assert.match(both.additionalContexts[0].content[0].text, /b/u);
+});
+
 await it("downstream contexts are preserved, ours in front", async () => {
   const ctx = fakeContext();
   apply(ctx, config({ budget: 100, tiers: [{ ratio: 0.5, text: "x" }], maskTools: [] }));

@@ -585,7 +585,14 @@ export function apply(ctx, config) {
     if (state === undefined) {
       // `firedAt` is for the platform only: the coach itself just needs to know that a
       // tier has been delivered, but "when" is what makes a timeline readable.
-      state = { delivered: new Set(), firedAt: new Map(), masked: false, reminders: 0 };
+      //
+      // `said` 记的是**说过的话**，不是"烧掉了哪个档位"。两个档位可能落在同一个文案桶里
+      // —— 力度 100 时 0.25 和 0.47 拿到的是逐字相同的一段 —— 只按比例去重的话，同一段话
+      // 会在历史里出现两遍。agent loop 把每一步的消息都落盘，重复的话不是"多提醒一次"，
+      // 是往上下文里灌了重复内容，而上下文正是这个插件要省的东西。
+      //
+      // 这条纪律来自 dsh-effort-slider 的策略注入：**文本没变就不注入**。
+      state = { delivered: new Set(), said: new Set(), firedAt: new Map(), masked: false, reminders: 0 };
       spoken.set(agent, state);
     }
     return state;
@@ -695,6 +702,9 @@ export function apply(ctx, config) {
     for (const [agent, state] of spokenKeys) {
       if (state.sessionId === sessionId) {
         state.delivered.clear();
+        // 重置会话 = 从头再看一遍，所以"说过的话"也要一起清，否则第二次跑同一档位
+        // 会因为文案没变而一声不吭。
+        state.said.clear();
         state.firedAt.clear();
         state.masked = false;
         state.reminders = 0;
@@ -751,11 +761,17 @@ export function apply(ctx, config) {
     const due = state.reminders >= settings.maxReminders
       ? []
       : settings.tiers.filter((tier) => ratio >= tier.ratio && !state.delivered.has(tier.ratio));
+    // 档位照常标记为已烧掉（平台的时间线上要看得到它们到期了），但**只说没说过的话**。
+    const fresh = [];
     for (const tier of due) {
       state.delivered.add(tier.ratio);
       state.firedAt.set(tier.ratio, Date.now());
+      if (!state.said.has(tier.text)) {
+        state.said.add(tier.text);
+        fresh.push(tier);
+      }
     }
-    if (due.length > 0) state.reminders += 1;
+    if (fresh.length > 0) state.reminders += 1;
 
     publish(sessionId, {
       sessionId,
@@ -772,11 +788,11 @@ export function apply(ctx, config) {
       fired: settings.tiers.map((tier) => ({ ratio: tier.ratio, at: state.firedAt.get(tier.ratio) ?? null })),
     });
 
-    if (due.length === 0) return downstream;
+    if (fresh.length === 0) return downstream;
 
     // One message even when several tiers came due at once: spending the remaining budget
     // on three near-identical reminders would be its own joke.
-    const text = due.map((tier) => tier.text).join("\n\n");
+    const text = fresh.map((tier) => tier.text).join("\n\n");
     const percent = Math.round(ratio * 100);
     return {
       ...downstream,
