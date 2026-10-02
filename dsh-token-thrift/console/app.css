@@ -112,22 +112,51 @@ main {
 .dial-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 5px; }
 .dial-head b { font-size: 22px; font-variant-numeric: tabular-nums; color: var(--tone); }
 .dial-head span { color: var(--dim); font-size: 12px; }
-.dial input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 22px;
-  background: none; cursor: pointer; margin: 0; }
-.dial input[type="range"]::-webkit-slider-runnable-track { height: 8px; border-radius: 999px;
-  background: linear-gradient(90deg, rgba(79,214,168,.6), #ffd34d 45%, #ff5f6d);
-  border: 1px solid var(--line); }
-.dial input[type="range"]::-moz-range-track { height: 8px; border-radius: 999px;
-  background: linear-gradient(90deg, rgba(79,214,168,.6), #ffd34d 45%, #ff5f6d);
-  border: 1px solid var(--line); }
-.dial input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
-  width: 18px; height: 18px; margin-top: -6px; border-radius: 50%;
-  background: var(--bg); border: 3px solid var(--tone); box-shadow: 0 0 10px rgba(0,0,0,.55); }
-.dial input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%;
-  background: var(--bg); border: 3px solid var(--tone); }
-.dial input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
-.dial-ticks { position: relative; height: 16px; margin-top: 2px; }
-.dial-ticks span { position: absolute; transform: translateX(-50%); font-size: 10.5px; color: var(--dim); white-space: nowrap; }
+.dial input[type="range"] { -webkit-appearance: none; appearance: none; position: absolute; inset: 0;
+  width: 100%; height: 100%; background: none; cursor: ew-resize; margin: 0; opacity: 0; z-index: 3; }
+
+/* ---------- 自绘轨道（呈现参考 dsh-effort-slider） ----------
+   三条从那边学来的规矩：
+   1. **填充从轨道左边缘画到珠子中心**。写成 `left: 17px` 的话，最低档时左端会露出一段空档
+      —— 那是它在实机上修过的一个 bug，公式抄的是修好之后的。
+   2. **刻度线画在轨道内部**（1px 竖线），不是画在下面当分隔。
+   3. 吸附脉冲环必须**夹在轨道高度以内**：环体放大后超出轨道的部分会被 `overflow:hidden`
+      裁成贴着圆角的一块，看起来像"残影"。所以这里环 18px、放大到 1.0 就到顶。
+   珠子半径 9px，所以两端各留 9px 行程余量。 */
+.dial-rail { position: relative; height: 26px; border-radius: 999px; overflow: hidden;
+  isolation: isolate; touch-action: none; }
+.dial-rail::before { content: ""; position: absolute; inset: 0; border-radius: 999px;
+  background: linear-gradient(90deg, rgba(79,214,168,.35), #ffd34d 45%, #ff5f6d);
+  opacity: .28; border: 1px solid var(--line); }
+.dial-rail__fill { position: absolute; top: 0; bottom: 0; left: 0; z-index: 1;
+  width: calc(9px + (100% - 18px) * var(--pct, 0) / 100); border-radius: 999px;
+  background: linear-gradient(90deg, rgba(79,214,168,.85), #ffd34d 45%, #ff5f6d);
+  box-shadow: 0 0 14px rgba(255, 211, 77, .22); }
+.dial-rail__grid { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.dial-rail__grid i { position: absolute; top: 0; bottom: 0; width: 1px;
+  background: rgba(255,255,255,.16); transform: translateX(-.5px); }
+.dial-rail__knob { position: absolute; top: 50%; z-index: 4; width: 18px; height: 18px;
+  margin: -9px 0 0 -9px; border-radius: 999px; pointer-events: none;
+  left: calc(9px + (100% - 18px) * var(--pct, 0) / 100);
+  background: var(--bg); border: 3px solid var(--tone);
+  box-shadow: 0 0 12px rgba(0,0,0,.6); transition: left .07s linear; }
+/* 珠子上一道高光，让它看起来是个球而不是一个圆 */
+.dial-rail__knob::after { content: ""; position: absolute; left: 18%; right: 18%; top: 11%;
+  height: 26%; border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,.85), rgba(255,255,255,0)); }
+/* 松手 / 点刻度时的一次脉冲。环 18px，放大到 1.0 就到顶 —— 再大就会被轨道裁出直角。 */
+.dial-rail__spark { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.dial-rail__spark[data-on="1"]::before { content: ""; position: absolute; top: 50%;
+  left: calc(9px + (100% - 18px) * var(--pct, 0) / 100);
+  width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 999px;
+  border: 1px solid var(--tone); box-shadow: 0 0 8px var(--tone);
+  animation: dial-ring .5s cubic-bezier(.2,.7,.3,1) both; }
+@keyframes dial-ring { from { transform: scale(.55); opacity: .9 } to { transform: scale(1); opacity: 0 } }
+.dial-rail:focus-within { outline: 2px solid var(--accent); outline-offset: 4px; }
+.dial-ticks { position: relative; height: 16px; margin-top: 4px; }
+.dial-ticks span { position: absolute; transform: translateX(-50%); font-size: 10.5px; color: var(--dim);
+  white-space: nowrap; cursor: pointer; user-select: none; transition: color .2s, opacity .2s; }
+.dial-ticks span[data-on="1"] { color: var(--tone); font-weight: 700; }
 
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
 input[type="number"] {

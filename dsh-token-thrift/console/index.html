@@ -29,7 +29,18 @@
         <b id="dial-value">—</b>
         <span id="dial-words"></span>
       </div>
-      <input type="range" id="dial-range" min="0" max="100" step="1" aria-label="节流力度">
+      <!-- 自绘轨道。
+           原生 range 留在原地当**交互层**（键盘、触摸、无障碍、拖拽全免费），视觉由
+           `.dial-rail__*` 三层画出来，range 透明地躺在最上面接事件。
+           呈现参考 dsh-effort-slider：填充从**轨道左边缘**画到珠子中心、刻度线画在轨道
+           **内部**、珠子带一道高光。 -->
+      <div class="dial-rail" id="dial-rail" style="--pct:0">
+        <span class="dial-rail__grid" id="dial-grid" aria-hidden="true"></span>
+        <span class="dial-rail__fill" aria-hidden="true"></span>
+        <span class="dial-rail__knob" aria-hidden="true"></span>
+        <span class="dial-rail__spark" aria-hidden="true"></span>
+        <input type="range" id="dial-range" min="0" max="100" step="1" aria-label="节流力度">
+      </div>
       <div class="dial-ticks" id="dial-ticks"></div>
     </div>
     <div class="configured" id="configured"></div>

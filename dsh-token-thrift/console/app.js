@@ -91,22 +91,63 @@
     return best;
   }
 
+  /** 把值画到轨道上：填充宽度、珠子位置、脉冲环都读同一个 `--pct`。 */
+  function paintRail(shown) {
+    var pct = Math.max(0, Math.min(100, Number(shown) || 0));
+    el("dial-rail").style.setProperty("--pct", String(pct));
+    // 刻度文字跟着点亮：哪一档是"当前这一档"，和档位名走同一个判定。
+    var host = el("dial-ticks");
+    for (var i = 0; i < host.children.length; i++) {
+      var mark = host.children[i];
+      mark.dataset.on = mark.dataset.stop === String(nameFor(pct)) ? "1" : "0";
+    }
+  }
+
+  /** 一次脉冲：只在**松手 / 点刻度**时放，拖动过程中每帧都放会变成频闪。 */
+  function sparkRail() {
+    var spark = el("dial-rail__spark") || document.querySelector(".dial-rail__spark");
+    if (spark === null) return;
+    spark.dataset.on = "0";
+    // 读一次布局，让动画能重播（连续两次设成 1 不会重新触发）。
+    void spark.offsetWidth;
+    spark.dataset.on = "1";
+  }
+
   function buildTicks(presets) {
     var host = el("dial-ticks");
     host.textContent = "";
+    var grid = el("dial-grid");
+    grid.textContent = "";
     Object.keys(presets || {}).forEach(function (name) {
       var mark = document.createElement("span");
       mark.style.left = presets[name] + "%";
       mark.textContent = name;
       mark.title = name + " · " + presets[name];
+      mark.dataset.stop = name;
+      // 点刻度直接跳过去，和拖拽走同一个提交口。
+      mark.addEventListener("click", function () {
+        dialDraft = presets[name];
+        el("dial-range").value = String(presets[name]);
+        el("dial-value").textContent = dialDraft <= 0 ? "关" : String(dialDraft);
+        el("dial-words").textContent = dialDraft <= 0 ? LEVEL_TEXT.off : LEVEL_TEXT[nameFor(dialDraft)] || "";
+        paintRail(dialDraft);
+        sparkRail();
+        commitDial();
+      });
       host.appendChild(mark);
+      // 轨道内部的刻度线：珠子半径 9px，所以线和珠子用同一套换算，才对得上。
+      var line = document.createElement("i");
+      line.style.left = "calc(9px + (100% - 18px) * " + presets[name] + " / 100)";
+      grid.appendChild(line);
     });
+    paintRail(el("dial-range").value);
   }
 
   el("dial-range").addEventListener("input", function () {
     dialDraft = Number(el("dial-range").value);
     el("dial-value").textContent = dialDraft <= 0 ? "关" : String(dialDraft);
     el("dial-words").textContent = dialDraft <= 0 ? LEVEL_TEXT.off : LEVEL_TEXT[nameFor(dialDraft)] || "";
+    paintRail(dialDraft);
   });
   var commitDial = function () {
     if (dialDraft === null || last === null || dialDraft === last.intensity) { dialDraft = null; return; }
@@ -115,7 +156,8 @@
     post(SETTINGS_URL, { intensity: value });
   };
   el("dial-range").addEventListener("change", commitDial);
-  el("dial-range").addEventListener("pointerup", commitDial);
+  el("dial-range").addEventListener("pointerup", function () { sparkRail(); commitDial(); });
+  el("dial-range").addEventListener("keyup", function () { sparkRail(); commitDial(); });
   el("dial-range").addEventListener("blur", commitDial);
 
   el("apply").addEventListener("click", function () {
@@ -389,6 +431,8 @@
     var shown = dialDraft === null ? live : dialDraft;
     el("dial-value").textContent = shown <= 0 ? "关" : String(shown);
     el("dial-words").textContent = shown <= 0 ? LEVEL_TEXT.off : (LEVEL_TEXT[nameFor(shown)] || "");
+    // 宿主每隔 POLL_MS 来一次；拖动中不要被它拉回去，所以只在没在拖的时候重画。
+    if (dialDraft === null) paintRail(shown);
   }
 
   function load() {
