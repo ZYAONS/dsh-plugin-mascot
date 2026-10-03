@@ -716,23 +716,37 @@ await it("the API key is never sent to an address that is not the vendor's", asy
   assert.equal(vendor.calls.length, 1);
 });
 
-await it("a cross-site request is refused before the session is even consulted", async () => {
+await it("a cross-site request is refused, but only on evidence the browser itself supplies", async () => {
   // The session cookie rides along on same-origin requests, so "a page that can make the browser
-  // call this" is the attack surface — and the server would see a valid session ticket. These two
-  // headers are set by the browser and cannot be forged from script, so they are worth checking
-  // here rather than trusting every deployment to send SameSite.
+  // call this" is the attack surface — and the server would see a valid session ticket.
+  //
+  // `Sec-Fetch-Site` is the main guard, and it is the same one DSH's own request gate uses
+  // (`isCrossSite` in lib/src-DGihCtmE.js). The `Origin` check is a narrow addition, and it has to
+  // stay *narrower* than the framework's judgement — anything stricter rejects legitimate
+  // requests rather than attacks.
   const crossSite = hostHarness({ authenticated: true });
   const site = await request(crossSite, "/dsh-mascot/api/health", { headers: { "sec-fetch-site": "cross-site" } });
   assert.equal(site.status, 401);
 
+  // A parseable, genuinely different origin: refused.
   const foreignOrigin = hostHarness({ authenticated: true });
   const origin = await request(foreignOrigin, "/dsh-mascot/api/health", { headers: { origin: "https://evil.example" } });
   assert.equal(origin.status, 401);
 
-  // A malformed Origin is not something a browser sends; it is a forged request.
+  // `Origin: null` is a legal value — sandboxed iframes and opaque origins send it — so treating
+  // it as a forgery would 401 a legitimate caller.
+  const opaque = hostHarness({ authenticated: true });
+  assert.equal((await request(opaque, "/dsh-mascot/api/health", { headers: { origin: "null" } })).json.ok, true);
+
+  // An Origin that will not parse is *unknown*, not hostile: a forger can write any Origin it
+  // likes, so refusing unparseable ones buys nothing and can only misfire. The session decides.
   const bogus = hostHarness({ authenticated: true });
-  const junk = await request(bogus, "/dsh-mascot/api/health", { headers: { origin: "not a url" } });
-  assert.equal(junk.status, 401);
+  assert.equal((await request(bogus, "/dsh-mascot/api/health", { headers: { origin: "not a url" } })).json.ok, true);
+
+  // None of that is a way past the session: without one, every one of them is 401.
+  const sessionless = hostHarness({ authenticated: false });
+  assert.equal((await request(sessionless, "/dsh-mascot/api/health", { headers: { origin: "null" } })).status, 401);
+  assert.equal((await request(sessionless, "/dsh-mascot/api/health", { headers: { origin: "not a url" } })).status, 401);
 
   // And the ordinary case still works: same-origin, with a session.
   const fine = hostHarness({ authenticated: true });
