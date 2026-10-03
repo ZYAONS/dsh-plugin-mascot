@@ -302,8 +302,9 @@ GET /dsh-mascot/art/<file>    插件 art/ 目录里的素材
 
 ```bash
 npm install
-npm test                  # 47 项
-npm run check             # 两半各跑 node --check，再跑自检
+npm test                  # 56 项（快，不起浏览器）
+npm run check             # 上面那些，加接线检查与一次真渲染
+npm run check:render      # 在 Chromium 里挂真组件；任何页面异常即失败
 npm run check:site        # 102 项，用 CDP 驱动配置台
 npm run check:site -- https://zyaons.github.io/dsh-plugin-mascot/
 npm run build:site        # 重新生成 docs/site/catalog.json 和 rig.js

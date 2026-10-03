@@ -302,8 +302,9 @@ Anything unmeasurable renders as `—`, not `0`.
 
 ```bash
 npm install
-npm test                  # 47 checks
-npm run check             # node --check on both halves, plus the self-test
+npm test                  # 56 checks — fast, no browser
+npm run check             # the above, plus the wiring check and a real render
+npm run check:render      # renders the mascot in Chromium; fails on any page error
 npm run check:site        # 102 checks, drives the console over CDP
 npm run check:site -- https://zyaons.github.io/dsh-plugin-mascot/
 npm run build:site        # regenerate docs/site/catalog.json and rig.js
@@ -311,6 +312,8 @@ npm run preview           # docs/preview.png — placeholder, committed
 npm run preview:official  # docs/preview-official.png — official art, gitignored
 npm run verify            # pre-flight the current DSH profile
 ```
+
+**`npm test` renders nothing**, so it cannot see a component that throws while rendering — and a throw in `MascotOverlay` leaves no mascot at all. `npm run check:render` mounts the real component in Chromium and fails on any uncaught page error. It caught a `return today` left over from a `return { today, error }` refactor: the overlay threw on every render and the mascot vanished, while all the fast checks stayed green.
 
 Run `npm run build:site` after editing `lib/client.js`; `check:site` fails if `docs/site/rig.js` is out of step with the plugin's own skeleton.
 
