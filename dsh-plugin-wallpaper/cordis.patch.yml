@@ -1,0 +1,3 @@
+name: dsh-plugin-wallpaper
+config:
+  routePrefix: /dsh-wallpaper

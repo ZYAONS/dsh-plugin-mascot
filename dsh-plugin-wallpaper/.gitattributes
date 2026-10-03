@@ -1,0 +1,8 @@
+# 换行符钉死成 LF：这个仓库只有源码，没有需要在 Windows 上保持 CRLF 的东西。
+# 不钉的话 `git add` 每次都会警告"LF will be replaced by CRLF"，而不同机器 clone 下来
+# 得到的字节还不一样 —— 源码仓库里那是纯粹的自找麻烦。
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.mp4 binary
+*.webm binary

@@ -1,0 +1,40 @@
+{
+  "name": "dsh-plugin-wallpaper",
+  "version": "0.1.0",
+  "description": "把本机的图片 / 视频当作 DSH 网页界面的背景，带磨砂与暗化。DeepSeek Harness bundle plugin.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node scripts/check.mjs",
+    "check": "node --check lib/index.js && node --check lib/client.js && node scripts/check.mjs"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "wallpaper",
+    "background"
+  ],
+  "license": "MIT",
+  "author": "ZYAONS",
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "entry": "./lib/client.js"
+    }
+  }
+}
