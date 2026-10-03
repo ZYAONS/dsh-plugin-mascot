@@ -435,9 +435,9 @@ await it("the catalogue filter takes the game and its characters, and not the wa
   ]) assert.equal(inArk(title), false, `不该认成方舟：${title}`);
 
   // 单字与常用词不进表 —— 这一类是误伤的来源。
-  const words = [...ark.words, ...ark.names];
+  const all = [...ark.works, ...ark.bands, ...ark.characters];
   for (const word of ["w", "年", "夕", "令", "陈", "shu", "dusk", "logos", "夜莺", "nightingale"]) {
-    assert.equal(words.includes(word), false, `"${word}" 太宽，不该在表里`);
+    assert.equal(all.includes(word), false, `"${word}" 太宽，不该在表里`);
   }
 
   // 「不过滤」就是全过。
@@ -481,12 +481,16 @@ await it("the BanG Dream! table is honest about not having been calibrated", () 
   ]) assert.equal(inBang(title), false, `不该认成邦多利：${title}`);
 
   // 没校准的表要**更保守**：不收任何单字，也不收那些同时是常用英文词的成员代号。
-  const words = [...bang.words, ...bang.names];
+  const all = [...bang.works, ...bang.bands, ...bang.characters];
   for (const word of ["layer", "lock", "masking", "pareo", "chuchu", "灯", "睦", "兰", "彩"]) {
-    assert.equal(words.includes(word), false, `"${word}" 太宽或太泛，没校准的表不该收`);
+    assert.equal(all.includes(word), false, `"${word}" 太宽或太泛，没校准的表不该收`);
   }
-  // 反过来：乐队和角色得真的在里面，否则这张表是空的。
-  assert.ok(bang.names.length >= 30, `角色名只有 ${String(bang.names.length)} 个，这张表大概漏了一大片`);
+  // 三层都要有东西：作品名、乐队名、角色名 —— 少一层就是这张表没写完。
+  for (const layer of ["works", "bands", "characters"]) {
+    assert.ok(bang[layer].length > 0, `BanG Dream! 的 ${layer} 是空的`);
+  }
+  assert.ok(bang.bands.length >= 8, `乐队名只有 ${String(bang.bands.length)} 个，这张表大概漏了`);
+  assert.ok(bang.characters.length >= 30, `角色名只有 ${String(bang.characters.length)} 个，这张表大概漏了一大片`);
 });
 
 //#endregion

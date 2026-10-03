@@ -42,31 +42,44 @@ window.__ModuleLoader__.load({
 		/**
 		 * 能筛的作品，一个一份词表。
 		 *
+		 * 每个作品按**三层**写：**作品名 / 乐队名 / 角色名**。形状统一（没有乐队的作品
+		 * 就留空数组，不删字段），读的人不用先想清楚"这个作品的这批词算哪一类"。
+		 *
 		 * 工坊是玩家自己起名的，同一个作品能写出十几种：中文全称、英文、日文、只写角色名。
-		 * 所以给的是**词表**而不是正则 —— 遇到没覆盖的写法往数组里加一条就行。
+		 * 所以给的是**词表**而不是正则 —— 遇到没覆盖的写法往对应那一层加一条就行。
 		 *
-		 * ## 两张表的可信度不一样，这一点写在这里而不是靠记忆
+		 * ## 三条规矩，都是这台机器上的真实壁纸教出来的
 		 *
-		 * **「明日方舟」那张是拿本机真实的 152 张工坊壁纸校准过的。** 校准抓到两个真误伤：
-		 * 单个字母 `w` 把 `Zero Two / DARLING in the FRANXX` 认成了方舟，
-		 * `夜莺` 撞了工坊一位作者名 `夜莺Night` 把《黑神话悟空》那张认成了方舟。
-		 * 所以那张表里有两条硬规矩：**不收单字和常用词**、**不收会和作者名撞车的**。
+		 * 拿 `.scratch/arknights-calibrate.mjs` 校准时抓到过两个误伤：
+		 * 单个字母 `w` 把 `Zero Two / DARLING in the FRANXX` 认成方舟，
+		 * `夜莺` 撞了工坊一位作者名 `夜莺Night` 把《黑神话悟空》那张认成方舟。
 		 *
-		 * **「BanG Dream!」那张没校准过** —— 写它的时候本机 152 张里一张邦多利都没有
-		 * （作品名、乐队名、角色名全零命中，见 `.scratch/bangdream-calibrate.mjs` 的记录）。
-		 * 没有真实样本就没法验证认对了没有，所以那张表**刻意只收辨识度高的专有名词**：
-		 * 不收 `bandori` 之外的泛称，不收任何单字。等机器上有了邦多利壁纸，
-		 * 跑一遍校准再决定加什么。
+		 * 1. **不收单字。** `w` / `年` / `夕` / `令` / `陈` / `黍` 这类一律不收。
+		 *    砍掉之后逐条核过：它们**净增的命中全是误伤**（`年` 命中「年轮版」、
+		 *    `w` 命中 19 张英文标题），真命中（`明日方舟 W`、`[明日方舟]令`）本来就带
+		 *    作品名、已被覆盖。**所以砍掉不丢东西。**
+		 * 2. **不收常用英文词。** `ling` 命中 `DARLING`、`logos` 命中别的、`layer` /
+		 *    `lock` / `masking` 这类同理。
+		 * 3. **不收会和工坊作者名撞车的。** `夜莺` 撞 `夜莺Night`。
+		 *
+		 * 加词之前先跑一遍校准，看它在真实库里多认了谁、有没有认错。
+		 *
+		 * ## 可信度不一样，这一点写在数据里
+		 *
+		 * 「明日方舟」那张**校准过**。「BanG Dream!」那张**没校准** —— 写它的时候本机
+		 * 152 张里一张邦多利都没有（作品名、乐队名、角色名全零命中），没有样本就没法
+		 * 验证认对了没有，所以那张表刻意更保守。`calibrated` 这个字段会被界面读出来，
+		 * 明说「这个词表没校准过」。
 		 */
 		const CATALOGS = Object.freeze([
 			{
 				id: "arknights",
 				label: "明日方舟",
 				calibrated: true,
-				words: [
-					"明日方舟", "arknights", "arknight", "アークナイツ", "罗德岛", "rhodes island",
-				],
-				names: [
+				works: ["明日方舟", "arknights", "arknight", "アークナイツ", "罗德岛", "rhodes island"],
+				// 这个作品没有「乐队」这一层。留空数组而不是删字段，三类的形状保持一致。
+				bands: [],
+				characters: [
 					"阿米娅", "amiya", "凯尔希", "kal'tsit", "kaltsit",
 					"德克萨斯", "texas", "能天使", "exusiai", "蕾缪安", "lemuen",
 					"斯卡蒂", "skadi", "幽灵鲨", "gladiia",
@@ -81,15 +94,16 @@ window.__ModuleLoader__.load({
 				label: "BanG Dream!",
 				// 没校准过：本机没有样本。改这张表之前先弄到样本再改。
 				calibrated: false,
-				words: [
+				works: [
 					"bang dream", "bangdream", "bandori", "バンドリ", "邦多利",
 					"girls band party", "少女乐团派对",
-					// 乐队名。`mygo` / `ave mujica` 辨识度够，收。
-					"mygo", "ave mujica", "アヴェムジカ",
+				],
+				bands: [
 					"poppin'party", "poppin party", "afterglow", "pastel*palettes", "pastel palettes",
 					"roselia", "hello, happy world", "morfonica", "raise a suilen",
+					"mygo", "ave mujica", "アヴェムジカ",
 				],
-				names: [
+				characters: [
 					// MyGO!!!!! 与 Ave Mujica（近两代主角团）
 					"高松灯", "千早爱音", "要乐奈", "长崎爽世", "椎名立希",
 					"丰川祥子", "若叶睦", "八幡海铃", "三角初华", "祐天寺若麦",
@@ -111,6 +125,9 @@ window.__ModuleLoader__.load({
 			},
 		]);
 
+		/** 一个作品的全部词，三层合起来。 */
+		const wordsOf = (catalog) => [...catalog.works, ...catalog.bands, ...catalog.characters];
+
 		/**
 		 * 这张壁纸属不属于某个作品。
 		 *
@@ -124,7 +141,7 @@ window.__ModuleLoader__.load({
 		function inCatalog(entry, catalog) {
 			if (catalog === undefined) return true;
 			const haystack = `${entry.title ?? ""} ${entry.file ?? ""}`.toLowerCase();
-			return [...catalog.words, ...catalog.names].some((word) => haystack.includes(word));
+			return wordsOf(catalog).some((word) => haystack.includes(word));
 		}
 
 		/** 自由检索：标题或文件名里含这个词就留下。空串 = 不筛。 */
