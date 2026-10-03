@@ -40,55 +40,91 @@ window.__ModuleLoader__.load({
 		const LAYER_ID = "dsh-wallpaper-layer";
 
 		/**
-		 * 「明日方舟」在工坊标题里的各种写法。
+		 * 能筛的作品，一个一份词表。
 		 *
-		 * 工坊是玩家自己起名的，同一个游戏能写出十几种：中文全称、英文、日文、缩写。
-		 * 所以给的是一张**关键字表**而不是一条正则 —— 往后遇到没覆盖到的写法，
-		 * 往数组里加一条就行，不用改逻辑。
+		 * 工坊是玩家自己起名的，同一个作品能写出十几种：中文全称、英文、日文、只写角色名。
+		 * 所以给的是**词表**而不是正则 —— 遇到没覆盖的写法往数组里加一条就行。
+		 *
+		 * ## 两张表的可信度不一样，这一点写在这里而不是靠记忆
+		 *
+		 * **「明日方舟」那张是拿本机真实的 152 张工坊壁纸校准过的。** 校准抓到两个真误伤：
+		 * 单个字母 `w` 把 `Zero Two / DARLING in the FRANXX` 认成了方舟，
+		 * `夜莺` 撞了工坊一位作者名 `夜莺Night` 把《黑神话悟空》那张认成了方舟。
+		 * 所以那张表里有两条硬规矩：**不收单字和常用词**、**不收会和作者名撞车的**。
+		 *
+		 * **「BanG Dream!」那张没校准过** —— 写它的时候本机 152 张里一张邦多利都没有
+		 * （作品名、乐队名、角色名全零命中，见 `.scratch/bangdream-calibrate.mjs` 的记录）。
+		 * 没有真实样本就没法验证认对了没有，所以那张表**刻意只收辨识度高的专有名词**：
+		 * 不收 `bandori` 之外的泛称，不收任何单字。等机器上有了邦多利壁纸，
+		 * 跑一遍校准再决定加什么。
 		 */
-		const ARKNIGHTS_WORDS = Object.freeze([
-			"明日方舟", "arknights", "arknight", "アークナイツ",
-			"罗德岛", "rhodes island",
+		const CATALOGS = Object.freeze([
+			{
+				id: "arknights",
+				label: "明日方舟",
+				calibrated: true,
+				words: [
+					"明日方舟", "arknights", "arknight", "アークナイツ", "罗德岛", "rhodes island",
+				],
+				names: [
+					"阿米娅", "amiya", "凯尔希", "kal'tsit", "kaltsit",
+					"德克萨斯", "texas", "能天使", "exusiai", "蕾缪安", "lemuen",
+					"斯卡蒂", "skadi", "幽灵鲨", "gladiia",
+					"史尔特尔", "surtr", "拉普兰德", "lappland", "银灰", "silverash",
+					"mon3tr", "缪尔赛思", "muelsyse", "温蒂", "weedy",
+					"安洁莉娜", "angelina", "塔露拉", "talulah", "特蕾西娅", "theresa",
+					"薇薇安娜", "viviana",
+				],
+			},
+			{
+				id: "bangdream",
+				label: "BanG Dream!",
+				// 没校准过：本机没有样本。改这张表之前先弄到样本再改。
+				calibrated: false,
+				words: [
+					"bang dream", "bangdream", "bandori", "バンドリ", "邦多利",
+					"girls band party", "少女乐团派对",
+					// 乐队名。`mygo` / `ave mujica` 辨识度够，收。
+					"mygo", "ave mujica", "アヴェムジカ",
+					"poppin'party", "poppin party", "afterglow", "pastel*palettes", "pastel palettes",
+					"roselia", "hello, happy world", "morfonica", "raise a suilen",
+				],
+				names: [
+					// MyGO!!!!! 与 Ave Mujica（近两代主角团）
+					"高松灯", "千早爱音", "要乐奈", "长崎爽世", "椎名立希",
+					"丰川祥子", "若叶睦", "八幡海铃", "三角初华", "祐天寺若麦",
+					// Poppin'Party
+					"户山香澄", "花园多惠", "牛込里美", "山吹沙绫", "市谷有咲",
+					// Afterglow
+					"美竹兰", "青叶摩卡", "上原绯玛丽", "宇田川巴", "羽泽鸫",
+					// Pastel*Palettes
+					"丸山彩", "冰川日菜", "白鹭千圣", "大和麻弥", "若宫伊芙",
+					// Roselia
+					"凑友希那", "冰川纱夜", "今井莉莎", "宇田川亚子", "白金燐子",
+					// Hello, Happy World!
+					"弦卷心", "濑田薰", "北泽育美", "松原花音", "奥泽美咲",
+					// Morfonica
+					"仓田真白", "桐谷透子", "广町七深", "二叶筑紫", "八潮瑠唯",
+					// 本仓库看板娘里的两位
+					"千石由乃",
+				],
+			},
 		]);
 
 		/**
-		 * 干员名。
-		 *
-		 * **这张表是拿本机真实的 152 张工坊壁纸校准出来的，不是凭印象列的。** 两条规矩：
-		 *
-		 *   1. **不收单字和常用词。** 一开始收过 `w` / `年` / `夕` / `令` / `陈` / `shu` /
-		 *      `dusk` / `logos` —— 校准立刻抓到 `Zero Two / DARLING in the FRANXX [AR]`
-		 *      被单个字母 `w` 匹配进去。这类词的误伤远多于真命中，而它们的真命中
-		 *      （`『明日方舟』动态桌面 年`）本来就带着游戏名，删掉不丢东西。
-		 *   2. **不收会和壁纸作者名撞车的。** `夜莺` 撞了工坊里一位作者 `夜莺Night`，
-		 *      于是 `黑神话悟空——夜莺Night` 被认成方舟。这条是校准里抓到的第二个误伤。
-		 *
-		 * 加名字之前先跑 `.scratch/arknights-calibrate.mjs`（或自己数一遍），
-		 * 看它在真实库里多认了谁、有没有认错。
-		 */
-		const ARKNIGHTS_OPERATORS = Object.freeze([
-			"阿米娅", "amiya", "凯尔希", "kal'tsit", "kaltsit",
-			"德克萨斯", "texas", "能天使", "exusiai", "蕾缪安", "lemuen",
-			"斯卡蒂", "skadi", "幽灵鲨", "gladiia",
-			"史尔特尔", "surtr", "拉普兰德", "lappland", "银灰", "silverash",
-			"mon3tr", "缪尔赛思", "muelsyse", "温蒂", "weedy",
-			"安洁莉娜", "angelina", "塔露拉", "talulah", "特蕾西娅", "theresa",
-			"薇薇安娜", "viviana",
-		]);
-
-		/**
-		 * 这张壁纸是不是明日方舟的。
+		 * 这张壁纸属不属于某个作品。
 		 *
 		 * **单向**：只从标题往词表上匹配，不反向、不做模糊、不猜。
 		 * 判不出来就是判不出来 —— 宁可漏，不可错，因为筛错了会让人以为插件在乱认。
 		 *
 		 * @param entry - a file entry from `/api/state`.
-		 * @returns true when the title names the game or one of its operators.
+		 * @param catalog - one of `CATALOGS`, or undefined for "不过滤".
+		 * @returns true when it should be shown.
 		 */
-		function isArknights(entry) {
+		function inCatalog(entry, catalog) {
+			if (catalog === undefined) return true;
 			const haystack = `${entry.title ?? ""} ${entry.file ?? ""}`.toLowerCase();
-			if (ARKNIGHTS_WORDS.some((word) => haystack.includes(word))) return true;
-			return ARKNIGHTS_OPERATORS.some((name) => haystack.includes(name));
+			return [...catalog.words, ...catalog.names].some((word) => haystack.includes(word));
 		}
 
 		/** 自由检索：标题或文件名里含这个词就留下。空串 = 不筛。 */
@@ -248,12 +284,19 @@ window.__ModuleLoader__.load({
 			const [error, setError] = React.useState(undefined);
 			/** 检索框里的词；空串 = 不筛。 */
 			const [query, setQuery] = React.useState("");
-			/** 只看明日方舟。和检索词**叠加**生效，不是二选一。 */
-			const [onlyArknights, setOnlyArknights] = React.useState(false);
+			/**
+			 * 选中的作品 id，或者 `""` 表示全部。
+			 *
+			 * **单选**，不是多个开关：一个作品一个开关的话，「只看明日方舟」和
+			 * 「只看 BanG Dream!」同时打开该显示什么就得解释 —— 而"只看"两个字
+			 * 本来就不该能同时成立。单选没有这个问题。
+			 */
+			const [catalogId, setCatalogId] = React.useState("");
+			const catalog = CATALOGS.find((entry) => entry.id === catalogId);
 
-			/** 当前列表里筛出来的那些。 */
+			/** 当前列表里筛出来的那些。检索与作品筛选**叠加**生效。 */
 			const shown = (state?.files ?? []).filter(
-				(entry) => matches(entry, query) && (!onlyArknights || isArknights(entry)),
+				(entry) => matches(entry, query) && inCatalog(entry, catalog),
 			);
 
 			const apply = async (patch) => {
@@ -301,7 +344,7 @@ window.__ModuleLoader__.load({
 								: h(
 										React.Fragment,
 										null,
-										// 检索一行：一个输入框 + 一个「只看明日方舟」。两者叠加生效。
+										// 检索一行：输入框 + 作品筛选。两者叠加生效。
 										h(
 											"div",
 											{ className: "filter" },
@@ -313,17 +356,45 @@ window.__ModuleLoader__.load({
 												onChange: (event) => setQuery(event.target.value),
 												"aria-label": "检索壁纸",
 											}),
-											h(
-												"button",
-												{
-													type: "button",
-													className: "only",
-													"data-on": onlyArknights ? "1" : "0",
-													"aria-pressed": onlyArknights,
-													onClick: () => setOnlyArknights((value) => !value),
-												},
-												"只看明日方舟",
-											),
+										),
+										// 作品筛选：单选。没配过的作品**数出来是 0 也照样列** ——
+										// 藏起来的话，用户订阅了壁纸却找不到那个按钮，只会以为功能坏了。
+										h(
+											"div",
+											{ className: "catalogs", role: "group", "aria-label": "按作品筛选" },
+											[
+												h(
+													"button",
+													{
+														key: "all",
+														type: "button",
+														className: "only",
+														"data-on": catalogId === "" ? "1" : "0",
+														"aria-pressed": catalogId === "",
+														onClick: () => setCatalogId(""),
+													},
+													`全部 ${String(state.files.length)}`,
+												),
+												...CATALOGS.map((entry) => {
+													const count = state.files.filter((file) => inCatalog(file, entry)).length;
+													return h(
+														"button",
+														{
+															key: entry.id,
+															type: "button",
+															className: "only",
+															"data-on": catalogId === entry.id ? "1" : "0",
+															"aria-pressed": catalogId === entry.id,
+															// 没校准过的表，把这件事写在使用处，而不是只写在源码注释里。
+															title: entry.calibrated
+																? `${entry.label}：${String(count)} 张（词表已按本机真实壁纸校准）`
+																: `${entry.label}：${String(count)} 张（词表未校准 —— 本机没有这类壁纸可供对照）`,
+															onClick: () => setCatalogId(catalogId === entry.id ? "" : entry.id),
+														},
+														`${entry.label} ${String(count)}`,
+													);
+												}),
+											],
 										),
 										shown.length === 0
 											? h("p", { className: "hint" }, `没有匹配的壁纸（共 ${String(state.files.length)} 张）。`)
@@ -353,7 +424,8 @@ window.__ModuleLoader__.load({
 											"p",
 											{ className: "hint" },
 											`显示 ${String(shown.length)} / ${String(state.files.length)} 张` +
-												(onlyArknights ? `　·　认出的方舟壁纸 ${String(state.files.filter(isArknights).length)} 张` : ""),
+												(catalog === undefined ? "" : `　·　${catalog.label}`) +
+												(catalog === undefined || catalog.calibrated ? "" : "（这个词表没校准过）"),
 										),
 									),
 							// 收不了的工坊壁纸要说清楚有几张、为什么 —— 静默跳过会让人以为"我的壁纸没被认出来"。
@@ -423,6 +495,20 @@ window.__ModuleLoader__.load({
 .dsh-wallpaper-panel .x { appearance: none; border: 0; background: none; color: #98a2b3;
   font-size: 18px; line-height: 1; cursor: pointer; padding: 0 4px; }
 .dsh-wallpaper-panel .hint { font-size: 12px; color: #98a2b3; line-height: 1.6; margin: 0; word-break: break-all; }
+/* 检索行。这一段曾经漏写过 —— 检索框和作品按钮一直是浏览器默认长相（白底输入框、
+   灰渐变按钮），在一个深色面板里非常显眼。所以样式和功能一起加。 */
+.dsh-wallpaper-panel .filter { margin-bottom: 8px; }
+.dsh-wallpaper-panel .query { appearance: none; width: 100%; box-sizing: border-box;
+  background: rgba(0,0,0,.35); border: 1px solid rgba(150,160,180,.28); border-radius: 8px;
+  color: #e9eef5; font: inherit; font-size: 12px; padding: 6px 9px; }
+.dsh-wallpaper-panel .query::placeholder { color: #6b7480; }
+.dsh-wallpaper-panel .query:focus { outline: none; border-color: #4fd6a8; }
+.dsh-wallpaper-panel .catalogs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.dsh-wallpaper-panel .only { appearance: none; cursor: pointer; font: inherit; font-size: 11.5px;
+  padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+  border: 1px solid rgba(150,160,180,.28); background: rgba(255,255,255,.04); color: #c7d0dc; }
+.dsh-wallpaper-panel .only:hover { border-color: rgba(150,160,180,.5); }
+.dsh-wallpaper-panel .only[data-on="1"] { border-color: #4fd6a8; color: #4fd6a8; background: rgba(79,214,168,.1); }
 .dsh-wallpaper-panel .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .dsh-wallpaper-panel .thumb { appearance: none; padding: 0; cursor: pointer; overflow: hidden;
   border: 1px solid rgba(150,160,180,.2); border-radius: 8px; background: #0b0e14; color: #98a2b3; }
@@ -447,10 +533,9 @@ window.__ModuleLoader__.load({
 		exports.WallpaperControl = WallpaperControl;
 		exports.ensureLayer = ensureLayer;
 		exports.paint = paint;
-		// 检索用的两张表和判定，导出给自检 —— 那两条已知误伤要能被钉住。
-		exports.ARKNIGHTS_WORDS = ARKNIGHTS_WORDS;
-		exports.ARKNIGHTS_OPERATORS = ARKNIGHTS_OPERATORS;
-		exports.isArknights = isArknights;
+		// 检索用的表和判定，导出给自检 —— 那两条已知误伤要能被钉住。
+		exports.CATALOGS = CATALOGS;
+		exports.inCatalog = inCatalog;
 		exports.matches = matches;
 
 		return module.exports;

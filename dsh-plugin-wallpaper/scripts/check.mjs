@@ -405,13 +405,14 @@ function clientHalf() {
   });
 }
 
-await it("the Arknights filter takes the game, its operators, and not the wallpapers in between", () => {
+await it("the catalogue filter takes the game and its characters, and not the wallpapers in between", () => {
   // 这张表是拿本机真实的 152 张工坊壁纸校准出来的，两条误伤是真的抓到过：
   //   · 单个字母 `w` 把 `Zero Two / DARLING in the FRANXX [AR]` 认成了方舟；
   //   · `夜莺` 撞了工坊里一位作者 `夜莺Night`，于是 `黑神话悟空——夜莺Night` 被认成方舟。
   // 所以下面两条既是回归，也是这个表为什么长这样的说明。
   const client = clientHalf();
-  const arknights = (title) => client.isArknights({ title, file: "we:1" });
+  const ark = client.CATALOGS.find((entry) => entry.id === "arknights");
+  const inArk = (title) => client.inCatalog({ title, file: "we:1" }, ark);
 
   // 认得出来的：游戏名、以及只写角色名的那种。
   for (const title of [
@@ -422,7 +423,7 @@ await it("the Arknights filter takes the game, its operators, and not the wallpa
     "mon3tr",
     "蕾缪安 身体检查 | Lemuen Check-up",
     "薇薇安娜 | Viviana",
-  ]) assert.equal(arknights(title), true, `应认成方舟：${title}`);
+  ]) assert.equal(inArk(title), true, `应认成方舟：${title}`);
 
   // 认不出来的：别的游戏、以及两个真实误伤。
   for (const title of [
@@ -431,12 +432,16 @@ await it("the Arknights filter takes the game, its operators, and not the wallpa
     "Fate Stay Night - Sakura Mato (Dark) Cybust",
     "Winter Artoria Pendragon | Fate/Zero [4K]",
     "Nissan GTR R34 [Pneumatic Tokyo]",
-  ]) assert.equal(arknights(title), false, `不该认成方舟：${title}`);
+  ]) assert.equal(inArk(title), false, `不该认成方舟：${title}`);
 
   // 单字与常用词不进表 —— 这一类是误伤的来源。
+  const words = [...ark.words, ...ark.names];
   for (const word of ["w", "年", "夕", "令", "陈", "shu", "dusk", "logos", "夜莺", "nightingale"]) {
-    assert.equal(client.ARKNIGHTS_OPERATORS.includes(word), false, `"${word}" 太宽，不该在表里`);
+    assert.equal(words.includes(word), false, `"${word}" 太宽，不该在表里`);
   }
+
+  // 「不过滤」就是全过。
+  assert.equal(client.inCatalog({ title: "随便什么", file: "x" }, undefined), true);
 
   // 自由检索：子串、大小写不敏感、空串不筛。
   const entry = { title: "Arknights Texas", file: "we:9" };
@@ -444,6 +449,44 @@ await it("the Arknights filter takes the game, its operators, and not the wallpa
   assert.equal(client.matches(entry, "texas"), true);
   assert.equal(client.matches(entry, "TEXAS"), true);
   assert.equal(client.matches(entry, "能天使"), false);
+});
+
+await it("the BanG Dream! table is honest about not having been calibrated", () => {
+  // 本机 152 张工坊壁纸里一张邦多利都没有（作品名 / 乐队名 / 角色名全零命中，
+  // 见 .scratch/bangdream-calibrate.mjs）。所以这张表**没有真实样本可对照** ——
+  // 这件事要写在数据里让界面能说出来，而不是只写在源码注释里等着被忽略。
+  const client = clientHalf();
+  const bang = client.CATALOGS.find((entry) => entry.id === "bangdream");
+  assert.ok(bang !== undefined, "BanG Dream! 应该在目录里");
+  assert.equal(bang.calibrated, false, "没校准过就要标成没校准过");
+  assert.equal(client.CATALOGS.find((entry) => entry.id === "arknights").calibrated, true, "方舟那张是校准过的");
+
+  const inBang = (title) => client.inCatalog({ title, file: "we:1" }, bang);
+
+  // 认得出来的：作品名、乐队名、角色全名。
+  for (const title of [
+    "BanG Dream! It's MyGO!!!!! 高松灯",
+    "バンドリ 丰川祥子",
+    "Ave Mujica 若叶睦",
+    "Roselia 凑友希那 4K",
+    "Poppin'Party 户山香澄",
+    "千石由乃 常服",
+  ]) assert.equal(inBang(title), true, `应认成邦多利：${title}`);
+
+  // 认不出来的：别的作品。
+  for (const title of [
+    "明日方舟 能天使",
+    "Zero Two / DARLING in the FRANXX [4K]",
+    "Nissan GTR R34 [Pneumatic Tokyo]",
+  ]) assert.equal(inBang(title), false, `不该认成邦多利：${title}`);
+
+  // 没校准的表要**更保守**：不收任何单字，也不收那些同时是常用英文词的成员代号。
+  const words = [...bang.words, ...bang.names];
+  for (const word of ["layer", "lock", "masking", "pareo", "chuchu", "灯", "睦", "兰", "彩"]) {
+    assert.equal(words.includes(word), false, `"${word}" 太宽或太泛，没校准的表不该收`);
+  }
+  // 反过来：乐队和角色得真的在里面，否则这张表是空的。
+  assert.ok(bang.names.length >= 30, `角色名只有 ${String(bang.names.length)} 个，这张表大概漏了一大片`);
 });
 
 //#endregion
