@@ -32,10 +32,12 @@
   },
   "files": [
     "lib",
+    "skills",
     "art/looks.json",
     "art/index.json",
     "README.md",
     "README.zh.md",
+    "COPYRIGHT.md",
     "LICENSE"
   ],
   "scripts": {

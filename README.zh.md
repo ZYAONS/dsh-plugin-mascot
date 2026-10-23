@@ -332,6 +332,18 @@ npm run verify            # 当前 DSH profile 的预检
 
 `npm run check:slider` 会跑上游那套测试、在产物与 CSS 脱节时报错，并把两个文件里的每个颜色分类，凡是旧配色漏网的都算失败。白色是有意豁免的：`#fff` 没有色度，而面板的玻璃高光该留白、旋钮的珠子不该留白，这条区别写在追加的覆盖块里，不写在色值映射表里。
 
+## 随包技能：ponytail
+
+插件里带着一个技能（`skills/ponytail/SKILL.md`），是 [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail)（MIT）那套「少写代码」的提示词。**装这个插件就等于装这个习惯**：`apply` 会把它复制到 `$DSH_HOME/skills/ponytail/`，那正是 DSH 扫用户技能的那个目录，所以装完当场就能用，不用重启。
+
+它让 agent 在动手之前先停一下：这件事要不要存在、仓库里是不是已经有了、标准库或平台是不是自带、已装的依赖够不够用、能不能一行写完，最后才是「写出最小能跑的那一版」。省的是**方案**，不是读代码的工夫；输入校验、错误处理、安全、无障碍这几样不砍。
+
+三条边界。已经有一份就**不覆盖**（那可能是更新的上游版本，也可能是你自己改过的）；`bundledSkill: false` 整个关掉；关掉不会删掉已经装上的那份，要删自己删 `$DSH_HOME/skills/ponytail/`。
+
+装没装上是能查的事实，不是一句承诺：`GET /dsh-mascot/api/health` 的 `skill` 字段会给 `installed`（刚写进去）、`present`（本来就有，没动）、`disabled`、`missing` 或 `failed`（带原因）。
+
+点一下角色，她会说一句这类建议。气泡停十几秒就收，面板里那张卡会留着 —— 底下是一排七格的阶梯，她说到哪一级就点亮哪一格。
+
 ## 版权
 
 仓库里没有别人的素材。角色版权归各自所有者 —— 鹰角网络（明日方舟）、Bushiroad（BanG Dream!）。`npm run fetch-art` 把图下载到各人自己的机器上。

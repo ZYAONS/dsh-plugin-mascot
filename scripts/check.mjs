@@ -94,6 +94,60 @@ await it("the browser half is a mountable cordis plugin", () => {
   assert.deepEqual(required, ["react"], "react is the only module the half requires (a platform seed word)");
 });
 
+await it("the advice ladder has every rung, and every line points at one", () => {
+  // 她给的是 ponytail 那张梯子上的判断：动手之前先停在第一个站得住的那一级。
+  // 词表是手写的，所以"某一级根本没被用过"和"某一行的 rung 打错"都得由这条挡住。
+  const ladder = exports_.ADVICE_LADDER;
+  const lines = exports_.ADVICE_LINES;
+  assert.equal(ladder.length, 7, "the ladder is seven rungs");
+  assert.deepEqual(ladder.map((step) => step.rung), [0, 1, 2, 3, 4, 5, 6], "in order, no gaps");
+  for (const step of ladder) {
+    assert.ok(typeof step.label === "string" && step.label !== "", `rung ${String(step.rung)} needs a label`);
+    assert.ok(typeof step.hint === "string" && step.hint !== "", `rung ${String(step.rung)} needs a hint for the tooltip`);
+  }
+
+  assert.ok(lines.length >= 12, "a table this small would repeat itself within three clicks");
+  const known = new Set(ladder.map((step) => step.rung));
+  for (const line of lines) {
+    assert.ok(known.has(line.rung), `a line points at rung ${String(line.rung)}, which is not on the ladder: ${line.text}`);
+    assert.ok(typeof line.text === "string" && line.text.length > 8, "every line has to say something");
+  }
+  // 每一级都要有话说 —— 七格里空着一格，就是"这一级她永远不会提"。
+  const used = new Set(lines.map((line) => line.rung));
+  assert.deepEqual([...known].filter((rung) => !used.has(rung)), [], "every rung needs at least one line");
+
+  // 同一句话出现两遍，点两次就会看到同一句 —— 那和"没点上"没有区别。
+  const texts = lines.map((line) => line.text);
+  assert.equal(new Set(texts).size, texts.length, "two lines say exactly the same thing");
+});
+
+await it("two clicks never show the same sentence", () => {
+  const next = exports_.nextAdvice;
+  assert.equal(typeof next, "function");
+  assert.ok(next(undefined) !== undefined, "an empty table would make the click do nothing");
+
+  let previous = next(undefined);
+  for (let draw = 0; draw < 300; draw += 1) {
+    const line = next(previous);
+    assert.notEqual(line, previous, `draw ${String(draw)} repeated the previous line: ${String(line?.text)}`);
+    previous = line;
+  }
+});
+
+await it("the click is what produces the advice", () => {
+  // 词表再对，接不上点击也是白搭。这一条只看接线：她那个点击处理里要真的取一条新的，
+  // 并且真的存进状态。
+  const client = read("lib/client.js");
+  const click = client.slice(client.indexOf("/** Toggle the panel and react to the click. */"));
+  const handler = click.slice(0, click.indexOf("const vars ="));
+  assert.ok(handler.length > 0, "the click handler must still be findable");
+  assert.match(handler, /nextAdvice\(/u, "the handler has to pick a line");
+  assert.match(handler, /setAdvice\(/u, "and put it in state, or nothing renders");
+  assert.match(handler, /setBubble\(true\)/u, "and show the bubble");
+  // 面板要能拿到它，否则"回看"那句是空的。
+  assert.match(client, /advice,\s*\n\s*ladder: ADVICE_LADDER,/u, "the panel slot must be handed the advice and the ladder");
+});
+
 await it("apply() registers into shell.overlay and declares its own session-scoped panel seat", () => {
   const registrations = [];
   const injectedKeys = [];
@@ -675,6 +729,42 @@ await it("a failed track read says why, and is not cached", async () => {
   const retried = await request(harness, "/dsh-mascot/api/track?cid=1");
   assert.equal(retried.status, 502);
   assert.ok(harness.calls.length >= 3, "a failed resolve must be retried, not remembered");
+});
+
+await it("installing the plugin installs the bundled skill, and never overwrites one", async () => {
+  // 「装插件就等于装那个习惯」是这一条的整个意思：ponytail 的提示词随包带着，apply 的时候被
+  // 复制进 <DSH_HOME>/skills/ponytail/ —— 那正是用户自己那些技能所在的根，所以 skills
+  // provider 的 watcher 会直接把它收进目录，不用重启。实测过：写进去之后，同一个会话的技能
+  // 列表里就多出了 ponytail。
+  const home = mkdtempSync(join(tmpdir(), "mascot-skill-"));
+  const before = process.env.DSH_HOME;
+  try {
+    process.env.DSH_HOME = home;
+
+    const fresh = await request(hostHarness(), "/dsh-mascot/api/health");
+    assert.equal(fresh.json.skill.state, "installed", `a fresh home should install, got ${JSON.stringify(fresh.json.skill)}`);
+    const target = join(home, "skills", "ponytail", "SKILL.md");
+    const body = readFileSync(target, "utf8");
+    assert.match(body, /^---\nname: ponytail\n/mu, "the skill has to name itself, or the catalogue cannot list it");
+    assert.match(body, /Use whenever a coding task starts/u, "and it needs a description that says when to reach for it");
+
+    // 第二份不覆盖。那儿可能已经是更新的上游版本，也可能是用户自己改过的，两种都不是这个插件
+    // 该替换的东西 —— 一个会覆盖用户文件的插件，装一次就该被卸掉。
+    writeFileSync(target, "hand edited by the operator", "utf8");
+    const again = await request(hostHarness(), "/dsh-mascot/api/health");
+    assert.equal(again.json.skill.state, "present");
+    assert.equal(readFileSync(target, "utf8"), "hand edited by the operator", "an existing skill file must not be replaced");
+
+    // 关掉就一个字节都不写。
+    const offHome = mkdtempSync(join(tmpdir(), "mascot-skill-off-"));
+    process.env.DSH_HOME = offHome;
+    const off = await request(hostHarness({ config: { bundledSkill: false } }), "/dsh-mascot/api/health");
+    assert.equal(off.json.skill.state, "disabled");
+    assert.equal(existsSync(join(offHome, "skills", "ponytail", "SKILL.md")), false, "disabled means nothing is written");
+  } finally {
+    if (before === undefined) delete process.env.DSH_HOME;
+    else process.env.DSH_HOME = before;
+  }
 });
 
 await it("the play button says why it failed, and re-reads the URL first", () => {

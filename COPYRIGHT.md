@@ -127,6 +127,21 @@ repository.
 The rest of `dsh-effort-slider/` is upstream's code, and upstream's own tests run against it
 unchanged — `npm run check:slider` executes them.
 
+## 8. The bundled skill
+
+`skills/ponytail/SKILL.md` is taken from
+[DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail), **MIT**, © Dietrich
+Gebert. It is a prompt, not code, and it is reproduced here verbatim apart from two things:
+the `description` gained a Chinese summary and Chinese trigger phrases (this skill is found by
+matching a description, and the work here is described in Chinese), and a provenance note was
+appended to the file. Both are marked in the file itself.
+
+Installing this plugin installs that skill: `apply` copies it into
+`$DSH_HOME/skills/ponytail/`, the user-level root DSH scans. It never overwrites a file that is
+already there, and `bundledSkill: false` turns the copy off entirely. Setting
+`bundledSkill: false` does not remove a copy already installed — delete the directory yourself
+if you want it gone.
+
 ---
 
 ## 中文摘要
@@ -144,6 +159,12 @@ unchanged — `npm run check:slider` executes them.
   公网页面从**素材原本的出处**加载，像素不经过这个仓库。
 - 自我约束写在第 5 节，并且**由测试强制**：`art/` 或 `docs/art/` 下只要有图片被 git 跟踪，`npm test` 就失败。
 - 以上不构成法律意见。如果权利方提出异议，删掉 `art/looks.json` 里对应的条目即可，其余部分不受影响。
+- **`skills/ponytail/SKILL.md` 不是我的文字**：取自
+  [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail)，MIT，© Dietrich Gebert。
+  它是一段提示词，不是代码，除两处外逐字照录：`description` 加了中文摘要与中文触发词（技能是靠
+  描述匹配的，而这里的活是用中文说的），以及文末加了一段出处说明。两处都在文件里标了出来。
+  装这个插件会把这份技能复制到 `$DSH_HOME/skills/ponytail/`；已经有一份时**不覆盖**，
+  `bundledSkill: false` 可以整个关掉。
 - **`dsh-effort-slider/` 不是我们的代码**：取自 [yuhub233/dsh-effort-slider](https://github.com/yuhub233/dsh-effort-slider)，
   MIT，© 2026 yuhub233。那个目录以它自带的 `LICENSE` 和 `THIRD-PARTY.md` 为准，两份都是上游原文。
   改的只有配色（换成罗德岛这一套），`scripts/check-slider.mjs` 会在旧配色漏网时报错。

@@ -334,6 +334,18 @@ Two more DSH plugins live in this repository. Each is self-contained, with its o
 
 `npm run check:slider` runs upstream's suite, fails when the bundle has drifted from the CSS, and classifies every colour in both files, failing on anything left over from the old palette. Whites are exempt by design: `#fff` has no saturation, and the panel's glass highlights should stay white while the knob's bead should not, so that distinction lives in an override block rather than in the colour map.
 
+## The bundled skill
+
+The plugin ships a skill, `skills/ponytail/SKILL.md`: the "write less code" prompt from [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) (MIT). Installing this plugin installs the habit with it. `apply` copies the file into `$DSH_HOME/skills/ponytail/`, the user-level root DSH scans, so it is available immediately without a restart.
+
+What it asks for: stop before writing. Does this need to exist, is it already in the repo, does the standard library or the platform do it, is an installed dependency enough, can it be one line, and only then the smallest version that works. The saving is in the design, not in reading the code, and validation, error handling, security and accessibility are never cut.
+
+Three edges. An existing copy is **never overwritten**, because it may be a newer upstream version or your own edit. `bundledSkill: false` turns the copy off entirely. Turning it off does not delete a copy that is already installed; remove `$DSH_HOME/skills/ponytail/` yourself for that.
+
+Whether it landed is a fact you can check rather than a promise: the `skill` field of `GET /dsh-mascot/api/health` reports `installed`, `present`, `disabled`, `missing` or `failed` with a reason.
+
+Clicking the mascot makes her say one piece of that advice. The bubble clears after a few seconds; the card in the panel keeps the line, with a seven-rung ladder under it and the rung she is talking about lit.
+
 ## Copyright
 
 The repository contains no artwork belonging to anyone else. Characters are © their owners — Hypergryph (*Arknights*) and Bushiroad (*BanG Dream!*). `npm run fetch-art` downloads the images onto each machine.
