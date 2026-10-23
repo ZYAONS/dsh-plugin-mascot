@@ -77,7 +77,7 @@ for (const note of missing) console.warn(`  ⚠ ${note}`);
 const target = join(root, "art", "siren.json");
 writeFileSync(target, `${JSON.stringify({
   source: "塞壬唱片-MSR · monster-siren.hypergryph.com",
-  note: "album cids and titles only; covers and audio are hotlinked from the official CDN and never redistributed",
+  note: "album cids and titles only; covers and audio are hotlinked from the official CDN and never redistributed. track.src is a FALLBACK — the audio CDN signs each URL with a timestamp, so it expires and starts answering 403 'expired timestamp'. The plugin re-reads the current one from /api/song/<cid> via its own /api/track route at play time, which is why a stale src here does not break playback.",
   records,
 }, null, 2)}\n`);
 console.log(`siren:sync 写出 ${target}（${String(Object.keys(records).length)} 位角色）`);

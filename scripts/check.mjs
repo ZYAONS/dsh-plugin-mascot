@@ -609,6 +609,101 @@ await it("a balance read resolves the key and reports the provider figures", asy
   assert.equal(harness.calls[0].init.headers.authorization, "Bearer sk-test-secret");
 });
 
+await it("a track read re-signs the audio URL instead of trusting the one on disk", async () => {
+  // The bug this exists for: monster-siren signs its audio URLs with a timestamp, so the URL
+  // that `npm run siren:sync` writes into art/siren.json is dead within days. The CDN then
+  // answers 403 "denied by req auth: expired timestamp", audio.play() rejects, and because
+  // that rejection was swallowed the play button simply did nothing. Re-reading at click time
+  // fixes the cause; the note in the card fixes the silence.
+  const harness = hostHarness();
+  harness.setUpstream(() => Promise.resolve({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({
+      data: { cid: "306878", name: "All by My Design", sourceUrl: "https://res01.hycdn.cn/fresh/signed.wav" },
+    }),
+  }));
+
+  const result = await request(harness, "/dsh-mascot/api/track?cid=306878");
+  assert.equal(result.status, 200);
+  assert.equal(result.json.ok, true);
+  assert.equal(result.json.src, "https://res01.hycdn.cn/fresh/signed.wav");
+  assert.equal(result.json.name, "All by My Design");
+  assert.match(harness.calls[0].url, /monster-siren\.hypergryph\.com\/api\/song\/306878$/u,
+    "it has to ask the official API for this song");
+
+  // Cached. A signature outlives ten minutes by a wide margin, and re-resolving on every click
+  // would hammer someone else's API for nothing.
+  const again = await request(harness, "/dsh-mascot/api/track?cid=306878");
+  assert.equal(again.status, 200);
+  assert.equal(harness.calls.length, 1, "the second read comes from the cache");
+});
+
+await it("a track read refuses a cid that is not a number", async () => {
+  const harness = hostHarness();
+
+  const bad = await request(harness, "/dsh-mascot/api/track?cid=../../etc");
+  assert.equal(bad.status, 400);
+  assert.equal(bad.json.error, "bad_cid");
+  assert.equal(harness.calls.length, 0, "and it must not carry a bad id to the upstream");
+
+  const missing = await request(harness, "/dsh-mascot/api/track");
+  assert.equal(missing.status, 400, "a missing cid is the same refusal, not a crash");
+});
+
+await it("a failed track read says why, and is not cached", async () => {
+  const harness = hostHarness();
+
+  harness.setUpstream(() => Promise.resolve({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({ data: { cid: "1", name: "no source here" } }),
+  }));
+  const noSource = await request(harness, "/dsh-mascot/api/track?cid=1");
+  assert.equal(noSource.status, 502);
+  assert.equal(noSource.json.ok, false);
+  assert.equal(noSource.json.error, "no_source");
+  // The browser puts this text in front of the user, so it has to be there.
+  assert.equal(typeof noSource.json.message, "string");
+
+  harness.setUpstream(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }));
+  const down = await request(harness, "/dsh-mascot/api/track?cid=2");
+  assert.equal(down.status, 502);
+  assert.match(down.json.message, /500/u, "an upstream status has to reach the message");
+
+  // A failure is not cached: the next click tries again rather than pinning a transient error.
+  const retried = await request(harness, "/dsh-mascot/api/track?cid=1");
+  assert.equal(retried.status, 502);
+  assert.ok(harness.calls.length >= 3, "a failed resolve must be retried, not remembered");
+});
+
+await it("the play button says why it failed, and re-reads the URL first", () => {
+  // Two separate faults, and both were invisible from outside. The URL has to be re-read at
+  // click time because the stored one expires, and a rejected play() has to surface a reason
+  // because "nothing happened" is exactly how the bug was reported.
+  //
+  // A source assertion rather than a behavioural one: the browser half is not mounted in this
+  // file, and the note path needs a real click to reach. `npm run check:render` covers whether
+  // the panel renders at all.
+  const client = read("lib/client.js");
+  // Scoped to the handler rather than the whole file: a grep over everything would also trip on
+  // a comment that quotes the old line, which is not the same thing as running it.
+  const start = client.indexOf("const toggleMusic");
+  const toggle = client.slice(start, client.indexOf("return h(", start));
+  assert.ok(start > 0 && toggle.length > 0, "the music handler must still be findable");
+  assert.match(client, /TRACK_ENDPOINT = "\/dsh-mascot\/api\/track"/u, "the client has to know the route");
+  assert.match(toggle, /await audio\.play\(\)/u, "play() must be awaited so its rejection can be caught");
+  assert.ok(
+    !/audio\.play\(\)\.then\([^)]*\)\.catch\(\(\) => setPlaying\(false\)\)/u.test(toggle),
+    "a catch that only resets `playing` is the original bug: the reason is dropped and the button looks dead",
+  );
+  assert.match(toggle, /setMusicNote\(/u, "the handler has to set the reason somewhere");
+  assert.ok(toggle.includes("audio.error?.code"),
+    "a bare play() rejection says almost nothing; the media element carries the reason");
+  // And the reason has to reach the page, not just a state variable.
+  assert.ok(client.includes("dsh-mascot-music-note"), "the note needs a rule and a place in the tree");
+});
+
 await it("the headline currency is chosen by name, not by the order the provider lists them", async () => {
   // The provider answers with one entry per currency, and the order is not part of the
   // contract. This account gets CNY then USD, so reading the first entry happened to
