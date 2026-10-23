@@ -305,6 +305,7 @@ npm install
 npm test                  # 56 checks — fast, no browser
 npm run check             # the above, plus the wiring check and a real render
 npm run check:render      # renders the mascot in Chromium; fails on any page error
+npm run check:slider      # 300 upstream assertions + artifact freshness + the palette check
 npm run check:site        # 102 checks, drives the console over CDP
 npm run check:site -- https://zyaons.github.io/dsh-plugin-mascot/
 npm run build:site        # regenerate docs/site/catalog.json and rig.js
@@ -322,6 +323,16 @@ Run `npm run build:site` after editing `lib/client.js`; `check:site` fails if `d
 `check-site.mjs` drives the page over the Chrome DevTools Protocol: clicks are dispatched with `Input.dispatchMouseEvent`, console errors count as failures, and both `file://` and a deployed URL can be checked. The narrow viewport is set through `Emulation.setDeviceMetricsOverride` rather than `--window-size`, because a headless window has a minimum width that crops a wider layout.
 
 To add a theme: add a key to `THEMES` in `lib/client.js`, add the character's `theme` in `art/looks.json`, then add the page theme in all four places — a button in `docs/index.html`, `THEME_COLOURS` and `PAGE_THEME_NAMES` in `docs/site/site.js`, and a `[data-theme="…"]` rule in `docs/site/site.css`. `check:site` fails if any of the four is missing.
+
+## Bundled plugins
+
+Two more DSH plugins live in this repository. Each is self-contained, with its own `cordis.patch.yml`, and installing the mascot does not install them — add whichever you want to the same profile.
+
+`dsh-token-thrift/` is the reasoning-effort dial built here. `dsh-effort-slider/` is vendored from [yuhub233/dsh-effort-slider](https://github.com/yuhub233/dsh-effort-slider) (MIT, © 2026 yuhub233); its one departure from upstream is the palette. The four skins were cool white, periwinkle and violet, and now use the same Rhodes Island colours as the mascot's `rhodes` theme — `#37e0d8` over a `rgba(24,32,42)` → `rgba(11,15,21)` surface. `LICENSE` and `THIRD-PARTY.md` beside it are upstream's, unmodified.
+
+`effort-slider.css` is the source. `lib/client.js` is generated from it by `node build.mjs`, which will not write unless the embedded CSS is byte-identical to that file, so edit the CSS and rebuild — hand-editing the bundle desynchronises the two.
+
+`npm run check:slider` runs upstream's suite, fails when the bundle has drifted from the CSS, and classifies every colour in both files, failing on anything left over from the old palette. Whites are exempt by design: `#fff` has no saturation, and the panel's glass highlights should stay white while the knob's bead should not, so that distinction lives in an override block rather than in the colour map.
 
 ## Copyright
 

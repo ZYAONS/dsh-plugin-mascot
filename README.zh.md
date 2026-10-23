@@ -305,6 +305,7 @@ npm install
 npm test                  # 56 项（快，不起浏览器）
 npm run check             # 上面那些，加接线检查与一次真渲染
 npm run check:render      # 在 Chromium 里挂真组件；任何页面异常即失败
+npm run check:slider      # 上游 300 项断言 + 产物是否与 CSS 同步 + 配色检查
 npm run check:site        # 102 项，用 CDP 驱动配置台
 npm run check:site -- https://zyaons.github.io/dsh-plugin-mascot/
 npm run build:site        # 重新生成 docs/site/catalog.json 和 rig.js
@@ -320,6 +321,16 @@ npm run verify            # 当前 DSH profile 的预检
 `check-site.mjs` 用 Chrome DevTools Protocol 驱动页面：点击走 `Input.dispatchMouseEvent`，控制台报错算失败，`file://` 和线上 URL 都能测。窄视口用 `Emulation.setDeviceMetricsOverride` 设置，不用 `--window-size`，因为无头窗口有最小宽度，会把布局裁窄。
 
 加主题：在 `lib/client.js` 的 `THEMES` 里加一个键，在 `art/looks.json` 里让角色写上 `theme`，然后在**四个地方**都加上 —— `docs/index.html` 的按钮、`docs/site/site.js` 的 `THEME_COLOURS` 和 `PAGE_THEME_NAMES`、`docs/site/site.css` 的 `[data-theme="…"]` 规则。缺任何一处，`check:site` 失败。
+
+## 附带插件
+
+仓库里还有两个 DSH 插件，各自独立，各有自己的 `cordis.patch.yml`。装本体不会顺带装上它们，要哪个就单独加进同一个 profile。
+
+`dsh-token-thrift/` 是这里自己做的推理档位刻度盘。`dsh-effort-slider/` 取自 [yuhub233/dsh-effort-slider](https://github.com/yuhub233/dsh-effort-slider)（MIT，© 2026 yuhub233），与上游的差别只有配色：四套皮肤原本是冷白、蓝紫与紫罗兰，现在换成与本体的 `rhodes` 主题同一套罗德岛颜色 —— `#37e0d8` 压在 `rgba(24,32,42)` → `rgba(11,15,21)` 的表面上。旁边的 `LICENSE` 与 `THIRD-PARTY.md` 是上游原文，一字未改。
+
+`effort-slider.css` 是源；`lib/client.js` 由 `node build.mjs` 从它生成，那个脚本在内联进去的 CSS 与文件不字节一致时拒绝写盘。所以改样式就改 CSS 再重建，手改产物会让两边不同步。
+
+`npm run check:slider` 会跑上游那套测试、在产物与 CSS 脱节时报错，并把两个文件里的每个颜色分类，凡是旧配色漏网的都算失败。白色是有意豁免的：`#fff` 没有色度，而面板的玻璃高光该留白、旋钮的珠子不该留白，这条区别写在追加的覆盖块里，不写在色值映射表里。
 
 ## 版权
 

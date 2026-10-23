@@ -1,0 +1,1024 @@
+/* dsh-effort-slider — 组件样式
+   设计要点：全部变量作用在 .es-root 内，不污染宿主；四套皮肤由 [data-skin] 切换；
+   收起态是一枚发光核心（环上刻着当前档位），展开态是悬浮能量条。 */
+
+.es-root{position:relative;display:flex;align-items:center;font-family:inherit}
+
+/* ── 收起态：档位文字（圆球已按用户要求删除）───────────────── */
+.es-pill{
+  -webkit-appearance:none;appearance:none;margin:0;cursor:pointer;position:relative;
+  display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:999px;
+  background:transparent;border:1px solid rgba(255,255,255,.14);color:var(--dsw-alias-label-primary,#e4edf4);
+  font:inherit;transition:transform .2s cubic-bezier(.22,1.1,.36,1),box-shadow .25s,border-color .25s;
+}
+.es-pill:hover{transform:translateY(-1px)}
+.es-pill:active{transform:translateY(0) scale(.985)}
+.es-pill__name{font-size:12.5px;font-weight:600;white-space:nowrap;letter-spacing:.01em}
+/* 用户：「删除展开按钮旁边、对话框里 MAX 旁边的 UI」= 收起态胶囊里那颗带进度环的圆球。
+   所以 .es-orb / __ring / __core 三组规则**已删除**，胶囊现在只有档位文字一个子元素
+   （内边距也从 0 11px 0 7px 改成对称的 0 12px —— 旧值是在给左边的圆球留位）。
+   收起态不再有进度环；档位进度由**展开后**的轨道本体与读数表达。 */
+
+/* ── 最高档星光层 ────────────────────────────────────────────
+   单独一块 canvas 叠在流体之上，星星往**左**流（与流体反向）。
+   基础规则 display:none，只有流体皮肤打开（与 .es-rail__fluid 同一套条件）。
+   ⚠️ 它在 DOM 里排在 .es-rail__fluid **之后**：所有验收脚本用
+   `rail.querySelector('canvas')` 取"流体那块"，顺序不能反。 */
+.es-rail__stars{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:none;border-radius:inherit}
+[data-effort-slider][data-skin="fluid"] .es-rail__stars{display:block}
+
+/* ── 展开态：悬浮能量条 ─────────────────────────────────── */
+.es-panel{
+  position:absolute;bottom:calc(100% + 10px);right:0;width:392px;max-width:calc(100vw - 32px);
+  z-index:60;display:flex;flex-direction:column;gap:9px;padding:14px 16px;border-radius:20px;
+  transform-origin:calc(100% - 30px) calc(100% + 10px);
+  animation:es-in .34s cubic-bezier(.16,1.02,.28,1.02) both;
+}
+@keyframes es-in{
+  from{opacity:0;transform:translateY(12px) scale(.72,.9)}
+  to{opacity:1;transform:none}
+}
+.es-head{display:flex;align-items:center;justify-content:space-between;gap:10px;position:relative;z-index:1}
+.es-title{font-size:13.5px;font-weight:650;letter-spacing:.02em}
+.es-model{
+  font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;opacity:.55;
+  max-width:56%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.es-desc{position:relative;z-index:1;font-size:12.5px;opacity:.72;margin-top:-3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.es-railWrap{position:relative;z-index:1}
+.es-rail{
+  position:relative;height:30px;border-radius:999px;overflow:hidden;isolation:isolate;
+  cursor:ew-resize;touch-action:none;outline:none;
+}
+.es-rail:focus-visible{box-shadow:0 0 0 2px var(--es-focus,rgba(55,224,216,.6))}
+.es-rail__fx{position:absolute;inset:0;pointer-events:none}
+/* 皮肤 D（流体）的 canvas 图层：流体视觉 100% 由它承担。
+   默认 display:none —— 只有 [data-skin="fluid"] 才打开（见"皮肤 D"段的 display:block），
+   其它皮肤下它不占位、不绘制。border-radius:inherit 让画布跟着轨道圆角裁切。 */
+.es-rail__fluid{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;border-radius:inherit;display:none}
+/* 填充从**轨道左边缘**起算、一直画到珠子中心（珠子中心 = 17px + (W-34px)·pct）。
+   旧写法 left:17px + width:(W-34px)·pct 会让最低档时左端露出 17px 空档（实机可见的 bug）。 */
+.es-rail__fill{position:absolute;top:0;bottom:0;left:0;width:calc(17px + (100% - 34px) * var(--pct) / 100%);border-radius:999px}
+.es-rail__grid{position:absolute;inset:0;pointer-events:none}
+.es-rail__grid i{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.13);transform:translateX(-.5px)}
+.es-sparks{position:absolute;inset:0;pointer-events:none;overflow:hidden;border-radius:inherit}
+/* 吸附脉冲环：环体与它的辉光都必须"夹"在轨道内。
+   关键是**动画的终态**：旧写法在别的皮肤上把 scale 拉到 2.9，26px 的环会变成 75px，
+   而轨道只有 30px 高 —— .es-sparks 的 overflow:hidden + border-radius 会把超出部分
+   裁成一块贴着圆角的"白色半圆"，再配上 opacity → 0，看起来就是"残影、还会慢慢消失"。
+   这里锁死：24px × 1.05 = 25.2px ≤ 30px，辉光也从 18px 收到 10px。 */
+.es-sparks::before{
+  content:"";position:absolute;top:50%;left:calc(17px + (100% - 34px) * var(--pct) / 100%);
+  width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:999px;
+  border:1px solid currentColor;box-shadow:0 0 10px currentColor;
+  animation:es-ring .62s cubic-bezier(.2,.7,.3,1) both;
+}
+@keyframes es-ring{from{transform:scale(.6);opacity:.85}to{transform:scale(1.05);opacity:0}}
+.es-knob{
+  position:absolute;top:50%;left:calc(17px + (100% - 34px) * var(--pct) / 100%);
+  z-index:2;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:999px;
+  transition:left .07s linear;will-change:left;
+}
+.es-knob::after{
+  content:"";position:absolute;left:18%;right:18%;top:11%;height:26%;border-radius:999px;
+  background:linear-gradient(180deg,rgba(255,255,255,.85),rgba(255,255,255,0));opacity:.8;
+}
+/* 吸附动画（点刻度 / 方向键 / 松手落位）：
+   · 时长不再写死 —— 组件按**移动距离**往珠子上写内联 transition-duration
+     （= SNAP_MS_PER_PX × |Δpx|，2.0ms/px，clamp [120,900]），速度恒定；
+     这里只保留弹性曲线，同时作为"拿不到几何"时的固定 .32s 兜底。
+   · 过冲量从 1.45 收到 1.38（曲线上限 ≈1.046 倍行程）：1.45 时满量程实测珠子冲到
+     x=362.4，而轨道/画布只有 358 宽 —— 流体画不到画布外，判据
+     "|珠子中心-流体右边界| ≤ 4px"就在过冲那 ~100ms 里被顶破（实测 5.4px）。
+     1.38 时峰值 ≈356（行程 324），回弹照旧可见，全程贴合。 */
+.es-root[data-snap="1"] .es-knob{transition:left .32s cubic-bezier(.2,1.38,.4,1)}
+.es-ticks{position:relative;height:16px;margin-top:4px}
+.es-tick{
+  position:absolute;top:0;transform:translateX(-50%);cursor:pointer;user-select:none;
+  font-size:10.5px;line-height:16px;white-space:nowrap;opacity:.6;transition:opacity .2s,color .2s,text-shadow .2s;
+}
+.es-tick[data-on="1"]{font-weight:700;opacity:1}
+.es-foot{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:2px}
+.es-readout{display:flex;align-items:baseline;gap:7px;min-height:24px}
+.es-readout__lvl{font-size:24px;font-weight:750;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.es-readout__of{font-size:11.5px;opacity:.5}
+.es-readout__name{font-size:13px;font-weight:650}
+.es-readout__spinner{width:16px;height:16px;border-radius:999px;border:2px solid currentColor;border-top-color:transparent;
+  animation:es-spin .7s linear infinite;opacity:.8}
+@keyframes es-spin{to{transform:rotate(360deg)}}
+.es-skins{display:flex;align-items:center;gap:6px}
+.es-skin{
+  -webkit-appearance:none;appearance:none;cursor:pointer;width:20px;height:20px;padding:0;border-radius:999px;
+  border:1px solid rgba(255,255,255,.22);background:transparent;position:relative;transition:transform .2s,border-color .2s;
+}
+.es-skin:hover{transform:translateY(-1px);border-color:rgba(255,255,255,.5)}
+.es-skin[data-on="1"]{border-color:currentColor;box-shadow:0 0 0 2px rgba(255,255,255,.12),0 0 10px currentColor}
+.es-skin::after{content:"";position:absolute;inset:3px;border-radius:999px;background:currentColor;opacity:.85}
+/* 扁进度指示条（.es-energy）已删除：与轨道填充重复。档位由轨道 + 读数 + 收起态环表达。 */
+.es-root[data-busy="1"] .es-rail{cursor:progress}
+.es-root[data-failed="1"] .es-pill{border-color:var(--dsw-alias-state-error-primary,#e43c3c)}
+
+/* ── 皮肤 A：星际星云 ────────────────────────────────────── */
+[data-effort-slider][data-skin="nebula"]{--es-ring-on:#37e0d8;--es-focus:rgba(55,224,216,.65);color:#b8f2ec}
+[data-effort-slider][data-skin="nebula"] .es-pill{background:linear-gradient(180deg,#18202a,#0b0f15);
+  box-shadow:0 6px 20px rgba(4,8,12,.5),0 0 0 1px rgba(120,200,210,.08) inset}
+[data-effort-slider][data-skin="nebula"] .es-pill:hover{border-color:rgba(55,224,216,.5);box-shadow:0 8px 26px rgba(55,224,216,.3)}
+[data-effort-slider][data-skin="nebula"] .es-panel{border:1px solid rgba(120,200,210,.22);
+  background:radial-gradient(140% 130% at 10% 0%,#1a2630 0%,#131b23 44%,#0b0f15 100%);
+  box-shadow:0 28px 64px rgba(4,8,12,.72),0 0 0 1px rgba(255,255,255,.03) inset,0 0 40px rgba(55,224,216,.18)}
+[data-effort-slider][data-skin="nebula"] .es-panel::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background-image:
+    radial-gradient(1.4px 1.4px at 10% 24%,#fff 50%,transparent),
+    radial-gradient(1.2px 1.2px at 27% 72%,#cff6f3 50%,transparent),
+    radial-gradient(1.6px 1.6px at 43% 30%,#fff 50%,transparent),
+    radial-gradient(1.1px 1.1px at 58% 82%,#b9eae7 50%,transparent),
+    radial-gradient(1.5px 1.5px at 72% 20%,#fff 50%,transparent),
+    radial-gradient(1.1px 1.1px at 88% 62%,#d7f7f4 50%,transparent),
+    radial-gradient(1.3px 1.3px at 95% 38%,#fff 50%,transparent);
+  animation:es-twinkle 3.8s ease-in-out infinite}
+@keyframes es-twinkle{0%,100%{opacity:.42}50%{opacity:1}}
+[data-effort-slider][data-skin="nebula"] .es-rail{background:linear-gradient(180deg,#080c12,#151d26);
+  box-shadow:0 0 0 1px rgba(80,232,224,.36) inset,0 0 22px rgba(55,224,216,.14) inset,0 5px 16px rgba(4,8,12,.7) inset,0 1px 0 rgba(120,220,224,.18)}
+[data-effort-slider][data-skin="nebula"] .es-rail__fx{background:
+  radial-gradient(58% 130% at 16% 50%,rgba(55,224,216,.42),transparent 70%),
+  radial-gradient(54% 130% at 76% 50%,rgba(55,224,216,.34),transparent 70%),
+  linear-gradient(180deg,rgba(255,255,255,.10),transparent 42%,rgba(4,8,12,.32))}
+[data-effort-slider][data-skin="nebula"] .es-rail__fill{
+  background:linear-gradient(180deg,#37e0d8 0%,#2fbfb8 34%,#37e0d8 72%,#1d7d78 100%);
+  box-shadow:0 0 16px rgba(55,224,216,.7),0 0 36px rgba(55,224,216,.42)}
+/* 扫光必须屏蔽两端圆头：旧写法把白色渐变扫过 border-radius:999px 的圆头，
+   走到右端时被弧线裁出一块白色区域 —— 用户反馈的"最右端白色半圆 + 拖影"。
+   mask 让它离两端 20px 就淡出，永远画不进圆头。 */
+[data-effort-slider][data-skin="nebula"] .es-rail__fill::after{content:"";position:absolute;inset:0;border-radius:inherit;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.42),transparent);
+  background-size:34% 100%;background-repeat:no-repeat;animation:es-flow 2.4s linear infinite;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 20px,#000 calc(100% - 20px),transparent 100%);
+  mask-image:linear-gradient(90deg,transparent 0,#000 20px,#000 calc(100% - 20px),transparent 100%)}
+@keyframes es-flow{from{background-position:-45% 0}to{background-position:145% 0}}
+[data-effort-slider][data-skin="nebula"] .es-knob{background:
+  radial-gradient(circle at 36% 28%,#fff 0 26%,#f2fbfa 46%,#c3eeea 72%,#3ec9c2 100%);
+  box-shadow:0 0 0 1px rgba(255,255,255,.75),0 0 14px rgba(255,255,255,.75),0 0 34px rgba(48,214,208,.85),0 2px 8px rgba(4,8,12,.5)}
+[data-effort-slider][data-skin="nebula"] .es-tick[data-on="1"]{color:#eafaf7;text-shadow:0 0 10px rgba(55,224,216,.9)}
+[data-effort-slider][data-skin="nebula"] .es-readout__lvl{background:linear-gradient(180deg,#fff,#8feee6);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* ── 皮肤 B：全息能量 ────────────────────────────────────── */
+[data-effort-slider][data-skin="holo"]{--es-ring-on:#37e0d8;--es-focus:rgba(55,224,216,.7);color:#6ff0e6}
+[data-effort-slider][data-skin="holo"] .es-pill{background:linear-gradient(180deg,#10303a,#08171e);
+  border-color:rgba(55,224,216,.42);box-shadow:0 6px 20px rgba(4,8,12,.5),0 0 14px rgba(55,224,216,.16)}
+[data-effort-slider][data-skin="holo"] .es-pill:hover{border-color:rgba(55,224,216,.9);box-shadow:0 0 24px rgba(55,224,216,.4)}
+[data-effort-slider][data-skin="holo"] .es-panel{border:1px solid rgba(55,224,216,.34);
+  background:linear-gradient(180deg,#0e1c22,#08131a 94%);
+  box-shadow:0 28px 64px rgba(4,8,12,.76),0 0 40px rgba(55,224,216,.18)}
+[data-effort-slider][data-skin="holo"] .es-panel::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:.5;
+  background:repeating-linear-gradient(180deg,rgba(55,224,216,.07) 0 1px,transparent 1px 4px)}
+[data-effort-slider][data-skin="holo"] .es-panel::after{content:"";position:absolute;left:14px;right:14px;top:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(120,240,236,.9),transparent)}
+[data-effort-slider][data-skin="holo"] .es-rail{border-radius:9px;background:linear-gradient(180deg,#061016,#0e2830);
+  box-shadow:0 0 0 1px rgba(120,200,210,.55) inset,0 0 22px rgba(55,224,216,.22) inset,0 5px 14px rgba(4,8,12,.7) inset}
+[data-effort-slider][data-skin="holo"] .es-rail__fill{border-radius:9px;
+  background:linear-gradient(180deg,#a9ffff 0%,#35e6e6 32%,#12b3bf 68%,#0a6f7c 100%);
+  box-shadow:0 0 20px rgba(55,224,216,.85)}
+[data-effort-slider][data-skin="holo"] .es-rail__fill::after{content:"";position:absolute;inset:0;border-radius:inherit;
+  background:repeating-linear-gradient(90deg,rgba(2,32,38,.42) 0 1px,transparent 1px 11px);
+  animation:es-scan 1.1s linear infinite;opacity:.75}
+@keyframes es-scan{from{background-position:0 0}to{background-position:11px 0}}
+[data-effort-slider][data-skin="holo"] .es-rail__fx{background:
+  linear-gradient(90deg,transparent,rgba(55,224,216,.10) 50%,transparent),
+  linear-gradient(180deg,rgba(255,255,255,.09),transparent 42%,rgba(4,8,12,.4))}
+[data-effort-slider][data-skin="holo"] .es-knob{border-radius:9px;
+  background:linear-gradient(180deg,#fff,#5eeae0 46%,#0f8f96);
+  box-shadow:0 0 0 1px rgba(255,255,255,.7),0 0 20px rgba(120,240,236,.95),0 0 38px rgba(55,224,216,.6)}
+[data-effort-slider][data-skin="holo"] .es-tick[data-on="1"]{color:#d8fbf7;text-shadow:0 0 10px rgba(55,224,216,.95)}
+[data-effort-slider][data-skin="holo"] .es-title{color:#d8fbf7;text-shadow:0 0 10px rgba(55,224,216,.5)}
+[data-effort-slider][data-skin="holo"] .es-readout__lvl{color:#d8fbf7;text-shadow:0 0 14px rgba(55,224,216,.6)}
+
+/* ── 皮肤 C：液态金属 ────────────────────────────────────── */
+[data-effort-slider][data-skin="chrome"]{--es-ring-on:#eafaf7;--es-focus:rgba(214,248,245,.7);color:#d5e6e6}
+[data-effort-slider][data-skin="chrome"] .es-pill{background:linear-gradient(180deg,#2b333b,#171c22);
+  border-color:rgba(255,255,255,.22);box-shadow:0 6px 20px rgba(4,8,12,.5),0 1px 0 rgba(255,255,255,.2) inset}
+[data-effort-slider][data-skin="chrome"] .es-pill:hover{border-color:rgba(255,255,255,.5);box-shadow:0 8px 24px rgba(150,225,224,.22)}
+[data-effort-slider][data-skin="chrome"] .es-panel{border:1px solid rgba(255,255,255,.2);
+  background:linear-gradient(168deg,#2b333b,#1a2027 60%,#10151a);
+  box-shadow:0 30px 66px rgba(4,8,12,.74),0 1px 0 rgba(255,255,255,.2) inset}
+[data-effort-slider][data-skin="chrome"] .es-rail{background:linear-gradient(180deg,#20272e,#0b0f14);
+  box-shadow:0 0 0 1px rgba(255,255,255,.22) inset,0 1px 0 rgba(255,255,255,.14) inset,0 6px 16px rgba(4,8,12,.75) inset}
+[data-effort-slider][data-skin="chrome"] .es-rail__fx{background:linear-gradient(180deg,rgba(255,255,255,.12),transparent 44%,rgba(4,8,12,.42))}
+[data-effort-slider][data-skin="chrome"] .es-rail__fill{
+  background:linear-gradient(180deg,#ffffff 0%,#e2efee 26%,#aabfbe 58%,#6c7d7c 100%);
+  box-shadow:0 0 14px rgba(200,246,242,.35)}
+[data-effort-slider][data-skin="chrome"] .es-knob{background:
+  radial-gradient(circle at 32% 24%,#fff 0 22%,#f0faf9 42%,#c2dedb 66%,#7d9a99 88%,#464f4e);
+  box-shadow:0 0 0 1px rgba(255,255,255,.6),0 2px 8px rgba(4,8,12,.6),0 9px 18px rgba(4,8,12,.42)}
+[data-effort-slider][data-skin="chrome"] .es-knob::before{content:"";position:absolute;inset:1px;border-radius:999px;overflow:hidden;
+  background:conic-gradient(from 140deg,rgba(255,255,255,.9),transparent 32%,rgba(255,255,255,.6) 62%,transparent 82%);
+  opacity:.45;animation:es-spin 6s linear infinite}
+[data-effort-slider][data-skin="chrome"] .es-knob::after{left:16%;right:16%;top:9%;height:22%;opacity:.95}
+[data-effort-slider][data-skin="chrome"] .es-tick[data-on="1"]{color:#fff;text-shadow:0 0 9px rgba(214,248,245,.85)}
+[data-effort-slider][data-skin="chrome"] .es-readout__lvl{background:linear-gradient(180deg,#fff,#96aead);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* ── 皮肤 D：流体 ────────────────────────────────────────── */
+/* 色系沿用 nebula（蓝 → 紫 → 粉），星点闪烁改名 es-fluid-twinkle，避免和皮肤 A 的 es-twinkle 撞名。 */
+[data-effort-slider][data-skin="fluid"]{--es-ring-on:#37e0d8;--es-focus:rgba(55,224,216,.65);color:#b8f2ec}
+/* 收起态的胶囊与核心：
+   基础样式里 .es-pill / .es-orb__core 是**没有底色**的，底色全靠每套皮肤自己给。
+   漏掉这两条的话，流体皮肤在收起态就只剩一层几乎看不见的白环（这个坑皮肤 A 早期踩过一次）。 */
+/* 收起态胶囊的底色/投影已由文件末尾的 "Apple Liquid Glass" 段接管（高透明底 + 镜面亮边）。
+   旧的两条（不透明深蓝底 + 重投影）与"更透、更扁平"相反，已删除，避免两处定义打架。 */
+/* 面板本身不再在这里写死底色/描边/投影 —— 它已由文件末尾的 "Apple Liquid Glass" 段接管
+   （那里是高透明底 + backdrop-filter + 渐变镜面亮边）。旧的那版是深色径向底 + 厚投影 +
+   1px 描边，属于"靠画厚度表达材质"，与"更扁平"的方向相反，已删除，避免两处定义打架。 */
+/* 星点闪烁层（.es-panel::before）也按"更扁平"删掉了：在玻璃上它读起来像灰尘，
+   而且它是唯一给面板加"深度装饰"的东西。要找回深空感的话，把这一层加回来即可。 */
+/* canvas 图层：只有本皮肤打开（基础规则里是 display:none），流体不溢出轨道圆角。 */
+[data-effort-slider][data-skin="fluid"] .es-rail__fluid{display:block}
+[data-effort-slider][data-skin="fluid"] .es-rail{background:linear-gradient(180deg,#0b0f16,#141b24);
+  /* 扁平化：原来的 `0 5px 16px rgba(4,8,12,.7) inset` 是一道很深的凹槽阴影（拟物），
+     改成薄薄一层 + 保留 1px 细边 —— 凹陷感明显减弱，但轨道依然"嵌在玻璃里"。 */
+  box-shadow:0 0 0 1px rgba(55,224,216,.30) inset,0 0 18px rgba(55,224,216,.14) inset,0 2px 7px rgba(4,8,12,.42) inset}
+/* fx 层的球面高光在 border-radius:999px 的圆头处同样会被裁成"白色半圆"，本皮肤直接关掉它。 */
+[data-effort-slider][data-skin="fluid"] .es-rail__fx{display:none}
+[data-effort-slider][data-skin="fluid"] .es-rail__grid i{background:rgba(255,255,255,.10)}
+/* 填充条：**完全透明**。它是 border-radius:999px 的胶囊，任何画在它上面的白色
+   （inset 高光、半透明白底）都会被圆头裁成"最右端一个白色半圆"，拖动时还跟着 --pct
+   变宽变窄 → 就是用户看到的白半圆拖影。流体皮肤的视觉 100% 由 canvas 承担，填充条不该存在。 */
+[data-effort-slider][data-skin="fluid"] .es-rail__fill{background:transparent;box-shadow:none;border:none}
+/* 珠子：白色**实心球**（用户明确要求，不要透明、不要空心描边）。 */
+[data-effort-slider][data-skin="fluid"] .es-knob{
+  background:radial-gradient(circle at 36% 28%,#ffffff 0 22%,#eefaf8 44%,#c8f0ec 72%,#37e0d8 100%);
+  box-shadow:0 0 0 1px rgba(255,255,255,.7),0 0 12px rgba(255,255,255,.65),0 0 26px rgba(48,214,208,.7),0 2px 8px rgba(4,8,12,.5)}
+[data-effort-slider][data-skin="fluid"] .es-knob::after{display:none}
+/* 吸附脉冲环：**必须显式指定颜色**。不写的话 border-color/box-shadow 继承的 currentColor
+   会落到接近白色的文本色；而 .es-sparks 带 overflow:hidden + border-radius:inherit，
+   白色环一旦越出轨道就被圆角裁成贴着弧线的"白色半圆"，再配 opacity → 0，
+   就是"最右端一个白色半圆、有残影、还会慢慢消失"。
+   环的尺寸仍由全局 .es-sparks::before / @keyframes es-ring 锁死（≤ 轨道高度），这里只改颜色。 */
+[data-effort-slider][data-skin="fluid"] .es-sparks::before{border-color:rgba(140,230,226,.9);
+  box-shadow:0 0 10px rgba(48,210,203,.55)}
+[data-effort-slider][data-skin="fluid"] .es-tick[data-on="1"]{color:#eafaf7;text-shadow:0 0 10px rgba(55,224,216,.9)}
+[data-effort-slider][data-skin="fluid"] .es-readout__lvl{background:linear-gradient(180deg,#fff,#8feee6);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* ══ 皮肤 D：Apple Liquid Glass 外壳（面板 + 收起态胶囊）══════════════════
+   用户迭代要求：① 透明度更激进 ② UI 更扁平 ③ 模仿苹果的高级液态玻璃。
+   范围仍然**只限控件自己**（.es-panel / .es-pill），本文件依旧没有
+   :root / html / body / !important（见 DOCS-ALIGNMENT §2-①）。
+
+   Apple Liquid Glass 的观感来自三件事，而不是"堆很多层渐变"：
+     ① **高透明度 + 强模糊**：底色只是一层几乎没有的膜，背后内容要看得清；
+     ② **镜面边缘（specular rim）**：一圈 1px 的亮边，左上最亮、向右下渐隐 ——
+        这是"玻璃"最强的识别特征，也是"液体"感的来源；
+     ③ **扁平**：不要深色径向底、不要斜向扫掠、不要厚重投影、不要内侧暗线。
+        靠模糊 + 亮边表达材质，而不是靠画厚度。
+   所以这一版相对上一版**删掉**了：深色径向底、镜面扫掠层、色散层、内侧暗线、
+   厚重投影、以及本皮肤的星点闪烁层（.es-panel::before）—— 全部是为了"更扁平"。
+
+   ⚠️ 底色必须半透明：不透明色会让 backdrop-filter 背后没有可透内容，玻璃就不成立。
+   ⚠️ ::after 用 mask + counter-mask 做出"只有 1px 边框着色"的渐变亮边。
+      Chromium 支持 -webkit-mask-composite: xor / mask-composite: exclude；
+      （万一 mask 失效，这层会变成整片覆盖的白色 —— 所以必须用截图验证，见 §4-K。） */
+/* ── K-3：再激进一档 + 灵动 ────────────────────────────────────────────
+   用户："透明度太保守了，激进！！！灵动！"
+   ① 透明度：白膜 .12→.065、压暗 .20→.075（有效 ≈.30 → **≈.13**，几乎是"只有模糊和亮边"）；
+      模糊 28→34px、饱和 190→200%，用"糊得更彻底"而不是"压得更暗"来保证文字能读。
+   ② 灵动：玻璃**接光** —— 高光跟着指针走。JS 只写 CSS 变量 `--es-gx/--es-gy`（不进 state，
+      不触发重渲染），这里用 radial-gradient 画出一团跟着走的光斑；悬停淡入。 */
+[data-effort-slider][data-skin="fluid"] .es-panel{
+  border:1px solid transparent;              /* 亮边由 ::after 画；留 1px 透明边框是为了不改盒子尺寸 */
+  border-radius:26px;                        /* 更接近苹果那种连续大圆角 */
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.065),rgba(255,255,255,.028) 46%,rgba(255,255,255,.012)),
+    rgba(6,12,16,.075);                      /* 几乎不压暗：亮度全靠模糊后的背景本身 */
+  box-shadow:
+    0 6px 20px rgba(4,8,12,.18),              /* 扁平：轻到几乎只是一层柔光 */
+    0 1px 2px rgba(4,8,12,.12);
+  -webkit-backdrop-filter:blur(34px) saturate(200%) brightness(1.05);
+  backdrop-filter:blur(34px) saturate(200%) brightness(1.05);
+}
+/* 灵动：跟着指针走的光斑（指针位置由 JS 写进 --es-gx/--es-gy）。
+   显隐用 JS 写的 `--es-go` 而不是 `:hover`：拖轨道时轨道上有 setPointerCapture，
+   hover 状态可能不可靠；而且变量开关是"有没有真的看到指针"，语义更准。 */
+[data-effort-slider][data-skin="fluid"] .es-panel::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:0;
+  background:radial-gradient(240px 240px at var(--es-gx,50%) var(--es-gy,-12%),
+    rgba(255,255,255,.30),rgba(255,255,255,.08) 36%,rgba(255,255,255,0) 68%);
+  opacity:var(--es-go,0);transition:opacity .30s ease;
+}
+/* 渐变镜面亮边：1px，左上 .72 → 渐隐 → 右下回到 .22（光线绕边走的错觉）。
+   身体越透，这圈越关键 —— 它才是"玻璃"的识别特征。 */
+[data-effort-slider][data-skin="fluid"] .es-panel::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2;
+  padding:1px;
+  background:linear-gradient(150deg,
+    rgba(255,255,255,.72) 0%,rgba(255,255,255,.20) 26%,rgba(255,255,255,.03) 52%,
+    rgba(255,255,255,.07) 74%,rgba(255,255,255,.22) 100%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask-composite:exclude;
+}
+/* 玻璃上的文字：苹果不加投影，但我们的背景不可控（可能是亮页面）。
+   越是激进透明，这层"保底"越重要 —— 否则白字落在被模糊的亮底上会糊掉。 */
+[data-effort-slider][data-skin="fluid"] .es-head,
+[data-effort-slider][data-skin="fluid"] .es-desc,
+[data-effort-slider][data-skin="fluid"] .es-tick,
+[data-effort-slider][data-skin="fluid"] .es-readout{text-shadow:0 1px 3px rgba(4,8,12,.55),0 0 10px rgba(4,8,12,.30)}
+
+/* 收起态胶囊：同一套配方（模糊收窄一档），内部流体核心保持不透明。 */
+[data-effort-slider][data-skin="fluid"] .es-pill{
+  border:1px solid transparent;   /* 同上：亮边交给 ::before，透明边框只为保住原盒子尺寸（差 2px 会挪动工具行） */
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.085),rgba(255,255,255,.035) 52%,rgba(255,255,255,.015)),
+    rgba(6,12,16,.065);
+  box-shadow:0 4px 14px rgba(4,8,12,.18),0 1px 2px rgba(4,8,12,.12);
+  -webkit-backdrop-filter:blur(22px) saturate(190%) brightness(1.05);
+  backdrop-filter:blur(22px) saturate(190%) brightness(1.05);
+}
+/* 胶囊的镜面亮边：和面板同一套 mask 做法（用它而不是 inset 高光：
+   inset 阴影在这种 999px 圆角上曾经出过"右端白半圆"的坑）。 */
+[data-effort-slider][data-skin="fluid"] .es-pill::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2;
+  padding:1px;
+  background:linear-gradient(150deg,
+    rgba(255,255,255,.78) 0%,rgba(255,255,255,.22) 30%,rgba(255,255,255,.04) 55%,
+    rgba(255,255,255,.08) 78%,rgba(255,255,255,.26) 100%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask-composite:exclude;
+}
+/* 胶囊也接光（同一条 --es-gx/--es-gy，由同一个 JS 处理函数写；显隐同用 --es-go） */
+[data-effort-slider][data-skin="fluid"] .es-pill::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:1;
+  background:radial-gradient(64px 64px at var(--es-gx,50%) var(--es-gy,50%),
+    rgba(255,255,255,.30),rgba(255,255,255,0) 70%);
+  opacity:var(--es-go,0);transition:opacity .25s ease;
+}
+[data-effort-slider][data-skin="fluid"] .es-pill:hover{
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.055) 52%,rgba(255,255,255,.025)),
+    rgba(6,12,16,.05);
+  box-shadow:0 6px 18px rgba(4,8,12,.20),0 1px 2px rgba(4,8,12,.12);
+}
+
+@media (max-width:560px){
+  .es-panel{width:min(392px,calc(100vw - 20px));padding:12px 13px}
+  .es-tick{font-size:9.5px}
+}
+@media (prefers-reduced-motion:reduce){
+  .es-panel{animation-duration:.01ms}
+  .es-rail__fill::after,.es-panel::before,.es-knob::before{animation:none}
+  .es-knob{transition:none}
+}
+
+/* 加载态：store 还没就绪时的可见占位 —— 控件必须出现（首帧时序不该让它消失）。
+   不写 !important、不加全局规则，只作用于本控件自己的类。 */
+.es-pill--loading{opacity:.72;cursor:default}
+.es-pill--loading:hover{transform:none}
+@keyframes es-loading-pulse{0%,100%{opacity:.45}50%{opacity:1}}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ★ ULTRA 档位层 + 闪电控件 / tok·s⁻¹ 读数 / 策略 chip
+   （本段为纯追加：不重排、不覆盖任何既有规则；JS 侧写入的 DOM 契约见下）
+
+   DOM 契约（由 JS 提供，本段只负责长相）：
+     · 根节点 [data-effort-slider] 上挂  data-ultra="1" / data-lightning="1"
+     · 轨道内 .es-rail__core（默认 display:none，仅 data-ultra=1 出现）
+     · 旋钮附加态 .es-knob--ultra
+     · 面板档位文字 .es-panel__level--ultra
+     · 闪电 .es-pill__bolt[data-on="0|1"]
+     · 读数 .es-rate > .es-rate__num + .es-rate__unit，[data-idle="1"] 整块隐藏
+     · 策略 .es-policy > .es-policy__body，[data-open="1"] 展开
+     · 发光强度由 JS 写 CSS 变量 --es-rate(0–1，未定义按 0 处理) 驱动
+
+   设计方向：铂金 / 白炽 / 冰白。只用"亮度层次 + 发丝级 1px + 内阴影"做质感，
+   不用粗边框、不用霓虹彩虹。所有动画都是 5s 量级的慢呼吸或低振幅微抖
+   （无高频闪烁，无癫痫风险）；prefers-reduced-motion: reduce 下全部静态化。
+   本段同样**没有** :root / html / body / !important，全部选择器挂在
+   [data-effort-slider] 或 .es- 类下，不污染宿主页面。
+   ⚠️ 本段**不碰** .es-rail__stars / .es-rail__fluid（星星与流体画布层）任何规则。
+   ────────────────────────────────────────────────────────────────────────────── */
+
+/* ── 全局局部变量（只挂在控件根上，不写 :root）────────────────────────────────
+   --es-hair   ：发丝线 / 1px 描边用的白（各皮肤同值，暗底上都读得出来）
+   --es-cool   ：白炽核心的冷蓝端；用 color-mix 从各皮肤主色轻微偏冷后得到，
+                 这样核心在 nebula/fluid 偏蓝紫、holo 偏青、chrome 近中性 ——
+                 四套皮肤都不会出现"一块不属于自己的色"。
+   --es-bolt-off/--es-bolt-on：闪电未通电 / 通电时的描边色，逐皮肤覆盖。 */
+[data-effort-slider]{
+  --es-hair:rgba(255,255,255,.22);
+  --es-hair-strong:rgba(255,255,255,.42);
+  --es-cool:color-mix(in srgb,currentColor 30%,#ffffff);
+  --es-bolt-off:rgba(255,255,255,.72);
+  --es-bolt-on:currentColor;
+}
+
+/* ── ① ULTRA 白炽核心层：绝对定位覆盖在轨道上 ────────────────────────────────
+   默认 display:none（**必须**，见验收脚本 ⑤），只有 [data-ultra="1"] 才出现。
+   三层辉光都在轨道内部：轨道自带 overflow:hidden + border-radius:999px，
+   所以"任何生硬边缘"都会被圆角吃掉；这里再补 border-radius:inherit 兜底。
+   呼吸统一 5.2s ease-in-out：core 的 tint 层与 knob 的外发光**同一时长、无延迟**，
+   相位因此天然对齐（--es-rate 只改强度，不改节奏）。 */
+.es-rail__core{position:absolute;inset:0;border-radius:inherit;pointer-events:none;display:none;
+  mix-blend-mode:screen;isolation:auto;opacity:clamp(.35,calc(.45 + .55 * var(--es-rate,0)),1)}
+[data-effort-slider][data-ultra="1"] .es-rail__core{display:block}
+.es-rail__core span{position:absolute;inset:0;pointer-events:none;border-radius:inherit}
+/* 热核：中心几乎纯白的软糖球，用 radial-gradient 做柔边（绝无硬边） */
+.es-rail__core__glow{
+  background:
+    radial-gradient(52% 190% at 50% 50%,rgba(255,255,255,.98) 0%,rgba(255,255,255,.62) 26%,
+      rgba(210,248,244,.30) 52%,rgba(190,242,238,.10) 74%,transparent 100%),
+    radial-gradient(88% 220% at 50% 50%,rgba(190,242,238,.45) 0%,rgba(150,225,224,.16) 46%,transparent 76%);
+  filter:blur(.4px) saturate(108%);
+  animation:es-core-breathe 5.2s ease-in-out infinite;
+}
+/* 冷蓝呼吸层：白 → 淡蓝的"温度漂移"，与热核同相位 */
+.es-rail__core__tint{
+  background:radial-gradient(58% 210% at 50% 50%,color-mix(in srgb,var(--es-cool,#d8fbf7) 78%,transparent) 0%,
+    color-mix(in srgb,var(--es-cool,#d8fbf7) 30%,transparent) 44%,transparent 78%);
+  animation:es-core-cool 5.2s ease-in-out infinite;
+}
+/* 余烬层：贴着轨道两端渐隐的一条 1px 冷白亮线，只是"边缘还有温度"的暗示 */
+.es-rail__core__ember{
+  inset:auto 0 0;height:1px;opacity:calc(.10 + .34 * var(--es-rate,0));
+  background:linear-gradient(90deg,transparent,var(--es-core-line,rgba(226,251,248,.75)) 32%,
+    var(--es-core-line,rgba(226,251,248,.75)) 68%,transparent);
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);
+  mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);
+}
+@keyframes es-core-breathe{0%,100%{opacity:.40}50%{opacity:.98}}
+@keyframes es-core-cool{0%,100%{opacity:.14}50%{opacity:.56}}
+
+/* ── ② ULTRA 旋钮附加态：1px 细环 + 外发光 + 与核心同相位呼吸 ─────────────────
+   不写死底色 —— 底色仍由各皮肤块定义，这里只**追加**一圈 1px 白细环与外发光。
+   复合选择器 [data-effort-slider] .es-root…：即使 data-ultra 挂在根上，
+   只要 .es-knob--ultra 出现就生效。 */
+[data-effort-slider][data-ultra="1"] .es-knob--ultra{
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.92),                                   /* 细环 */
+    0 0 0 3px rgba(200,246,242,.13),                                   /* 环外一线冷白（亚像素层次） */
+    0 0 calc(6px + 14px * var(--es-rate,0)) rgba(255,255,255,.62),     /* 随 --es-rate 走的外发光 */
+    0 0 calc(16px + 26px * var(--es-rate,0)) rgba(150,225,224,.40),
+    0 2px 8px rgba(4,8,12,.45);
+  animation:es-knob-ultra 5.2s ease-in-out infinite;
+  transition:transform .4s cubic-bezier(.22,1,.36,1),filter .4s ease;
+}
+[data-effort-slider][data-ultra="1"] .es-knob--ultra::after{opacity:.95}
+@keyframes es-knob-ultra{
+  0%,100%{box-shadow:0 0 0 1px rgba(255,255,255,.80),0 0 0 3px rgba(200,246,242,.09),
+    0 0 5px rgba(255,255,255,.42),0 0 14px rgba(150,225,224,.26),0 2px 8px rgba(4,8,12,.45)}
+  50%{box-shadow:0 0 0 1px rgba(255,255,255,1),0 0 0 3px rgba(200,246,242,.18),
+    0 0 17px rgba(255,255,255,.80),0 0 40px rgba(150,225,224,.46),0 2px 8px rgba(4,8,12,.45)}
+}
+
+/* ── ③ 面板 ULTRA 文字：全大写 + 0.18em 字距 + 铂金白 + 1px 发丝线 ─────────────
+   发丝线用 ::after 画，**不动**文字基线（不占行高、不挤版面）。
+   铂金白：4 套皮肤统一取同一条铂金渐变，字色写在两边（color + -webkit-text-fill-color），
+   防止皮肤里已有的 background-clip:text 把字吃掉；-webkit-text-stroke 只补 0.2px 冷白。 */
+/* 用户明确要求档位名的大小写是 **Ultra**（不是全大写 ULTRA）：
+   所以这条规则里**不能**留 `text-transform:uppercase`（否则改名不生效），
+   连带把只为全大写服务的 `letter-spacing:.18em` 与固定的 10.5px 字号也撤掉 ——
+   这个类现在挂在**面板的档位名**（.es-readout__name，13px）上，字号必须跟随宿主。
+   只保留"铂金白 + 冷白描边 + 发丝下划线"这三个纯视觉特征。 */
+.es-panel__level--ultra{position:relative;white-space:nowrap;
+  color:#eefaf8;-webkit-text-fill-color:#eefaf8;
+  text-shadow:0 0 10px rgba(200,246,242,.42),0 1px 2px rgba(4,8,12,.5);
+  -webkit-text-stroke:.2px rgba(255,255,255,.32)}
+.es-panel__level--ultra::after{content:"";position:absolute;left:0;right:.18em;bottom:-4px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(226,251,248,.62) 16%,rgba(190,242,238,.30) 62%,transparent);
+  pointer-events:none}
+
+/* ── ④ 闪电按钮（旧版：clip-path 画形状，不引外部图片/SVG）────────────────────
+   ⚠️ 这段的形状实现**已被 ④-b 的内联 SVG 取代**，仅保留下面这行盒子模型
+   （position/尺寸/过渡），它同时被 `.es-head` 里的绝对定位覆盖规则命中。
+   把 `--es-bolt-shape` 留着是给旧检查脚本/旧截图做参照，不再参与任何绘制。 */
+.es-pill__bolt{
+  --es-bolt-shape:polygon(60% 0%,16% 56%,46% 56%,38% 100%,86% 40%,53% 40%);
+  position:relative;display:inline-flex;align-items:center;justify-content:center;
+  width:19px;height:19px;min-width:19px;flex:0 0 auto;cursor:inherit;box-sizing:border-box;
+  color:var(--es-bolt-on,currentColor);
+  transition:color .22s ease,opacity .22s ease,transform .16s ease;
+}
+/* ── ④-b 闪电改由**内联 SVG 描边**画（2026 复核：clip-path+mask 那套是几何错误）─────
+   旧写法（`.es-pill__bolt::after{inset:1.5px;padding:1.9px;mask:linear-gradient(...)
+   content-box,...;mask-composite:exclude}` + `clip-path:var(--es-bolt-shape)`）看着像
+   "描边"，其实是**按矩形盒子的周长**算出来的一圈框，再与闪电 clip-path 求交 ——
+   交集只剩闪电最外缘的几段残片。独立取证图 `bolt-probe.png`（×2 全页）里，面板右上角
+   只有一小段白短线，既不是闪电也没有轮廓。所以"白边看不到"是几何问题，不是亮度问题，
+   把 opacity 从 .34 抬到 .62 / #fff / padding 1.9px 都治不了它。
+   现在改成**内联 <svg> + path + stroke**：stroke 天生沿路径中心线两侧各画一半宽度，
+   轮廓是几何精确的（不引任何外部图片/SVG 文件，无额外请求）。
+   JS 侧 DOM（client.js 的 .es-pill__bolt 内）：
+     <svg class="es-bolt__svg" viewBox="0 0 24 24" aria-hidden="true">
+       <defs><linearGradient id="es-bolt-flow" x1="0" y1="0" x2="24" y2="24"
+         gradientUnits="userSpaceOnUse">
+         <stop offset="0%" stop-color="#ffffff"/>
+         <stop offset="42%" stop-color="var(--es-bolt-a)"/>
+         <stop offset="100%" stop-color="var(--es-bolt-b)"/>
+         <animate attributeName="x1" values="-24;24" dur="2.6s" repeatCount="indefinite"/>
+         <animate attributeName="x2" values="0;48"  dur="2.6s" repeatCount="indefinite"/>
+       </linearGradient></defs>
+       <path class="es-bolt__glowline" d="…" />
+       <path class="es-bolt__line" d="…" />
+     </svg>
+   这里的坐标是 SVG 用户单位，与 CSS 无关；`vector-effect:non-scaling-stroke` 让 1.7px
+   在任何缩放/CTM 下都是 1.7px，不会被 viewBox 缩放成别的粗细。 */
+.es-bolt__svg{width:100%;height:100%;display:block;overflow:visible;pointer-events:none}
+/* 未点亮（用户：「闪电在没被点击时很不明显，给他做个白色描边」）：
+   **纯白 #fff**、线宽 1.7px、圆角接头，四套皮肤的深色面板上都清清楚楚；
+   填充保持 none —— 没通电就是一条空心轮廓，不做任何填充。 */
+.es-bolt__line{
+  fill:none;stroke:#ffffff;stroke-width:1.7;
+  stroke-linejoin:round;stroke-linecap:round;
+  vector-effect:non-scaling-stroke;
+  opacity:.95;transition:opacity .22s ease,stroke .22s ease,stroke-width .22s ease;
+}
+/* 通电：换成本皮肤色系的**流动渐变**，再补一圈很淡的白色外发光 → "电弧在轮廓上跑"。
+   stroke-width 只加 0.05，避免点亮瞬间轮廓粗一圈导致视觉跳动。
+
+   ⚠️ 流动为什么不靠 SVG `<animate>`：`<animate attributeName="x1">` 只能覆盖
+   **元素上已经存在**的属性；`<linearGradient>` 没写 x1/x2 时 SMIL 不会凭空造一个
+   （独立实测量过：animate 元素在、值是空串、渐变一年不动）。所以改成
+   **CSS @property 注册的 --es-bolt-x1/--es-bolt-x2**（注册成 <number> 才能插值；
+   直接动画未注册的自定义属性只会得到离散跳变），元素上只写 `inherit` 默认值，
+   动画在 `.es-bolt__svg` 上跑 —— stroke 的渐变于是真的在扫。
+   万一宿主 Chromium 不支持 @property：变量不合法 → 渐变退化成默认的 0%→100%
+   静态斜向过渡，闪电照样亮，只是不流动。 */
+@property --es-bolt-x1{syntax:"<number>";inherits:true;initial-value:0}
+@property --es-bolt-x2{syntax:"<number>";inherits:true;initial-value:24}
+.es-pill__bolt[data-on="1"] .es-bolt__line{
+  stroke:url(#es-bolt-flow);stroke-width:1.75;opacity:1;
+}
+.es-pill__bolt[data-on="1"] .es-bolt__svg{
+  animation:es-bolt-sweep 2.6s linear infinite;
+}
+@keyframes es-bolt-sweep{
+  from{--es-bolt-x1:-24;--es-bolt-x2:0}
+  to{--es-bolt-x1:24;--es-bolt-x2:48}
+}
+[data-effort-slider][data-lightning="1"] .es-pill__bolt[data-on="1"] .es-bolt__line{
+  filter:drop-shadow(0 0 .8px rgba(255,255,255,.85))
+         drop-shadow(0 0 calc(2px + 4px * var(--es-rate,0)) rgba(190,242,238,.55));
+}
+/* 描边上的"电流包"：一条短的亮白虚线沿轮廓走动（dashoffset 由 CSS 动画驱动，
+   虚线长度 --es-bolt-len 由 JS 实测 path 总长后写入，未写入时用一个保守兜底值）。 */
+.es-bolt__glowline{
+  fill:none;stroke:#ffffff;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;
+  vector-effect:non-scaling-stroke;
+  opacity:0;
+  stroke-dasharray:calc(var(--es-bolt-len,64px) * .30) calc(var(--es-bolt-len,64px) * .70);
+}
+.es-pill__bolt[data-on="1"] .es-bolt__glowline{opacity:.9;
+  animation:es-bolt-run 1.9s linear infinite,es-bolt-run-fade 3.8s ease-in-out infinite}
+@keyframes es-bolt-run{
+  from{stroke-dashoffset:calc(var(--es-bolt-len,64px) * 1)}
+  to{stroke-dashoffset:0}
+}
+@keyframes es-bolt-run-fade{0%,100%{opacity:.42}50%{opacity:.95}}
+/* ⚠️ 描边**不再**用任何 ::before/::after 画。旧的两层 clip-path 规则已从本文件删除；
+   若日后又在 CSS 里出现盖在 SVG 上的 `content:""` 伪元素，用户看到的就会再次是那截白残片。 */
+/* 旧描边层与旧填充层（`.es-pill__bolt::before` 的 scaleY 爬升 + `::after` 的 mask 环 +
+   通电流动渐变）**已全部删除** —— 它们都是 clip-path/mask 几何路线的产物，
+   根因见上面 ④-b 段。形状、描边、流动、发光现在全部由内联 SVG 承担。 */
+/* 通电：外部发光（跟着轮廓）＋ 短周期低振幅亮度抖动（电弧），强度跟 --es-rate 走。
+   抖动幅度固定 ±3% 亮度（视觉上几乎只是"电流声"），不属于闪烁。 */
+.es-pill__bolt[data-on="1"]{opacity:.7}
+[data-effort-slider][data-lightning="1"] .es-pill__bolt[data-on="1"]{
+  opacity:1;
+  filter:drop-shadow(0 0 calc(3px + 6px * var(--es-rate,0)) rgba(255,255,255,.65))
+         drop-shadow(0 0 calc(8px + 12px * var(--es-rate,0)) rgba(190,242,238,.35));
+  animation:es-bolt-breathe 5.2s ease-in-out infinite,es-bolt-arc .42s steps(2,jump-none) infinite;
+}
+.es-pill__bolt[data-on="1"]:hover{transform:translateY(-1px)}
+/* 悬停不给"未通电"的闪电加粗或发光：没通电就没有理由发光。 */
+.es-pill__bolt[data-on="0"]:hover{opacity:1}
+@keyframes es-bolt-breathe{0%,100%{opacity:.86}50%{opacity:1}}
+@keyframes es-bolt-arc{0%{filter:brightness(1)}50%{filter:brightness(calc(1 + .035 * var(--es-rate,0)))}100%{filter:brightness(1)}}
+
+/* ── ⑤ tok/s 读数：等宽 + tabular-nums + 预留宽度（数字变化不得抖 pill）────────
+   注意：有自己的一套排版，所以这个块里**不复用** .es-readout 的 min-width。
+   [data-idle="1"] 时整块 display:none；父级 .es-foot 的 min-height:18px 把高度锁住，
+   所以"显示/隐藏读数"不会让 pill 行高跳一下。 */
+.es-rate{display:inline-flex;align-items:baseline;gap:2px;min-width:54px;min-height:18px;
+  white-space:nowrap;line-height:1;font-variant-numeric:tabular-nums lining-nums;
+  font-feature-settings:"tnum" 1,"lnum" 1;
+  font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  letter-spacing:.01em;transition:opacity .25s ease}
+.es-rate__num{display:inline-block;min-width:6.6ch;text-align:right;
+  font-weight:600;font-size:13px;font-variant-numeric:tabular-nums;
+  text-shadow:0 0 calc(3px + 7px * var(--es-rate,0)) rgba(255,255,255,.22)}
+.es-rate__unit{font-size:10px;font-weight:600;opacity:.5;letter-spacing:.04em;
+  margin-left:1px;text-transform:none}
+.es-rate[data-idle="1"]{display:none}
+
+/* ── ⑥ 策略 chip（幽灵按钮）＋ 展开原文块（等宽 / 暗色 / 可滚动 / max-height 过渡）─ */
+/* ── ⑦ 2026 反馈修订：ULTRA 刻度对齐 / 闪电进角落 / 脚注行不再随文字抖动 ──────
+   事故一（用户：「ultra 的位置没有对齐其它选项」）：ULTRA 刻度借用了
+   `.es-panel__level--ultra`，而那条规则含 `position:relative;display:inline-block`
+   —— 同权重、后写胜，它**覆盖**了 `.es-tick` 的 `position:absolute`，于是 ULTRA
+   那一格掉出绝对定位、和其它刻度对不齐。现在刻度改用只含视觉、不含布局的
+   `.es-tick--ultra`；带布局属性的 `.es-panel__level--ultra` 只留给面板里的档位文字。
+   事故二（用户：「闪电的位置一直在跳动当拉动滑动条时…应该放到一个角落而不是居中」）：
+   它原来是 `.es-foot` 的中间 flex 子元素，而那一行是 `justify-content:space-between`
+   —— 拖动时读数文字（"5 / ULTRA" → "3 / HIGH"）宽度在变，等于每帧重新分配空间。
+   现在它在 `.es-head` 内绝对定位，钉在面板右上角，位置与任何文字宽度无关。
+   事故三（顺带）：脚注行改 grid 三列固定归属，读数再长也不会把右边的读数/皮肤挤走。 */
+.es-foot{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;min-height:18px}
+.es-foot>.es-readout{grid-column:1}
+.es-foot>.es-rate{grid-column:2}
+.es-foot>.es-skins{grid-column:3}
+.es-head{padding-right:26px}
+.es-pill__bolt{position:absolute;top:-1px;right:0;z-index:4}
+.es-tick--ultra{color:#f0fbf9;-webkit-text-fill-color:#f0fbf9;font-weight:700}
+[data-effort-slider][data-skin="holo"] .es-tick--ultra{color:#d8fbf7;-webkit-text-fill-color:#d8fbf7}
+[data-effort-slider][data-skin="chrome"] .es-tick--ultra{color:#ffffff;-webkit-text-fill-color:#ffffff}
+[data-effort-slider][data-skin="fluid"] .es-tick--ultra{color:#eafaf7;-webkit-text-fill-color:#eafaf7}
+
+/* ── ⑧ 2026 反馈：闪电两态重做 / 策略面板浮出不再溢出 / 说明不许被截断 ─────────
+   事故（独立取证 + 用户实测）：`<button>` 没做 UA 复位时是**浅灰底 rgb(240,240,240)
+   + 黑 outset 边框 + radius 0** 的系统按钮，于是面板右上角出现一个**白方块**；
+   闪电描边压在自家白底上合成对比度只有 ≈1.06:1 ⇒ 根本看不见，
+   用户的原话就是"感觉点不亮也点不掉"。
+   现在是：**未点亮 = 透明（露出面板自己的背景）+ 发丝描边始终可见**；
+   点亮 = 形状内填充**同色系流动渐变**（逐皮肤给色，渐变横向流动，不引新 DOM）。 */
+.es-pill__bolt,.es-policy__chip{
+  appearance:none;-webkit-appearance:none;background:none;background-color:transparent;
+  border:0;margin:0;padding:0;font:inherit;color:inherit;cursor:pointer;
+  -webkit-tap-highlight-color:transparent}
+/* 断电态（用户：「闪电在没被点击时很不明显，给他做个白色描边」）：
+   · **纯白**描边，不再跟皮肤着色走（--es-bolt-off 那套逐皮肤色一律让位给 #fff）；
+   · 轮廓由内联 SVG 的 `stroke:#ffffff` 提供（线宽 1.7px，见 ④-b 段）。
+   ⚠️ 这里原来是 `.es-pill__bolt[data-on="0"]::after{background:#ffffff;padding:1.9px;…}`
+   —— 它沿**矩形盒子周长**裁一圈、再与闪电 clip-path 求交，只剩一小段白残片（几何错误，
+   见 ④-b 段与 bolt-probe.png）。白描边现在由 SVG path 的 stroke 承担，所以这条**整条删除**。
+   外发光不过滤到 SVG 上：挂在按钮上的 filter 会与 `::before` 时代的旧画法混淆，
+   而且按钮本身就是 19×19 的方形盒，drop-shadow 会变成"方块的阴影"。 */
+/* 通电：同色系流动渐变。渐变现在是 SVG 里的 <linearGradient x1/x2 + <animate>>，
+   逐皮肤配色仍由 --es-bolt-a/--es-bolt-b 提供（见下方四条）。 */
+[data-effort-slider][data-skin="nebula"]{--es-bolt-a:#e8faf7;--es-bolt-b:#37e0d8}
+[data-effort-slider][data-skin="holo"]{--es-bolt-a:#d8fbf7;--es-bolt-b:#37e0d8}
+[data-effort-slider][data-skin="chrome"]{--es-bolt-a:#ffffff;--es-bolt-b:#a8ccca}
+[data-effort-slider][data-skin="fluid"]{--es-bolt-a:#eafaf7;--es-bolt-b:#4fe6dc}
+
+/* 策略正文浮出：容器从"胶囊行"切成"列"（chip 在上、正文在下），高度交给内容。
+   旧写法容器固定 height:22px，148px 的正文以它为中心**上下各溢出 ~63px**
+   （实测底边越出面板 ~49px、顶部压住刻度行与读数）。 */
+.es-policy[data-open="1"],[data-effort-slider] :where([data-open="1"])>.es-policy,
+[data-effort-slider][data-open="1"]>.es-policy{
+  display:flex;flex-direction:column;align-items:stretch;gap:0;
+  height:auto;min-height:22px;padding:0;
+  border-color:transparent;background:transparent;box-shadow:none;opacity:1}
+.es-policy[data-open="1"]>.es-policy__chip{
+  display:inline-flex;align-items:center;justify-content:center;
+  height:22px;padding:0 8px;border-radius:999px;
+  border:1px solid var(--es-hair,rgba(255,255,255,.22));
+  background:rgba(255,255,255,.06);opacity:.92}
+/* 说明行：ULTRA 的英文说明有 175 字，旧规则 nowrap+ellipsis 把它截成半句读不到。
+   放宽到两行（仍是硬上限，不会把面板撑高）。 */
+.es-desc{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+@media (prefers-reduced-motion:reduce){
+  /* 闪电的流动（SVG <animate> 由 JS 在 reduce 下停掉；CSS 侧的"电流包"在这里停） */
+  .es-bolt__glowline{animation:none;opacity:.55}
+  .es-pill__bolt[data-on="1"]{animation:none}
+}
+
+/* 切到 Ultra 时标签从 ~25px 变 ~38px → pill 变宽 → 整块控件横移（独立取证实测 +12.75px，
+   而面板 `right:0` 锚在 root 上，所以连轨道一起挪）。给档位名预留一格宽度并居中：
+   常见档位名（含 "Ultra"）都落在里面，切换档位不再位移。更长的模型自带档次名仍会撑开 ——
+   那是模型目录的数据，不能为了不动而截断它的语义。 */
+.es-pill__name{min-width:3.3em;text-align:center}
+/* 读数预留：6.6ch 只覆盖 ≤6 字符，到 "1,234,567" 会撑宽 ~18.3px 把 tok/s 顶走。
+   7.6ch 覆盖到 "999,999"（现实量级够用），百万级仍会略微变宽，但不再是常见跳变。 */
+.es-rate__num{min-width:7.6ch}
+/* 收起态的幽灵胶囊原来是面板列里的 flex 子项，默认 align-items:stretch → 被拉满整行 358px，
+   看着像"面板底下孤零零多出一行"。让它按内容宽度靠左。 */
+.es-policy{align-self:flex-start}
+.es-policy{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;
+  flex:0 0 auto;white-space:nowrap;cursor:inherit;user-select:none;border-radius:999px;
+  background:transparent;border:1px solid var(--es-hair,rgba(255,255,255,.22));
+  color:inherit;opacity:.66;
+  font-size:10.5px;font-weight:600;letter-spacing:.05em;
+  transition:opacity .2s ease,border-color .2s ease,background .2s ease,box-shadow .2s ease}
+/* :not([data-open="1"]) 是必须的 —— 否则展开态被悬停态盖掉（同权重下后写者胜，
+   而悬停那组选择器更长）。这是折叠 chip 常见的一处"悬停把展开样式吃掉"的坑。 */
+.es-policy:not([data-open="1"]):hover{border-color:var(--es-hair-strong,rgba(255,255,255,.42));
+  box-shadow:0 0 0 1px var(--es-hair-strong,rgba(255,255,255,.42)) inset,
+    0 0 calc(5px + 9px * var(--es-rate,0)) rgba(255,255,255,.14);
+  opacity:1}
+.es-policy:focus-visible{outline:none;
+  box-shadow:0 0 0 2px var(--es-focus,rgba(55,224,216,.6));opacity:1}
+/* 展开态：数据属性由 JS 写。三种落点都支持，且**每种都锁在控件自己的子树里**：
+   ㈠ .es-policy 自身  ㈡ 直接父节点（工具行 / .es-foot，用 :where() 归零权重，不干扰它人）
+   ㈢ 控件根 [data-effort-slider]。
+   注意**不能**写裸的 `[data-open="1"]>.es-policy` —— 那会命中宿主页面里任何
+   带 data-open 的元素（选择器越界，见验收脚本 ⑫）。 */
+.es-policy[data-open="1"],[data-effort-slider] :where([data-open="1"])>.es-policy,
+[data-effort-slider][data-open="1"]>.es-policy{border-color:transparent;opacity:.92;
+  background:rgba(255,255,255,.06);box-shadow:0 0 0 1px var(--es-hair,rgba(255,255,255,.22)) inset}
+.es-policy__body{margin:0;padding:0 10px;max-height:0;opacity:0;
+  overflow:hidden auto;overscroll-behavior:contain;
+  scrollbar-width:thin;
+  font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  font-size:11px;line-height:1.62;letter-spacing:.005em;
+  color:rgba(214,248,245,.80);-webkit-text-fill-color:currentColor;
+  white-space:pre-wrap;overflow-wrap:anywhere;
+  background:rgba(4,8,12,.04);border-radius:10px;
+  transition:max-height .34s cubic-bezier(.22,1,.36,1),opacity .22s ease,padding .28s ease}
+/* 暗色底：面板本身是深色时只补一点点压暗（避免硬黑块），
+   玻璃面板（fluid / Apple 段）需要更明显的压暗才读得出等宽原文
+   —— 这就是"与皮肤底色耦合"的部分，按皮肤分别处理。 */
+[data-effort-slider][data-skin="nebula"] .es-policy__body{background:rgba(4,10,12,.26)}
+[data-effort-slider][data-skin="holo"] .es-policy__body{background:rgba(3,18,24,.30)}
+[data-effort-slider][data-skin="chrome"] .es-policy__body{background:rgba(8,13,15,.28)}
+[data-effort-slider][data-skin="fluid"] .es-policy__body{background:rgba(4,10,13,.34)}
+.es-policy__body::-webkit-scrollbar{width:6px}
+.es-policy__body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:99px}
+.es-policy__body::-webkit-scrollbar-track{background:transparent}
+/* 展开：data-open 落在自身 / 直接父节点 / 控件根，三种写法都能命中（同样全部锁在控件子树内） */
+.es-policy__body[data-open="1"],[data-effort-slider] :where([data-open="1"])>.es-policy__body,
+[data-effort-slider][data-open="1"]>.es-policy__body{
+  max-height:148px;opacity:1;padding:8px 10px;
+  box-shadow:0 0 0 1px rgba(255,255,255,.10) inset;
+  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 9px,#000 calc(100% - 9px),transparent 100%);
+  mask-image:linear-gradient(180deg,transparent 0,#000 9px,#000 calc(100% - 9px),transparent 100%)}
+
+/* ── ⑦ 控制错位：面板多了一行时的轻推（不写死任何既有间距）───────────────
+   只对 ULTRA + 闪电的组合生效，且都落在 --es-pct 体系之外，不影响轨道几何。 */
+[data-effort-slider][data-ultra="1"] .es-pill__name{letter-spacing:.02em}
+
+/* ── ⑧ 各皮肤对 ULTRA / 闪电的适配（暗底白炽一律成立：4 套皮肤都是暗底）──────
+   逐皮肤只调两样东西：① 闪电的描边色（保证暗底可见、通电色跟皮肤主色一致）
+   ② 白光核心的冷蓝端（避免在暖/青色皮肤上飘出违和的蓝）。 */
+[data-effort-slider][data-skin="nebula"]{--es-bolt-off:rgba(190,242,238,.78);--es-bolt-on:#e8faf7}
+[data-effort-slider][data-skin="nebula"] .es-panel__level--ultra{color:#f0fbf9;-webkit-text-fill-color:#f0fbf9}
+[data-effort-slider][data-skin="holo"]{--es-bolt-off:rgba(184,246,242,.78);--es-bolt-on:#d8fbf7}
+[data-effort-slider][data-skin="holo"] .es-panel__level--ultra{
+  color:#eafdfb;-webkit-text-fill-color:#eafdfb;
+  text-shadow:0 0 10px rgba(190,248,244,.45),0 1px 2px rgba(4,8,12,.5)}
+[data-effort-slider][data-skin="chrome"]{--es-bolt-off:rgba(226,251,248,.80);--es-bolt-on:#ffffff}
+[data-effort-slider][data-skin="chrome"] .es-panel__level--ultra{
+  color:#fff;-webkit-text-fill-color:#fff;text-shadow:0 1px 2px rgba(4,8,12,.55)}
+[data-effort-slider][data-skin="chrome"] .es-rate__num{text-shadow:none}
+[data-effort-slider][data-skin="fluid"]{--es-bolt-off:rgba(200,246,242,.78);--es-bolt-on:#eafaf7}
+[data-effort-slider][data-skin="fluid"] .es-panel__level--ultra{color:#f2fbfa;-webkit-text-fill-color:#f2fbfa}
+/* 后两套皮肤的主色本来就偏冷/中性，冷蓝端收紧一点更接近"冰白" */
+[data-effort-slider][data-skin="holo"] .es-rail__core__tint{
+  background:radial-gradient(58% 210% at 50% 50%,color-mix(in srgb,var(--es-cool,#d8fbf7) 58%,transparent) 0%,
+    color-mix(in srgb,var(--es-cool,#d8fbf7) 22%,transparent) 44%,transparent 74%)}
+[data-effort-slider][data-skin="chrome"] .es-rail__core__tint{
+  background:radial-gradient(58% 210% at 50% 50%,rgba(255,255,255,.34) 0%,rgba(190,242,238,.14) 44%,transparent 74%)}
+
+/* ── ⑨ reduced-motion：所有新增动画停掉，只留静态态（核心/细环/发光仍在，只是不呼吸）─ */
+@media (prefers-reduced-motion:reduce){
+  .es-rail__core__glow,.es-rail__core__tint{animation:none}
+  .es-rail__core__glow{opacity:.74}
+  .es-rail__core__tint{opacity:.30}
+  /* 核心层的 --es-rate 强度保留在 .es-rail__core 上（不在这里复位），只是不再呼吸 */
+  .es-rail__core__ember{opacity:.16}
+  [data-effort-slider][data-ultra="1"] .es-knob--ultra{animation:none}
+  [data-effort-slider][data-lightning="1"] .es-pill__bolt[data-on="1"]{animation:none}
+  .es-pill__bolt::before,.es-policy,.es-policy__body,.es-rate{transition-duration:.01ms}
+}
+
+/* 安全网：万一宿主/皮肤某条既有规则把核心层设成了可见，这里保证"未 ULTRA 时绝不显示"。
+   与上面 [data-ultra="1"] 的 display:block 同权重(0,2,0) —— 本段在文件末尾且条件排除 ULTRA，
+   所以不会和它互相打架。不使用 !important。 */
+/* ⚠️ 这里曾有 `[data-effort-slider]:not([data-ultra="1"]) .es-rail__core{display:none}` 当"安全网"，
+   它把 ULTRA 白炽核心层变成了**永远不绘制的死代码**：
+   · 它与 `[data-effort-slider][data-ultra="1"] .es-rail__core{display:block}` 同权重 (0,3,0)，且写在后面；
+   · 外层还有一层 `.es-root[data-effort-slider]`（错误边界）**不带** data-ultra，`:not()` 恒成立；
+   ⇒ ULTRA 时两条都命中，"后写胜"把 display 压回 none。
+   基础规则 `.es-rail__core` 自己已经是 `display:none`，这个安全网是多余的 —— 已删除，**别再补回来**。
+   （独立取证实测：ULTRA 与非 ULTRA 时 display 都是 none、rect 0×0，mix-blend-mode 设了却从不绘制。） */
+
+/* ══ ⑩ ULTRA 专属特效：白炽环 + 内缘亮线 + 缓慢扫过的微光（2026 第二轮）══════════
+   用户反馈原文：「Ultra 专属特效也要做呢」。加了这一层之后，"切到 Ultra"不再是
+   "轨道里多了一点白雾"，而是**轨道这一格整体换了个材质**：一圈镀白炽的外壳在呼吸。
+
+   设计（仍然克制动人 —— 白金/白炽，不是霓虹）：
+     ① `.es-rail` 外侧一圈**镀白炽外壳**：1.5px 白环 + 冷蓝大范围外发光 + 亮内缘
+        （box-shadow 链：外发光 → 实白 1.5px 环 → 内侧一圈亮线）。
+        ⚠️ 用 `0 0 0 1.5px` 的**扩散环**而不是 `1.5px` 的 border：不改盒子尺寸，
+           轨道几何 / 珠子落点 / 拖拽热区一律不动。
+     ② `.es-rail__core::after` 一层**缓慢扫过的微光**（5.2s，与核心呼吸同相）。
+        ⚠️ 用 core 的伪元素而不是 `.es-rail::before`：`.es-rail` 自带
+        `overflow:hidden;border-radius:999px`，扫光会被两端圆头**裁出生硬边缘**；
+        core 是同一个盒子但只在 ULTRA 时 `display:block`，条件天然正确，
+        再叠一层 mask 让两端渐隐 —— 扫光永远画不进圆头。
+     ③ `--es-rate` 仍然只改强度，不改节奏（呼吸统一 5.2s ease-in-out）。
+   全部新增规则都带 `[data-ultra="1"]`，非 ULTRA 时一条都不命中。 */
+[data-effort-slider][data-ultra="1"] .es-rail{
+  /* ⚠️ 外壳的 R 角必须与轨道**本体**逐一相等（2026-10 用户缺陷：「Ultra 外框的圆角似乎
+     和我们一贯设计的圆角不太一样，R 角有差别，需要统一」）。
+     轨道圆角是**逐皮肤**的：基础 `.es-rail{border-radius:999px}`（nebula / chrome / fluid
+     都沿用），但 **holo 那套是 `border-radius:9px`**（`.es-rail__fill` / `.es-knob` 在 holo 下
+     也一并是 9px）。
+     而 `box-shadow` 的 **spread 环不会跟随 border-radius**：`0 0 0 1.5px` 这类扩散环的
+     描边盒半径是 `r + spread` —— holo 下就是 9 + 1.5 = **10.5px**，比轨道本体的 9px 大
+     1.5px，这就是"R 角对不上"的来源。
+     所以实白外壳一律用 `inset` 环**向内画**，宿主自己的圆角就是最终可见轮廓
+     （⚠️ 只把外环挪到 `::after` 上、写 `border-radius:inherit` 是**等价改写**、修不到点：
+        inherit 只让盒子半径相等，外环半径仍是 r+spread，见下方 ::after 处的完整说明）。
+     冷白外发光仍留在 .es-rail 上（它半径本来就该更大，且正是"光晕"该有的样子）。 */
+  box-shadow:
+    0 0 calc(12px + 26px * var(--es-rate,0)) rgba(120,200,210,.42),   /* 冷白外发光（随 rate） */
+    0 0 12px rgba(255,255,255,.34) inset,                             /* 内缘亮线 */
+    0 0 0 1px rgba(55,224,216,.32) inset;                            /* 内缘冷蓝细边 */
+  animation:es-rail-ultra-glow 5.2s ease-in-out infinite;
+  transition:box-shadow .35s ease;
+}
+/* 实白 1.5px 外壳：**必须向内画（inset）**。
+   ⚠️ `border-radius:inherit` 只让这个 ::after **盒子**的半径等于宿主，**不会**让 spread 环同步：
+      外环的可见半径永远是 `r + spread` —— holo 下 9+1.5 = 10.5px（第二圈 11.5px），
+      而轨道本体是 9px，这就是用户报的「Ultra 外框的圆角和一贯设计不一样」。
+      （2026-10-01 子代理第一版就是把同一个外环从 .es-rail 挪到这里并写 inherit —— 几何上
+       是**等价改写**，没修到点；它用来"证明"的 `::after { border-radius }` 是 inherit 出来的
+       常数，永远不会失败，属假绿。）
+      改成 inset 环后，可见轮廓 = 宿主自己的圆角（holo 9px / 其余 999px），四皮肤自动统一；
+      模糊外发光（blur）不产生可辨认的 R 角，继续留在盒子外。
+   ⚠️ 环的颜色/宽度可以调，但**不要再加不带 inset 的硬环**，否则 R 角又会比设计大一圈。 */
+[data-effort-slider][data-ultra="1"] .es-rail::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  box-shadow:
+    0 0 0 1.5px rgba(255,255,255,.92) inset,
+    0 0 0 2.5px rgba(190,242,238,.26) inset;
+}
+/* 只呼吸**外发光**：半径/亮度变化，但不再动那圈 1.5px 外壳（避免任何半径漂移） */
+@keyframes es-rail-ultra-glow{
+  0%,100%{box-shadow:
+    0 0 calc(9px + 16px * var(--es-rate,0)) rgba(120,200,210,.28),
+    0 0 8px rgba(255,255,255,.22) inset,
+    0 0 0 1px rgba(55,224,216,.22) inset}
+  50%{box-shadow:
+    0 0 calc(16px + 34px * var(--es-rate,0)) rgba(190,242,238,.56),
+    0 0 16px rgba(255,255,255,.48) inset,
+    0 0 0 1px rgba(120,200,210,.46) inset}
+}
+/* 扫光：只在 ULTRA 的 core 上出现。mask 让它离两端 16% 就淡出，绝不被圆头裁成白半圆；用`width`动画而不是 `transform:translateX()` —— 后者在 46% 宽的色带上会把色带推出盒子，
+被圆头裁出一块生硬的白色直角（本文件历史上反复踩过的同一个坑）。 */
+[data-effort-slider][data-ultra="1"] .es-rail__core::after{
+  content:"";position:absolute;top:0;bottom:0;left:-46%;width:46%;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.55) 42%,rgba(214,248,245,.30) 62%,transparent);
+  filter:blur(.5px);opacity:.55;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent);
+  mask-image:linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent);
+  animation:es-core-sweep 5.2s ease-in-out infinite;
+}
+@keyframes es-core-sweep{
+  0%{left:-46%;width:46%;opacity:0}
+  22%{opacity:.55}
+  62%{opacity:.5}
+  100%{left:100%;width:46%;opacity:0}
+}
+/* 旋钮：ULTRA 时再多一圈雪白细环 + 更强的外发光呼吸（与核心/外壳同一 5.2s 相位，
+   叠加在 ② 段的 es-knob-ultra 之上，不替换它）。 */
+@keyframes es-knob-ultra-halo{
+  0%,100%{transform:scale(1);filter:drop-shadow(0 0 3px rgba(255,255,255,.45))}
+  50%{transform:scale(1.035);filter:drop-shadow(0 0 calc(5px + 7px * var(--es-rate,0)) rgba(255,255,255,.75))}
+}
+[data-effort-slider][data-ultra="1"] .es-knob--ultra{
+  animation:es-knob-ultra 5.2s ease-in-out infinite,es-knob-ultra-halo 5.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion:reduce){
+  [data-effort-slider][data-ultra="1"] .es-rail{animation:none;
+    box-shadow:
+      0 0 calc(12px + 26px * var(--es-rate,0)) rgba(120,200,210,.42),
+      0 0 12px rgba(255,255,255,.34) inset,
+      0 0 0 1px rgba(55,224,216,.32) inset}
+  /* 外壳（::after，border-radius:inherit）在 reduce 下保持静态，仍与轨道同半径 */
+  [data-effort-slider][data-ultra="1"] .es-rail__core::after{animation:none;opacity:0}
+  [data-effort-slider][data-ultra="1"] .es-knob--ultra{
+    animation:none;transform:none;filter:drop-shadow(0 0 5px rgba(255,255,255,.6))}
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ★ 罗德岛 · 工程终端 —— 把默认皮肤（fluid / Apple 液态玻璃）的**物质**换掉
+
+   为什么必须单独写这一段：
+   fluid 皮肤的颜色不在任何色值里 —— 面板底色是一层几乎透明的白膜
+   （rgba(255,255,255,.065→.012) 压在 rgba(8,12,24,.075) 上），观感完全由
+   backdrop-filter 后面的页面背景决定。所以上面那轮 literal 重映射
+   （214 处、rhodes-verify.mjs 复核 0 漏网）只收回了**强调色**，
+   "白霜玻璃"这个物质本身一点没动 —— 而罗德岛的表面不是白玻璃，是**蓝黑**。
+
+   罗德岛的配方（与 dsh-plugin-mascot 的 THEMES.rhodes 同一套）：
+     surface  rgba(24,32,42) -> rgba(11,15,21)
+     hairline rgba(120,200,210,.18)
+     accent   #37e0d8
+     text     #e4edf4
+   再加一层 scanline（1px/4px）—— 罗德岛终端的那点"屏幕感"主要来自它。
+
+   保留的：backdrop-filter（玻璃的"透"还在，只是从"白霜"变成"深色玻璃"）、
+   ::before 跟指针的光斑（改成青色）、::after 的 1px 镜面亮边（改成青色渐变）。
+   只作用于 [data-skin="fluid"]，其余三个皮肤靠色值重映射已经是蓝黑了。
+   本文件依旧没有 :root / html / body / !important，不影响宿主。
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── 展开面板 ── */
+[data-effort-slider][data-skin="fluid"] .es-panel{
+  color:#e4edf4;
+  background:
+    repeating-linear-gradient(180deg,rgba(120,200,210,.055) 0 1px,transparent 1px 4px),
+    linear-gradient(158deg,rgba(24,32,42,.94),rgba(11,15,21,.97));
+  box-shadow:
+    0 18px 44px rgba(4,8,12,.55),
+    0 0 34px rgba(55,224,216,.10);
+  -webkit-backdrop-filter:blur(22px) saturate(150%) brightness(.92);
+  backdrop-filter:blur(22px) saturate(150%) brightness(.92);
+}
+/* 跟指针走的光斑：白 -> 青 */
+[data-effort-slider][data-skin="fluid"] .es-panel::before{
+  background:radial-gradient(240px 240px at var(--es-gx,50%) var(--es-gy,-12%),
+    rgba(55,224,216,.22),rgba(120,200,210,.07) 36%,rgba(55,224,216,0) 68%);
+}
+/* 镜面亮边：白 -> 青（左上最亮、向右下渐隐，光线绕边走的错觉保留） */
+[data-effort-slider][data-skin="fluid"] .es-panel::after{
+  background:linear-gradient(150deg,
+    rgba(120,200,210,.72) 0%,rgba(120,200,210,.22) 26%,rgba(55,224,216,.05) 52%,
+    rgba(120,200,210,.08) 74%,rgba(120,200,210,.24) 100%);
+}
+
+/* ── 收起态胶囊 ── */
+[data-effort-slider][data-skin="fluid"] .es-pill{
+  color:#e4edf4;
+  background:
+    repeating-linear-gradient(180deg,rgba(120,200,210,.05) 0 1px,transparent 1px 4px),
+    linear-gradient(158deg,rgba(24,32,42,.94),rgba(11,15,21,.97));
+  box-shadow:
+    0 4px 14px rgba(4,8,12,.42),
+    0 0 18px rgba(55,224,216,.10);
+  -webkit-backdrop-filter:blur(16px) saturate(150%) brightness(.92);
+  backdrop-filter:blur(16px) saturate(150%) brightness(.92);
+}
+[data-effort-slider][data-skin="fluid"] .es-pill::before{
+  background:linear-gradient(150deg,
+    rgba(120,200,210,.78) 0%,rgba(120,200,210,.24) 30%,rgba(55,224,216,.06) 55%,
+    rgba(120,200,210,.09) 78%,rgba(120,200,210,.28) 100%);
+}
+[data-effort-slider][data-skin="fluid"] .es-pill::after{
+  background:radial-gradient(64px 64px at var(--es-gx,50%) var(--es-gy,50%),
+    rgba(55,224,216,.26),rgba(55,224,216,0) 70%);
+}
+[data-effort-slider][data-skin="fluid"] .es-pill:hover{
+  background:
+    repeating-linear-gradient(180deg,rgba(120,200,210,.06) 0 1px,transparent 1px 4px),
+    linear-gradient(158deg,rgba(30,40,52,.96),rgba(14,19,26,.98));
+  box-shadow:
+    0 6px 18px rgba(4,8,12,.48),
+    0 0 24px rgba(55,224,216,.20);
+}
+
+/* ── 轨道：蓝黑本体 + 罗德岛青色细边（fluid 的填充由 canvas 画，见 client.js 彗尾） ── */
+[data-effort-slider][data-skin="fluid"] .es-rail{
+  background:linear-gradient(180deg,rgba(24,32,42,.92),rgba(11,15,21,.96));
+  box-shadow:
+    0 0 0 1px rgba(120,200,210,.18) inset,
+    0 2px 10px rgba(4,8,12,.45) inset;
+}
+/* 刻度线：白 -> 罗德岛 hairline 青 */
+[data-effort-slider][data-skin="fluid"] .es-rail__grid i{background:rgba(120,200,210,.20)}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ★ 罗德岛 · 旋钮与 chrome 皮肤
+
+   为什么色值重映射没管这里：
+   旋钮的白来自 #fff / #ffffff —— 色度 0，rhodes-verify.mjs 会（正确地）
+   把它判成"中性"放过。但面板玻璃的白色高光**该留白**（那是反光），
+   旋钮的实心白球**不该**：它是一颗珠子，罗德岛的珠子是青的。
+   所以白球只能按选择器改，不能按色值一刀切。
+
+   chrome 皮肤另当别论：它本来是银白液态金属（填充 #ffffff→#6c7d7c、
+   珠子白银径向），收成"罗德岛金属"要连填充和珠子一起换，光换强调色不够。
+   holo 皮肤本来就是青的，渲染确认无误，不动。
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── 白珍珠 -> 青色能量珠（fluid / nebula）── */
+[data-effort-slider][data-skin="fluid"] .es-knob,
+[data-effort-slider][data-skin="nebula"] .es-knob{
+  background:radial-gradient(circle at 36% 28%,#e8fbf8 0 20%,#8feee6 44%,#37e0d8 72%,#1d7d78 100%);
+  box-shadow:
+    0 0 0 1px rgba(216,251,247,.75),
+    0 0 12px rgba(55,224,216,.70),
+    0 0 26px rgba(55,224,216,.50),
+    0 2px 8px rgba(4,8,12,.5);
+}
+
+/* ── chrome：银白液态金属 -> 罗德岛金属（青）── */
+[data-effort-slider][data-skin="chrome"] .es-knob{
+  background:radial-gradient(circle at 32% 24%,#eafaf7 0 20%,#b8f2ec 42%,#37e0d8 68%,#12474a 100%);
+  box-shadow:
+    0 0 0 1px rgba(216,251,247,.6),
+    0 2px 8px rgba(4,8,12,.6),
+    0 9px 18px rgba(4,8,12,.42);
+}
+[data-effort-slider][data-skin="chrome"] .es-rail__fill{
+  background:linear-gradient(180deg,#d8fbf7 0%,#8feee6 26%,#37e0d8 58%,#1d7d78 100%);
+  box-shadow:0 0 14px rgba(55,224,216,.40);
+}
+[data-effort-slider][data-skin="chrome"] .es-rail{
+  box-shadow:
+    0 0 0 1px rgba(120,200,210,.28) inset,
+    0 1px 0 rgba(216,251,247,.18) inset,
+    0 6px 16px rgba(4,8,12,.75) inset;
+}
+[data-effort-slider][data-skin="chrome"] .es-panel{border-color:rgba(120,200,210,.28)}
+[data-effort-slider][data-skin="chrome"] .es-pill{border-color:rgba(120,200,210,.24)}

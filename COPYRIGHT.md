@@ -110,6 +110,23 @@ declared in `art/looks.json` and the console will load them from there. Publishi
 the files yourself is your decision and your risk — which is why this project makes
 you type the acknowledgement to do it.
 
+## 7. Code in this repository that is not mine
+
+`dsh-effort-slider/` is a vendored copy of
+[yuhub233/dsh-effort-slider](https://github.com/yuhub233/dsh-effort-slider), MIT, © 2026
+yuhub233. Its `LICENSE` and `THIRD-PARTY.md` are upstream's files, unmodified, and they
+govern that directory. What changed here is the palette: the stylesheet's colours were
+remapped onto this project's Rhodes Island theme, and `scripts/check-slider.mjs` fails if
+anything from the original palette reappears.
+
+That repository also bundles four skill packs from
+[obra/superpowers](https://github.com/obra/superpowers) under `skills/`. They are third
+party, they are not used by the plugin at runtime, and they are **not** copied into this
+repository.
+
+The rest of `dsh-effort-slider/` is upstream's code, and upstream's own tests run against it
+unchanged — `npm run check:slider` executes them.
+
 ---
 
 ## 中文摘要
@@ -127,6 +144,10 @@ you type the acknowledgement to do it.
   公网页面从**素材原本的出处**加载，像素不经过这个仓库。
 - 自我约束写在第 5 节，并且**由测试强制**：`art/` 或 `docs/art/` 下只要有图片被 git 跟踪，`npm test` 就失败。
 - 以上不构成法律意见。如果权利方提出异议，删掉 `art/looks.json` 里对应的条目即可，其余部分不受影响。
+- **`dsh-effort-slider/` 不是我们的代码**：取自 [yuhub233/dsh-effort-slider](https://github.com/yuhub233/dsh-effort-slider)，
+  MIT，© 2026 yuhub233。那个目录以它自带的 `LICENSE` 和 `THIRD-PARTY.md` 为准，两份都是上游原文。
+  改的只有配色（换成罗德岛这一套），`scripts/check-slider.mjs` 会在旧配色漏网时报错。
+  上游打包的四个 `obra/superpowers` 技能包属于第三方，插件运行时不使用，**没有**复制进本仓库。
 
 ## Voice / 配音
 

@@ -1,0 +1,68 @@
+{
+  "name": "dsh-effort-slider",
+  "version": "1.1.0",
+  "private": true,
+  "description": "科幻推理等级滑条：把推理档位做成一条能量滑条，附加 Ultra 档、闪电编排模式与子代理 tok/s 读数 / A sci-fi reasoning-effort slider for DeepSeek Harness (DSH), with an Ultra level, a lightning orchestration mode and a live subagent tok/s readout",
+  "license": "MIT",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "plugin",
+    "reasoning-effort",
+    "ui",
+    "slider"
+  ],
+  "type": "module",
+  "main": "./index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.mjs",
+    "inject.mjs",
+    "policy.mjs",
+    "turbo.mjs",
+    "metrics.mjs",
+    "client.js",
+    "effort-slider.css",
+    "build.mjs",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "smoke-test.mjs",
+    "skills",
+    "test",
+    "preview",
+    "README.md",
+    "README.en.md",
+    "LICENSE",
+    "THIRD-PARTY.md",
+    "TURBO-CONTRACT.md"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node smoke-test.mjs && node test/metrics.test.mjs && node test/turbo.test.mjs && node test/host.test.mjs && node test/fluid.test.mjs && node test/client-lifecycle.test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yuhub233/dsh-effort-slider.git"
+  },
+  "homepage": "https://github.com/yuhub233/dsh-effort-slider#readme",
+  "bugs": {
+    "url": "https://github.com/yuhub233/dsh-effort-slider/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}
