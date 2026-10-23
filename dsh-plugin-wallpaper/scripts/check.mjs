@@ -9,7 +9,7 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -77,15 +77,33 @@ function call(config, { path, method = "GET", headers = {}, body } = {}) {
       destroy() {},
     };
     const captured = { status: undefined, headers: undefined, body: undefined };
+    // 媒体路由是**流式**的（Range 支持 + createReadStream），所以这个替身得能接分块：
+    // 只有 end() 的替身会让宿主抛 "res.on is not a function"，而那是替身缺件，不是产品坏了。
+    // 非流式响应的行为保持原样（end(payload) 直接把 payload 当 body），其它断言不受影响。
+    const outChunks = [];
     const res = {
       writeHead(status, head) {
         captured.status = status;
         captured.headers = head;
       },
+      write(chunk) {
+        outChunks.push(Buffer.from(chunk));
+        return true;
+      },
       end(payload) {
-        captured.body = payload;
+        if (payload !== undefined && outChunks.length === 0) {
+          captured.body = payload;
+          resolve(captured);
+          return;
+        }
+        if (payload !== undefined) outChunks.push(Buffer.from(payload));
+        captured.body = Buffer.concat(outChunks);
         resolve(captured);
       },
+      on() { return this; },
+      once() { return this; },
+      emit() { return true; },
+      destroy() {},
     };
     host.handle(fakeContext(), req, res, config);
   });
@@ -541,6 +559,39 @@ await it("the bundle patch is a top-level array, or DSH refuses to boot", () => 
   );
   assert.match(patch, /^\s*- insert:/mu, "the entry has to insert a row");
   assert.match(patch, /name:\s*dsh-plugin-wallpaper/u, "and the inserted row has to name this plugin");
+});
+
+await it("a media response is ranged and streamed, not one whole body", async () => {
+  // Wallpaper Engine videos run to gigabytes — the biggest on this machine is 2.8 GB — and a
+  // `<video>` seeks with ranges. Without them Chrome has to pull the entire file before it can
+  // even find the index, and the old shape made it worse by reading the whole file into memory
+  // first: a 2.8 GB allocation to draw one thumbnail. Rendering the picker end to end is what
+  // showed it: of 43 wallpapers, the two that failed were the 2.8 GB one and a file whose codec
+  // Chrome cannot decode — and only the first of those was ours to fix.
+  const dir = wallpaperDir();
+  const config = withDir(dir);
+  const size = statSync(join(dir, "a.png")).size;
+
+  const whole = await call(config, { path: `${config.routePrefix}/media/a.png` });
+  assert.equal(whole.status, 200);
+  assert.equal(whole.headers["accept-ranges"], "bytes", "without this header a player will not even try to seek");
+  assert.equal(whole.headers["content-length"], size);
+  assert.equal(whole.headers["content-range"], undefined, "a full body carries no content-range");
+  assert.equal(Buffer.from(whole.body).length, size);
+
+  const slice = await call(config, { path: `${config.routePrefix}/media/a.png`, headers: { range: "bytes=0-9" } });
+  assert.equal(slice.status, 206, "a range is answered 206, not 200");
+  assert.equal(slice.headers["content-range"], `bytes 0-9/${String(size)}`);
+  assert.equal(slice.headers["content-length"], 10);
+  assert.equal(Buffer.from(slice.body).length, 10);
+
+  const tail = await call(config, { path: `${config.routePrefix}/media/a.png`, headers: { range: "bytes=-4" } });
+  assert.equal(tail.status, 206, "the suffix form is how a player reads an index stored at the end");
+  assert.equal(tail.headers["content-range"], `bytes ${String(size - 4)}-${String(size - 1)}/${String(size)}`);
+
+  const past = await call(config, { path: `${config.routePrefix}/media/a.png`, headers: { range: `bytes=${String(size + 10)}-` } });
+  assert.equal(past.status, 416, "a range past the end is refused, not silently clamped");
+  assert.equal(past.headers["content-range"], `bytes */${String(size)}`);
 });
 
 console.log(`\nwallpaper: ${String(passed)} passed, ${String(failures.length)} failed`);

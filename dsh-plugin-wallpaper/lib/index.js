@@ -1,4 +1,4 @@
-/**
+﻿/**
  * dsh-plugin-wallpaper — 宿主半边。
  *
  * 只做三件事：**找壁纸、发壁纸、记住选了哪张**。
@@ -12,7 +12,7 @@
  */
 
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
-import { readFileSync } from "node:fs";
+import { createReadStream, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { extname, join, normalize, sep } from "node:path";
 import { homedir } from "node:os";
@@ -360,10 +360,11 @@ export async function workshopWallpapers(libraries = steamLibraries()) {
  * `project.json`，再用它里面的路径。客户端只能报一个 id，报不出路径 ——
  * 这是这个路由不需要路径包含检查的原因，也是它必须这样写的原因。
  *
+ * @param req - the request, for its Range header.
  * @param res - response.
  * @param id - the workshop id from the URL.
  */
-async function serveWorkshop(res, id) {
+async function serveWorkshop(req, res, id) {
   if (!/^\d{1,20}$/u.test(id)) {
     sendJson(res, 404, { ok: false, error: "not_found", message: "工坊 id 不是数字" });
     return;
@@ -374,26 +375,9 @@ async function serveWorkshop(res, id) {
     sendJson(res, 404, { ok: false, error: "not_found", message: `工坊里没有这张能渲染的壁纸：${id}` });
     return;
   }
-  const target = normalize(join(entry.dir, entry.file));
-  const mime = MIME[extname(target).toLowerCase()];
-  // 作者写的路径可能带 `..`；照样按目录包含检查一遍。
-  if (!target.startsWith(normalize(entry.dir) + sep) || mime === undefined) {
-    sendJson(res, 403, { ok: false, error: "forbidden", message: "这张壁纸的路径不合法" });
-    return;
-  }
-  let body;
-  try {
-    body = await readFile(target);
-  } catch {
-    sendJson(res, 404, { ok: false, error: "not_found", message: "壁纸文件读不到" });
-    return;
-  }
-  res.writeHead(200, {
-    "content-type": mime,
-    "content-length": body.length,
-    "cache-control": "private, max-age=300",
-  });
-  res.end(body);
+  // 交给同一个发送器。作者在 project.json 里写的路径可能带 `..`，所以包含检查照样要跑；
+  // MIME、Range、流式也都在那里 —— 两条发送路径各写一份，是这个 bug 只会修好一半的写法。
+  await serveMedia(req, res, entry.dir, entry.file);
 }
 
 /** 读请求体，带上限。 */
@@ -415,8 +399,45 @@ function readBody(req, limit = 4096) {
   });
 }
 
-/** 发一个媒体文件。路径包含检查在调用方之前做完。 */
-async function serveMedia(res, dir, name) {
+/**
+ * Read a single `Range: bytes=…` header against a known size.
+ *
+ * Only the single-range form is handled. That is what a `<video>` sends, and answering a
+ * multi-range request with one range is explicitly allowed. Returns `null` when there is no
+ * usable header, or `{ unsupported: true }` for a range that has to be refused.
+ */
+function parseRange(header, size) {
+  if (typeof header !== "string" || header === "") return null;
+  const spec = /^bytes=(\d*)-(\d*)$/u.exec(header.trim());
+  if (spec === null) return { unsupported: true };
+  const start = spec[1];
+  const end = spec[2];
+  if (start === "" && end === "") return { unsupported: true };
+
+  if (start === "") {
+    // `bytes=-500`: the last 500 bytes.
+    const tail = Number(end);
+    if (!Number.isFinite(tail) || tail <= 0) return { unsupported: true };
+    return { start: Math.max(0, size - tail), end: size - 1 };
+  }
+  const from = Number(start);
+  const to = end === "" ? size - 1 : Number(end);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from > to || from >= size) {
+    return { unsupported: true };
+  }
+  return { start: from, end: Math.min(to, size - 1) };
+}
+
+/**
+ * Send a media file. The containment check belongs to the caller.
+ *
+ * Range support is not a nicety here. A `<video>` seeks with it, and these files are big —
+ * the largest Wallpaper Engine video on this machine is 2.8 GB — so the previous shape
+ * (`readFile` the whole thing, answer 200) both broke seeking and asked the host process to
+ * allocate the entire file just to show a thumbnail. Streamed, ranged, and capped by the
+ * player's own buffering instead.
+ */
+async function serveMedia(req, res, dir, name) {
   const root = normalize(dir);
   const target = normalize(join(root, name));
   // 越界在**碰磁盘之前**就挡掉：`..`、编码过的分隔符都在这里变成 403。
@@ -429,22 +450,50 @@ async function serveMedia(res, dir, name) {
     sendJson(res, 404, { ok: false, error: "not_found", message: "不支持的壁纸类型" });
     return;
   }
-  let body;
+  let info;
   try {
-    const info = await stat(target);
+    info = await stat(target);
     if (!info.isFile()) throw new Error("not a file");
-    body = await readFile(target);
   } catch {
     sendJson(res, 404, { ok: false, error: "not_found", message: `找不到壁纸：${name}` });
     return;
   }
-  res.writeHead(200, {
+
+  const range = parseRange(req.headers?.range, info.size);
+  if (range !== null && range.unsupported === true) {
+    res.writeHead(416, { "content-range": `bytes */${String(info.size)}`, "accept-ranges": "bytes" });
+    res.end();
+    return;
+  }
+
+  const start = range === null ? 0 : range.start;
+  const end = range === null ? info.size - 1 : range.end;
+  const headers = {
     "content-type": mime,
-    "content-length": body.length,
+    "content-length": end - start + 1,
+    // Without this header a player will not even try to seek: it assumes one long body.
+    "accept-ranges": "bytes",
     // 壁纸换了名字就换了地址，所以可以短缓存；但目录内容随时可能变，不能长缓存。
     "cache-control": "private, max-age=30",
+  };
+  if (range !== null) headers["content-range"] = `bytes ${String(start)}-${String(end)}/${String(info.size)}`;
+  res.writeHead(range === null ? 200 : 206, headers);
+
+  if (info.size === 0) {
+    res.end();
+    return;
+  }
+  await new Promise((done) => {
+    const stream = createReadStream(target, { start, end });
+    stream.on("error", () => {
+      // The headers are already out, so the only honest end is to drop the connection.
+      res.destroy();
+      done();
+    });
+    stream.on("end", done);
+    res.on("close", () => stream.destroy());
+    stream.pipe(res);
   });
-  res.end(body);
 }
 
 /**
@@ -508,14 +557,14 @@ export async function handle(ctx, req, res, config) {
   }
 
   if (route.startsWith("/media/")) {
-    await serveMedia(res, config.dir, route.slice("/media/".length));
+    await serveMedia(req, res, config.dir, route.slice("/media/".length));
     return;
   }
 
   // 工坊壁纸走自己的路由：它的文件在用户的壁纸目录之外，而且路径由 project.json 决定，
   // 不由请求决定。
   if (route.startsWith("/workshop/")) {
-    await serveWorkshop(res, route.slice("/workshop/".length));
+    await serveWorkshop(req, res, route.slice("/workshop/".length));
     return;
   }
 
