@@ -141,11 +141,41 @@ await it("the click is what produces the advice", () => {
   const click = client.slice(client.indexOf("/** Toggle the panel and react to the click. */"));
   const handler = click.slice(0, click.indexOf("const vars ="));
   assert.ok(handler.length > 0, "the click handler must still be findable");
-  assert.match(handler, /nextAdvice\(/u, "the handler has to pick a line");
+  assert.match(handler, /adviceFor\(/u, "the handler has to pick a line, and pick it from signals");
   assert.match(handler, /setAdvice\(/u, "and put it in state, or nothing renders");
   assert.match(handler, /setBubble\(true\)/u, "and show the bubble");
   // 面板要能拿到它，否则"回看"那句是空的。
   assert.match(client, /advice,\s*\n\s*ladder: ADVICE_LADDER,/u, "the panel slot must be handed the advice and the ladder");
+});
+
+await it("the advice follows the session's own numbers, without asking a model", () => {
+  // 这一条测的是"零成本"能不能成立：判断只看宿主**已经算好**的几个数，所以不花 token、
+  // 不联网、也不把工作区内容送出去。信号全掉光时它得退回轮换，而不是崩掉或者胡说。
+  const pick = exports_.adviceFor;
+  assert.equal(typeof pick, "function");
+
+  const high = pick({ pressure: 0.9, cacheHit: 0.8, tokens: 500000 }, undefined);
+  assert.equal(high.id, "pressure-high", "past 85% the context itself is the problem");
+  assert.match(String(high.note), /90%/u, "and it says the number it decided on");
+
+  const mid = pick({ pressure: 0.65, cacheHit: 0.8, tokens: 500000 }, undefined);
+  assert.equal(mid.id, "pressure-mid");
+
+  const stale = pick({ pressure: 0.1, cacheHit: 0.05, tokens: 400000 }, undefined);
+  assert.equal(stale.id, "cache-low", "mostly re-reading is its own problem");
+
+  const fresh = pick({ pressure: 0.02, cacheHit: 0.5, tokens: 3000 }, undefined);
+  assert.equal(fresh.id, "fresh");
+
+  // 全掉光：不崩、不乱说，退回轮换那一层。
+  const blind = pick({}, undefined);
+  assert.ok(blind !== undefined, "no signals still has to say something");
+  assert.equal(blind.note, undefined, "and must not invent a reason it does not have");
+  assert.ok(exports_.ADVICE_LINES.includes(blind), "the fallback comes from the ladder table");
+
+  // 条件一直成立时，连点两次不能是同一句 —— 否则看着像点了没反应。
+  const again = pick({ pressure: 0.9, cacheHit: 0.8, tokens: 500000 }, high);
+  assert.notEqual(again.text, high.text, "the same condition twice must not repeat verbatim");
 });
 
 await it("apply() registers into shell.overlay and declares its own session-scoped panel seat", () => {
