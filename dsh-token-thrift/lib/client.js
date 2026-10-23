@@ -882,23 +882,37 @@ window.__ModuleLoader__.load({
 					h("div", { className: "dsh-thrift-label" }, "预算（100% 的位置）"),
 					budgetRow(state.budget),
 
-					h("div", { className: "dsh-thrift-label" }, "遮罩（花到多少比例就摘掉会开枝的工具）"),
-					maskRow(
-						state.maskAt ?? 0,
-						maskDraft,
-						setMaskDraft,
-						() => {
-							if (maskDraft === undefined || maskDraft === state.maskAt) return;
-							send(SETTINGS_ENDPOINT, { maskAt: maskDraft });
-						},
-					),
+					// The mask threshold only exists on a host half that knows about it, and a new
+					// client against an old host is a real state: the client bundle hot-reloads
+					// while the host half only loads at boot. Showing 「关 / 永不遮罩」 for a missing
+					// `maskAt` was a lie — the old host masks at its own dial-derived threshold, so
+					// the panel claimed masking was off while 75% masking was in effect.
+					state.maskAt === undefined
+						? h("div", { className: "dsh-thrift-pending", "data-error": "1" },
+							"宿主半边还是旧版本（快照里没有遮罩阈值），所以遮罩仍由力度决定。"
+							+ "重启 DSH 之后这一项才可调。")
+						: [
+								h("div", { className: "dsh-thrift-label", key: "mask-label" },
+									"遮罩（花到多少比例就摘掉会开枝的工具）"),
+								maskRow(
+									state.maskAt,
+									maskDraft,
+									setMaskDraft,
+									() => {
+										if (maskDraft === undefined || maskDraft === state.maskAt) return;
+										send(SETTINGS_ENDPOINT, { maskAt: maskDraft });
+									},
+								),
+							],
 
 					h("div", { className: "dsh-thrift-configured" },
-						state.overridden?.intensity === true
+						`配置里 力度 ${String(state.configured?.intensity)} · ${count(state.configured?.budget)}`
+						+ (state.configured?.maskAt === undefined ? "" : ` · 遮罩 ${String(state.configured.maskAt)}%`)
+						+ (state.overridden?.intensity === true
 							|| state.overridden?.budget === true
 							|| state.overridden?.maskAt === true
-							? `配置里 力度 ${String(state.configured?.intensity)} · ${count(state.configured?.budget)} · 遮罩 ${String(state.configured?.maskAt)}%，已被本页覆盖（重启恢复）`
-							: `配置里 力度 ${String(state.configured?.intensity)} · ${count(state.configured?.budget)} · 遮罩 ${String(state.configured?.maskAt)}%`),
+							? "，已被本页覆盖（重启恢复）"
+							: "")),
 					errorLine,
 
 					h("div", { className: "dsh-thrift-rule" }),

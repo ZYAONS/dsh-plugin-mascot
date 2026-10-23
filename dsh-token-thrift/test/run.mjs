@@ -1150,6 +1150,66 @@ await it("the panel is a control surface, not a read-out", () => {
   assert.match(maskRange["aria-label"], /遮罩/u, "and it has to say which control it is");
 });
 
+await it("a new panel against an old host says so instead of lying about masking", () => {
+  // A real state, not a hypothetical: the client bundle hot-reloads while the host half only
+  // loads at boot, so the panel can talk to a host that has never heard of maskAt. The first
+  // version rendered that as 「关 / 永不遮罩」 — while the old host went on masking at its own
+  // dial-derived 75%. The screenshot that reported it showed "遮罩 undefined%" underneath.
+  const oldHost = {
+    ok: true, enabled: true, budget: 2000000, intensity: 55, level: "standard",
+    // No maskAt and no configured.maskAt; maskRatio is the old dial-derived value.
+    maskRatio: 0.75, tiers: [0.54, 0.9], maskTools: ["subagent", "workflow"],
+    countCache: true, maxReminders: 6,
+    presets: { off: 0, light: 25, standard: 55, strict: 100 },
+    configured: { budget: 2000000, intensity: -1 },
+    overridden: { budget: false, intensity: false },
+    reports: [{ sessionId: "s1", at: 1, spent: 400, ratio: 0.2, masked: false, reminders: 0,
+      tiers: [0.54, 0.9], fired: [] }],
+  };
+  const queue = [oldHost, true];
+  const Hooks = {
+    createElement: (type, props, ...children) => ({
+      type,
+      props: props ?? {},
+      children: children.flat(Infinity).filter((child) => child !== null && child !== undefined && child !== false),
+    }),
+    useState: (initial) => [queue.length > 0 ? queue.shift() : initial, () => {}],
+    useEffect: () => {},
+    useRef: (initial) => ({ current: queue.length > 0 && initial !== undefined ? queue.shift() : initial }),
+    Fragment: Symbol.for("react.fragment"),
+  };
+  const rendered = registrations[0]
+    .factory((spec) => {
+      if (spec === "react") return Hooks;
+      throw new Error(`unexpected require(${spec})`);
+    })
+    .ThriftPanel({ sessionId: "s1" });
+
+  const strings = [];
+  const walkText = (node) => {
+    if (typeof node === "string") { strings.push(node); return; }
+    if (node === null || typeof node !== "object") return;
+    if (Array.isArray(node)) { node.forEach(walkText); return; }
+    (node.children ?? []).forEach(walkText);
+  };
+  walkText(rendered);
+  const text = strings.join(" ");
+
+  assert.ok(!text.includes("undefined"), `no field may leak as "undefined": ${text.slice(0, 200)}`);
+  assert.ok(!text.includes("永不遮罩"), "and it must not claim masking is off — the old host still masks");
+  assert.match(text, /重启 DSH/u, "the panel has to say what would fix it");
+
+  const ranges = [];
+  const walkRanges = (node) => {
+    if (node === null || typeof node !== "object") return;
+    if (Array.isArray(node)) { node.forEach(walkRanges); return; }
+    if (node.type === "input" && node.props?.type === "range") ranges.push(node.props);
+    (node.children ?? []).forEach(walkRanges);
+  };
+  walkRanges(rendered);
+  assert.equal(ranges.length, 1, "no mask slider to offer when the host cannot take one");
+});
+
 await it("every id the console script reaches for exists in the page", () => {
   // The console is a static page with no build step, so nothing catches a typo in an id:
   // el("maskat") against a page that defines "mask-at" returns null, and the first symptom is

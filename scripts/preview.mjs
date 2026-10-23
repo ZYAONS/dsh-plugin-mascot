@@ -204,7 +204,18 @@ function renderSlot(key, owner) {
   if (Component === undefined) return null;
   return h(Component, Object.assign({}, owner, {
     renderSlot,
-    useProjection: (name) => name === "tokenUsage" ? FIXTURES.usage : FIXTURES.pressure,
+    /**
+     * 按名字给，**认不出的名字就抛**。
+     *
+     * 原来写的是 name === "tokenUsage" ? usage : pressure —— 任何其它名字都拿到
+     * pressure，于是投影名写错（或者宿主压根不提供这个投影）时预览照样是绿的，
+     * 而线上面板显示的是「—」。一个不会失败的替身证明不了宿主会递东西过来。
+     */
+    useProjection: (name) => {
+      if (name === "tokenUsage") return FIXTURES.usage;
+      if (name === "contextPressure") return FIXTURES.pressure;
+      throw new Error('preview: unknown projection "' + String(name) + '"');
+    },
     sessionId: FIXTURES.sessionId,
   }));
 }
