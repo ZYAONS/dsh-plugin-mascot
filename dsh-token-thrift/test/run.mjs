@@ -9,6 +9,7 @@
  */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { apply, Config, STATE_PATH, ladderFor, name, PRESETS, presetOf, spentTokens, usageTokens } from "../lib/index.js";
 
 let passed = 0;
@@ -1099,6 +1100,22 @@ await it("the panel is a control surface, not a read-out", () => {
   const levelButtons = found.filter((node) => node.cls === "dsh-thrift-level").map((node) => node.text).sort();
   assert.deepEqual(levelButtons, [], "the four buttons are gone — the dial replaced them");
   assert.ok(found.some((node) => node.cls === "dsh-thrift-dial"), "the dial must be in the panel");
+
+  // The dial's caption must not talk about masking any more. It used to read "永不遮工具" and
+  // "五成半起遮", and both became lies the moment the threshold moved to its own slider.
+  //
+  // Checked on the LEVEL_WORDS block rather than on the rendered tree, because which row
+  // renders depends on the payload: at intensity 55 the nearest preset is `standard`, which
+  // deliberately has no entry, so the caption is empty and a rendered-text check would pass
+  // while the `light` and `strict` strings stayed wrong. (That is exactly what the first
+  // version of this assertion did.) Comments are stripped first, so a comment quoting the old
+  // wording cannot trip it.
+  const clientSource = readFileSync(new URL("../lib/client.js", import.meta.url), "utf8");
+  const wordsBlock = /const LEVEL_WORDS = \{[\s\S]*?\};/u.exec(clientSource)?.[0];
+  assert.ok(typeof wordsBlock === "string", "LEVEL_WORDS must still exist");
+  const wordsCode = wordsBlock.replace(/\/\/[^\n]*/gu, "");
+  assert.ok(!wordsCode.includes("永不遮"), "the dial must not promise to never mask");
+  assert.ok(!wordsCode.includes("起遮"), "nor claim to start masking at a ratio it no longer controls");
   assert.ok(found.some((node) => node.cls === "dsh-thrift-budget"), "the budget must be settable from the panel");
   assert.ok(found.some((node) => node.cls === "dsh-thrift-apply"), "with a way to submit it");
   assert.ok(found.some((node) => node.cls === "dsh-thrift-restore"), "and a way back to the file's value");

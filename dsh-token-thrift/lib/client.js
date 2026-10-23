@@ -678,9 +678,14 @@ window.__ModuleLoader__.load({
 			 * oversight, and the next person would helpfully write one back in.
 			 */
 			const LEVEL_WORDS = {
+				// Only the advising is described here. Masking used to be welded to the dial and
+				// these words said so ("永不遮工具", "五成半起遮"); it is `maskAt`'s own slider
+				// now, so any sentence about masking in this table would be a lie. The `off` row
+				// keeps its mention because at 0 the whole coach is disabled, tiers included, and
+				// a disabled coach cannot mask either.
 				off: "不劝也不遮",
-				light: "只劝一次，永不遮工具",
-				strict: "四档劝告，五成半起遮",
+				light: "只劝一次",
+				strict: "四档劝告，最早开始",
 			};
 
 			/** The nearest name for a dial position, so the label reads like a word. */
@@ -709,8 +714,12 @@ window.__ModuleLoader__.load({
 			 * The dial, 0–100.
 			 *
 			 * A slider rather than four words because the four words were always four points
-			 * on one line: leaning harder means speaking earlier, more often, and masking
-			 * sooner, and there is no reason the middle of that line should be unreachable.
+			 * on one line: leaning harder means speaking earlier and more often, and there is
+			 * no reason the middle of that line should be unreachable.
+			 *
+			 * It does *not* move the mask threshold. It used to, and that coupling put the
+			 * mask at 55-86% of the budget, where a session never arrives — see `maskRow`.
+			 *
 			 * `0` keeps its own meaning — off — and is labelled as such rather than shown as
 			 * a percentage of nothing.
 			 *
