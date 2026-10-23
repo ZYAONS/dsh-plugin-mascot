@@ -68,6 +68,18 @@
   </section>
 
   <section class="card wide">
+    <h2>遮罩阈值</h2>
+    <p class="hint">花到预算的百分之多少，就把会开枝的工具（subagent / workflow / ralph 那几个）从工具表里摘掉。
+      0 表示永不遮，上限 50。留空表示回到配置。</p>
+    <div class="row">
+      <input type="number" id="maskat" min="0" max="50" step="1" placeholder="25">
+      <button id="mask-apply" class="primary">应用</button>
+      <button id="mask-restore">恢复配置</button>
+      <span class="configured" id="configured-mask"></span>
+    </div>
+  </section>
+
+  <section class="card wide">
     <h2>当前会话</h2>
     <div id="current" class="current empty">还没有会话在花 token。</div>
   </section>

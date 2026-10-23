@@ -1150,5 +1150,25 @@ await it("the panel is a control surface, not a read-out", () => {
   assert.match(maskRange["aria-label"], /遮罩/u, "and it has to say which control it is");
 });
 
+await it("every id the console script reaches for exists in the page", () => {
+  // The console is a static page with no build step, so nothing catches a typo in an id:
+  // el("maskat") against a page that defines "mask-at" returns null, and the first symptom is
+  // a control that silently does nothing when clicked — the same shape of failure as the play
+  // button that swallowed its error.
+  const dir = new URL("../console/", import.meta.url);
+  // Comments are stripped first: a comment that quotes the old lookup (`el("x") || …`) is not
+  // a lookup, and this guard tripped on exactly that while the code it was checking was right.
+  const script = readFileSync(new URL("app.js", dir), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//gu, " ")
+    .replace(/(^|[^:])\/\/[^\n]*/gu, "$1 ");
+  const page = readFileSync(new URL("index.html", dir), "utf8");
+  const wanted = new Set([...script.matchAll(/\bel\("([\w-]+)"\)/gu)].map((match) => match[1]));
+  const have = new Set([...page.matchAll(/\bid="([\w-]+)"/gu)].map((match) => match[1]));
+
+  assert.ok(wanted.size > 10, "the script should be reaching for the page's elements");
+  const missing = [...wanted].filter((id) => !have.has(id));
+  assert.deepEqual(missing, [], `wired up but not in index.html: ${missing.join(", ")}`);
+});
+
 console.log(`\ntoken-thrift: ${String(passed)} passed, ${String(failed)} failed`);
 if (failed > 0) process.exit(1);

@@ -105,7 +105,9 @@
 
   /** 一次脉冲：只在**松手 / 点刻度**时放，拖动过程中每帧都放会变成频闪。 */
   function sparkRail() {
-    var spark = el("dial-rail__spark") || document.querySelector(".dial-rail__spark");
+    // 页面给它的是 class 不是 id，所以这里只能按 class 找。原来写成
+    // `el("dial-rail__spark") || querySelector(...)`，前半截永远拿不到，看着像有个 id 可用。
+    var spark = document.querySelector(".dial-rail__spark");
     if (spark === null) return;
     spark.dataset.on = "0";
     // 读一次布局，让动画能重播（连续两次设成 1 不会重新触发）。
@@ -170,6 +172,20 @@
 
   el("restore").addEventListener("click", function () {
     post(SETTINGS_URL, { budget: null, intensity: null });
+  });
+
+  /* 遮罩阈值：自己的旋钮，不跟着力度走。
+     留空是"回到配置"，0 是"永不遮" —— 这两个意思不一样，所以分开处理，不能都当成 null。 */
+  el("mask-apply").addEventListener("click", function () {
+    var raw = el("maskat").value.trim();
+    if (raw === "") return post(SETTINGS_URL, { maskAt: null });
+    var value = Number(raw);
+    if (!isFinite(value) || value < 0 || value > 50) return toast("遮罩阈值要在 0 到 50 之间，或者留空表示回到配置");
+    post(SETTINGS_URL, { maskAt: value });
+  });
+
+  el("mask-restore").addEventListener("click", function () {
+    post(SETTINGS_URL, { maskAt: null });
   });
 
   /* 全力工作：一句话把力度归零。
@@ -402,6 +418,13 @@
       : "配置里 " + num(state.configured.budget) + (over.length === 2 ? "" : "（没有覆盖）");
 
     if (document.activeElement !== el("budget")) el("budget").value = String(state.budget);
+
+    // 遮罩阈值。`over` 那个数组不动它：下面那句"（没有覆盖）"是按它的长度算的，
+    // 多塞一项会把那句话的逻辑改坏。
+    el("configured-mask").textContent = state.overridden.maskAt
+      ? "配置里 " + String(state.configured.maskAt) + "%，已被本页覆盖（重启恢复）"
+      : "配置里 " + String(state.configured.maskAt) + "%";
+    if (document.activeElement !== el("maskat")) el("maskat").value = String(state.maskAt);
 
     var reports = state.reports || [];
     currentCard(reports[0]);
