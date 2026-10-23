@@ -514,5 +514,34 @@ await it("the wallpaper layer is injected into body, not into a slot", () => {
 
 //#endregion
 
+await it("the bundle patch is a top-level array, or DSH refuses to boot", () => {
+  // Not a style rule. DSH loads this file as a bundle overlay and rejects a bare mapping:
+  //
+  //   dsh: overlay …\dsh-plugin-wallpaper\cordis.patch.yml must be a top-level YAML array
+  //   of loader patch entries
+  //
+  // and then the whole app fails to start — which is what this file did when it was first
+  // written as an object. Found by running `dsh --profile desktop --dump-config` (exit 1),
+  // not by reading it.
+  //
+  // Asserted on text rather than through a YAML parser on purpose: the package has no
+  // dependencies, and the failure being guarded against is exactly "the first meaningful
+  // line is a key instead of a list item".
+  const patch = readFileSync(new URL("../cordis.patch.yml", import.meta.url), "utf8");
+  const meaningful = patch
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#"));
+
+  assert.ok(meaningful.length > 0, "the patch file must not be empty");
+  assert.ok(
+    meaningful[0].startsWith("- "),
+    `the first meaningful line has to be a list item, got ${JSON.stringify(meaningful[0])}`
+      + " — a bare mapping makes DSH refuse to start",
+  );
+  assert.match(patch, /^\s*- insert:/mu, "the entry has to insert a row");
+  assert.match(patch, /name:\s*dsh-plugin-wallpaper/u, "and the inserted row has to name this plugin");
+});
+
 console.log(`\nwallpaper: ${String(passed)} passed, ${String(failures.length)} failed`);
 if (failures.length > 0) process.exit(1);

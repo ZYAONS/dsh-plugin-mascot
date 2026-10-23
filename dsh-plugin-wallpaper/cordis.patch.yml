@@ -1,3 +1,15 @@
-name: dsh-plugin-wallpaper
-config:
-  routePrefix: /dsh-wallpaper
+# This file is loaded as a **bundle overlay**, and DSH requires an overlay to be a top-level
+# YAML ARRAY of loader patch entries. A bare mapping is not a style choice here: the loader
+# refuses it and the whole app fails to start with
+#
+#   dsh: overlay …\dsh-plugin-wallpaper\cordis.patch.yml must be a top-level YAML array of
+#   loader patch entries
+#
+# which is what happened when this file was first written as an object. scripts/check.mjs
+# asserts the shape so it cannot come back. Verified end to end with
+#   dsh --profile desktop --dump-config
+- insert:
+    - id: wallpaper
+      name: dsh-plugin-wallpaper
+      config:
+        routePrefix: /dsh-wallpaper

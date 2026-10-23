@@ -50,3 +50,7 @@ voices/
 # real CSS with its real class names, for eyeballing a restyle. Regenerate on demand with
 # `node make-preview.mjs` inside that folder; what it renders is already committed CSS.
 dsh-effort-slider/preview/
+
+# dsh-effort-slider's per-session state (which sessions have Ultra or lightning on). Written by
+# index.mjs when the host has no `storages/` home to write into; a machine-local fact, not code.
+dsh-effort-slider/effort-slider.json

@@ -129,6 +129,8 @@ window.__ModuleLoader__.load({
   background: rgba(255,95,109,.12); border: 1px solid rgba(255,95,109,.35); color: #ffb3b3; }
 .dsh-thrift-rule { height: 1px; margin: 12px 0 2px; background: rgba(255,255,255,.1); }
 .dsh-thrift-pending { margin-top: 8px; font-size: 10.5px; color: #ffab3d; }
+/* A refused mask is a failure, so it reads as one rather than as the same amber hint. */
+.dsh-thrift-pending[data-error="1"] { color: #ff5f6d; overflow-wrap: anywhere; }
 .dsh-thrift-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 11px; }
 .dsh-thrift-link { pointer-events: auto; font-size: 10.5px; color: var(--dsh-thrift-tone); text-decoration: none; opacity: .8; }
 .dsh-thrift-link:hover { opacity: 1; text-decoration: underline; }
@@ -555,6 +557,8 @@ window.__ModuleLoader__.load({
 			const [draft, setDraft] = React.useState(undefined);
 			/** The dial while it is being dragged. Also `undefined` when it is not. */
 			const [dial, setDial] = React.useState(undefined);
+			/** The mask threshold while it is being dragged. Same rule as the dial. */
+			const [maskDraft, setMaskDraft] = React.useState(undefined);
 			/** Where the ball sits. Read once, then owned by this component. */
 			const [ball, setBall] = React.useState(() => clampBall(readBall() ?? defaultBall()));
 			/** The live position during a drag: state would lag a frame behind the pointer. */
@@ -736,6 +740,41 @@ window.__ModuleLoader__.load({
 						title: `${name} · ${String(stop)}`,
 					}, name))));
 
+			/**
+			 * The mask threshold, as its own slider.
+			 *
+			 * It used to be derived from the dial, and the dial's floor was 55% of the budget —
+			 * at a 2M budget that is 1.1M tokens, which no ordinary session reaches. So the
+			 * mask never landed, and because the failed `restrict()` was swallowed nothing said
+			 * why. Making it visible and movable is half the fix; the other half is that it no
+			 * longer moves when the dial does.
+			 *
+			 * 0 means never, and the label says so rather than showing "0%".
+			 */
+			const maskRow = (live, draftMaskAt, setDraftMaskAt, commit) => h("div", { className: "dsh-thrift-dial" },
+				h("div", { className: "dsh-thrift-dial-head" },
+					h("b", null, live <= 0 ? "关" : `${String(live)}%`),
+					h("span", null, live <= 0 ? "永不遮罩" : "花到这个比例就摘掉会开枝的工具")),
+				h("input", {
+					type: "range",
+					min: "0",
+					max: "50",
+					step: "1",
+					"aria-label": "遮罩阈值（百分比）",
+					value: String(draftMaskAt ?? live),
+					onChange: (event) => setDraftMaskAt(Number(event.target.value)),
+					onPointerUp: commit,
+					onKeyUp: commit,
+					onBlur: commit,
+				}),
+				h("div", { className: "dsh-thrift-dial-ticks" },
+					[0, 10, 25, 50].map((stop) => h("span", {
+						key: String(stop),
+						// The track is 0-50, so a stop's position is `stop / 50` of its width.
+						style: { left: `${String(stop * 2)}%` },
+						title: stop === 0 ? "永不遮罩" : `${String(stop)}%`,
+					}, stop === 0 ? "关" : String(stop)))));
+
 			const budgetRow = (live) => h("div", { className: "dsh-thrift-budget" },
 				h("input", {
 					type: "number",
@@ -833,10 +872,24 @@ window.__ModuleLoader__.load({
 
 					h("div", { className: "dsh-thrift-label" }, "预算（100% 的位置）"),
 					budgetRow(state.budget),
+
+					h("div", { className: "dsh-thrift-label" }, "遮罩（花到多少比例就摘掉会开枝的工具）"),
+					maskRow(
+						state.maskAt ?? 0,
+						maskDraft,
+						setMaskDraft,
+						() => {
+							if (maskDraft === undefined || maskDraft === state.maskAt) return;
+							send(SETTINGS_ENDPOINT, { maskAt: maskDraft });
+						},
+					),
+
 					h("div", { className: "dsh-thrift-configured" },
-						state.overridden?.intensity === true || state.overridden?.budget === true
-							? `配置里 力度 ${String(state.configured?.intensity)} · ${count(state.configured?.budget)}，已被本页覆盖（重启恢复）`
-							: `配置里 力度 ${String(state.configured?.intensity)} · ${count(state.configured?.budget)}`),
+						state.overridden?.intensity === true
+							|| state.overridden?.budget === true
+							|| state.overridden?.maskAt === true
+							? `配置里 力度 ${String(state.configured?.intensity)} · ${count(state.configured?.budget)} · 遮罩 ${String(state.configured?.maskAt)}%，已被本页覆盖（重启恢复）`
+							: `配置里 力度 ${String(state.configured?.intensity)} · ${count(state.configured?.budget)} · 遮罩 ${String(state.configured?.maskAt)}%`),
 					errorLine,
 
 					h("div", { className: "dsh-thrift-rule" }),
@@ -878,7 +931,13 @@ window.__ModuleLoader__.load({
 							report.masked ? h("div", { className: "dsh-thrift-tools" },
 								(state.maskTools ?? []).map((tool) => h("code", { key: tool }, tool))) : null,
 							overMask ? h("div", { className: "dsh-thrift-pending" },
-								`已过遮罩阈值 —— 下一次工具调用时会摘掉 ${String((state.maskTools ?? []).length)} 个会开枝的工具。`) : null),
+								`已过遮罩阈值 —— 下一次工具调用时会摘掉 ${String((state.maskTools ?? []).length)} 个会开枝的工具。`) : null,
+							// Why the mask did not land. Without this line the three possible
+							// states — not reached yet, refused by the host, masked — all looked
+							// the same from outside, which is how "it does nothing" gets reported.
+							typeof report.maskNote === "string"
+								? h("div", { className: "dsh-thrift-pending", "data-error": "1" },
+									`遮罩没生效：${report.maskNote}`) : null),
 
 					h("div", { className: "dsh-thrift-actions" },
 						h("button", {

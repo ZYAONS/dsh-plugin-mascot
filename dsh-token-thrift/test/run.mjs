@@ -428,7 +428,7 @@ await it("a profile patch written before the dial still configures the same thin
   assert.ok((await ctx.postExecute(agent)).additionalContexts?.length > 0, "strict has already spoken at 30%");
   ctx.setTotal(600);
   await ctx.postExecute(agent);
-  assert.equal(ctx.restrictions.length, 1, "and masks past its 55% threshold");
+  assert.equal(ctx.restrictions.length, 1, "and masks once the spend is past the mask threshold");
 
   const quiet = fakeContext();
   apply(quiet, config({ budget: 1000, level: "off" }));
@@ -436,10 +436,12 @@ await it("a profile patch written before the dial still configures the same thin
 
   // And an explicit intensity beats it.
   const dialled = fakeContext();
-  apply(dialled, config({ budget: 1000, level: "strict", intensity: 20 }));
+  // `maskAt: 0` isolates the dial. Masking is its own control now, so leaving it at the
+  // default would arm the mask at 25% and this assertion would be measuring the wrong knob.
+  apply(dialled, config({ budget: 1000, level: "strict", intensity: 20, maskAt: 0 }));
   dialled.setTotal(300);
   assert.equal((await dialled.postExecute(dialled.agent())).additionalContexts, undefined, "20 is gentle again");
-  assert.equal(dialled.restrictions.length, 0, "and it does not mask");
+  assert.equal(dialled.restrictions.length, 0, "and with maskAt 0 it does not mask");
 });
 
 await it("the dial turns the coach on and off, from the config alone", () => {
@@ -541,7 +543,11 @@ await it("the platform route answers with what the coach is doing", async () => 
   assert.equal(payload.budget, 1000);
   assert.equal(payload.intensity, 100, "the dial is what the platform reports");
   assert.equal(payload.level, "strict", "and the old word is derived from it, for labels");
-  assert.equal(payload.maskRatio, 0.55, "the harsh end masks past halfway");
+  // Masking is `maskAt`'s own control now, not the dial's. Reporting a dial-derived 0.55 here
+  // is what made the feature look broken: at a 2M budget that is 1.1M tokens, which no
+  // ordinary session reaches, so the mask never landed and nothing said why.
+  assert.equal(payload.maskAt, 25, "the mask threshold defaults to a quarter of the budget");
+  assert.equal(payload.maskRatio, 0.25, "and that is what the coach actually compares against");
   assert.deepEqual(payload.tiers, [0.25, 0.47, 0.68, 0.9]);
   // The console's debug view needs the words, not just the positions: "what is this about to
   // say to me, and at what point" is the question the dial raises, and `tiers` cannot answer it.
@@ -588,7 +594,11 @@ await it("the console can turn the dial, and the running coach follows", async (
 
   ctx.setTotal(300);
   await ctx.postExecute(agent);
-  assert.equal(jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0].masked, false, "a gentle dial never masks");
+  // The dial is gentle and the mask still lands — that is the fix, not a regression. Masking
+  // used to ride on the dial, and the dial's floor was 55% of the budget: at a 2M budget that
+  // is 1.1M tokens, so it never fired in practice and the feature read as dead.
+  assert.equal(jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0].masked, true,
+    "masking follows maskAt, so 30% is past the 25% default whatever the dial says");
 
   // Turn it up from the console. No restart, no reload: the listener is a live thing,
   // which is the difference between a screenshot and a platform.
@@ -597,22 +607,87 @@ await it("the console can turn the dial, and the running coach follows", async (
   const after = jsonOf(changed);
   assert.equal(after.intensity, 100);
   assert.equal(after.level, "strict", "the word follows the dial");
-  assert.equal(after.maskRatio, 0.55);
+  assert.equal(after.maskRatio, 0.25, "and turning the dial up does not move the mask threshold");
   assert.deepEqual(after.tiers, [0.25, 0.47, 0.68, 0.9]);
-  assert.deepEqual(after.overridden, { budget: false, intensity: true }, "the console must say what it changed");
+  assert.deepEqual(after.overridden, { budget: false, intensity: true, maskAt: false }, "the console must say what it changed");
   assert.equal(after.configured.intensity, 20, "and what the file still says");
 
   await ctx.postExecute(agent);
   const at30 = jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0];
-  // 300/1000 is past the first tier (25%) but not the mask threshold (55%).
   assert.ok(at30.fired.some((tier) => tier.ratio === 0.25 && tier.at !== null), "the 25% tier fires now that the dial is up");
-  assert.equal(at30.masked, false, "30% is still below the 55% mask threshold");
+  // 300/1000 is past both the 25% tier and the 25% default mask threshold, and the mask is
+  // sticky once it lands: that is the point of masking, not a bug. Lifting it mid-session
+  // would let the fan-out the coach just refused restart on the very next step.
+  assert.equal(at30.masked, true, "the mask is already down, from the 25% default");
 
   ctx.setTotal(600);
   await ctx.postExecute(agent);
   const at60 = jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0];
-  assert.equal(at60.masked, true, "60% is past it, so the tools are masked");
+  assert.equal(at60.masked, true, "and it stays down");
   assert.ok(at60.fired.some((tier) => tier.ratio === 0.47 && tier.at !== null), "and the second tier fires");
+});
+
+await it("the mask threshold is its own control, with its own bounds", async () => {
+  // It used to be derived from the dial, and the dial's floor was 55% of the budget. At a
+  // sensible budget that is eight figures, so it never fired and the whole feature looked
+  // dead. These are the properties that keep it reachable and bounded.
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 1000, intensity: 100 }));
+  const agent = ctx.agent();
+
+  // Default: a quarter of the budget.
+  const at20 = await ask(ctx.route, "/dsh-token-thrift/api/state");
+  assert.equal(jsonOf(at20).maskAt, 25, "the default is 25% of the budget");
+
+  // Turning the dial up must not drag the threshold with it.
+  ctx.setTotal(200);
+  await ctx.postExecute(agent);
+  assert.equal(jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0].masked, false,
+    "20% is below the 25% default, so nothing is masked yet");
+
+  ctx.setTotal(260);
+  await ctx.postExecute(agent);
+  assert.equal(jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0].masked, true,
+    "26% is past it");
+
+  // The console can move it while the session runs.
+  const moved = await ask(ctx.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { maskAt: 10 } });
+  assert.equal(moved.status, 200);
+  const snapshot = jsonOf(moved);
+  assert.equal(snapshot.maskAt, 10);
+  assert.equal(snapshot.maskRatio, 0.1, "and the effective ratio follows it");
+
+  // Bounds: 0 is "never", and above 50 is refused rather than clamped silently.
+  const never = await ask(ctx.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { maskAt: 0 } });
+  assert.equal(never.status, 200);
+  assert.equal(jsonOf(never).maskRatio, null, "0 means never mask, and null is how the wire says it");
+
+  const tooLate = await ask(ctx.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { maskAt: 80 } });
+  assert.equal(tooLate.status, 400, "anything past 50 is the old behaviour renamed, so it is refused");
+  assert.equal(jsonOf(tooLate).error, "bad_mask_at");
+
+  const negative = await ask(ctx.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { maskAt: -1 } });
+  assert.equal(negative.status, 400);
+
+  // And it can be handed back to the file.
+  const restored = await ask(ctx.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { maskAt: null } });
+  assert.equal(restored.status, 200);
+  assert.equal(jsonOf(restored).maskAt, 25, "null restores what the config says");
+  assert.equal(jsonOf(restored).overridden.maskAt, false);
+});
+
+await it("a mask the host refuses says so instead of doing nothing", async () => {
+  // Silence here *is* the reported bug. Not-reached, refused and masked all looked the same
+  // from outside, because only the last one reported anything at all.
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 100, tiers: [{ ratio: 0.5, text: "x" }], maskTools: ["subagent"], maskAt: 20 }));
+  const broken = { ctx: { tools: { restrict: () => { throw new Error("unknown global tool \"subagent\""); } } } };
+  ctx.setTotal(30);
+  await ctx.postExecute(broken);
+
+  const report = jsonOf(await ask(ctx.route, "/dsh-token-thrift/api/state")).reports[0];
+  assert.equal(report.masked, false, "a refused mask is not a mask");
+  assert.match(String(report.maskNote), /unknown global tool/u, "and the reason has to reach the panel");
 });
 
 await it("the console can turn a disabled coach on, and off again", async () => {
@@ -976,10 +1051,13 @@ await it("the panel is a control surface, not a read-out", () => {
   // the panel returns null until its first poll lands, so rendering it for real would
   // assert nothing at all.
   const loaded = {
-    ok: true, enabled: true, budget: 1000, intensity: 55, level: "standard", maskRatio: 0.75,
+    // `maskRatio` 0.75 and `maskAt` 25 together are the realistic shape now: the effective
+    // ratio comes from the slider, and the dial no longer drags it around.
+    ok: true, enabled: true, budget: 1000, intensity: 55, level: "standard", maskAt: 25, maskRatio: 0.25,
     tiers: [0.54, 0.9], maskTools: ["workflow"], countCache: true, maxReminders: 6,
     presets: { off: 0, light: 25, standard: 55, strict: 100 },
-    configured: { budget: 1000, intensity: -1 }, overridden: { budget: false, intensity: false },
+    configured: { budget: 1000, intensity: -1, maskAt: 25 },
+    overridden: { budget: false, intensity: false, maskAt: false },
     reports: [{ sessionId: "s1", at: 1, spent: 400, ratio: 0.4, masked: false, reminders: 1,
       tiers: [0.54, 0.9],
       fired: [{ ratio: 0.54, at: 1 }, { ratio: 0.9, at: null }] }],
@@ -1038,11 +1116,21 @@ await it("the panel is a control surface, not a read-out", () => {
     (node.children ?? []).forEach(walkRanges);
   };
   walkRanges(rendered);
-  assert.equal(ranges.length, 1, "exactly one dial");
-  assert.equal(ranges[0].min, "0");
-  assert.equal(ranges[0].max, "100");
-  assert.equal(ranges[0].step, "1");
-  assert.equal(ranges[0].value, "55", "and it shows where the dial currently is");
+  // Two sliders now, and the second one is the point: masking used to be welded to the dial,
+  // and the dial's floor was 55% of the budget, so it never fired. They are separate controls,
+  // so they get separate assertions — including that they cover different ranges.
+  assert.equal(ranges.length, 2, "the dial, and the mask threshold");
+  const [dialRange, maskRange] = ranges;
+  assert.equal(dialRange.min, "0");
+  assert.equal(dialRange.max, "100");
+  assert.equal(dialRange.step, "1");
+  assert.equal(dialRange.value, "55", "and the dial shows where it currently is");
+
+  assert.equal(maskRange.min, "0", "0 is 'never mask'");
+  assert.equal(maskRange.max, "50", "and 50 is the ceiling: later than that is the old behaviour renamed");
+  assert.equal(maskRange.step, "1");
+  assert.equal(maskRange.value, "25", "the threshold comes from maskAt, not from the dial");
+  assert.match(maskRange["aria-label"], /遮罩/u, "and it has to say which control it is");
 });
 
 console.log(`\ntoken-thrift: ${String(passed)} passed, ${String(failed)} failed`);

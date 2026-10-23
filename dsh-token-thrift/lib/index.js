@@ -183,8 +183,18 @@ export const Config = z.object({
    * job is fan-out.
    */
   maskTools: z.array(z.string()).default(DEFAULT_MASKED),
-  /** Mask as soon as this ratio is crossed; `0` uses the dial's own threshold. */
+  /** Mask as soon as this ratio is crossed; `0` uses `maskAt` instead. */
   maskRatio: z.number().default(0),
+  /**
+   * Mask once this percentage of the budget is spent; `0` never masks.
+   *
+   * Its own control, deliberately not derived from `intensity`. The dial's own threshold
+   * bottoms out at 55% of the budget, which at a 2M budget is 1.1M tokens: a session ends
+   * long before that, so masking never fired and the feature read as broken rather than as
+   * strict. 25% bites early enough to matter and late enough not to refuse a fan-out the
+   * session actually needs. Capped at 50 because anything later is the old behaviour renamed.
+   */
+  maskAt: z.number().min(0).max(50).default(25),
   /**
    * Count cached Tokens toward the spend.
    *
@@ -345,17 +355,20 @@ function settingsFor(config, override) {
   const tiers = [...wanted]
     .filter((tier) => Number.isFinite(tier.ratio) && tier.ratio > 0 && typeof tier.text === "string" && tier.text !== "")
     .sort((a, b) => a.ratio - b.ratio);
-  // `Infinity` for "never": `ratio >= Infinity` is false for every real ratio, so the
-  // mask simply never fires, and the comparison below stays a single expression.
-  const fallback = Number.isFinite(config.maskRatio) && config.maskRatio > 0
+  // Masking is `maskAt`'s job now, not the dial's. An explicit `maskRatio` still wins, so a
+  // config written against the old shape keeps working. `Infinity` means never: `ratio >=
+  // Infinity` is false for every real ratio, so the comparison downstream stays one expression.
+  const maskAt = Number.isFinite(override.maskAt) ? override.maskAt : config.maskAt;
+  const maskRatio = Number.isFinite(config.maskRatio) && config.maskRatio > 0
     ? config.maskRatio
-    : (built.maskRatio ?? Number.POSITIVE_INFINITY);
+    : maskAt > 0 ? maskAt / 100 : Number.POSITIVE_INFINITY;
   return {
     intensity,
     level: presetOf(intensity),
     budget: override.budget ?? (Number.isFinite(config.budget) ? config.budget : 0),
     tiers,
-    maskRatio: fallback,
+    maskAt,
+    maskRatio,
     maskTools: config.maskTools,
     countCache: config.countCache,
     maxReminders: config.maxReminders,
@@ -561,7 +574,7 @@ function buildHandler(ctx, deps) {
  */
 export function apply(ctx, config) {
   /** Console overrides on top of the config. In memory only: a restart restores the file. */
-  const override = { intensity: null, budget: null };
+  const override = { intensity: null, budget: null, maskAt: null };
   let settings = settingsFor(config, override);
 
   /** session id -> the last snapshot for it. Insertion-ordered, oldest evicted first. */
@@ -615,6 +628,8 @@ export function apply(ctx, config) {
     presets: PRESETS,
     // `Infinity` does not survive JSON; null is the wire's word for "never".
     maskRatio: Number.isFinite(settings.maskRatio) ? settings.maskRatio : null,
+    /** The slider's own value, as a percentage of the budget; 0 is "never mask". */
+    maskAt: settings.maskAt,
     tiers: settings.tiers.map((tier) => tier.ratio),
     /**
      * The ladder with what each rung would say, for the console's debug view.
@@ -630,10 +645,11 @@ export function apply(ctx, config) {
     maxReminders: settings.maxReminders,
     // What the console needs to draw its own controls: the file's values, and whether
     // what you are looking at is the file or something someone clicked.
-    configured: { budget: config.budget, level: config.level, intensity: config.intensity },
+    configured: { budget: config.budget, level: config.level, intensity: config.intensity, maskAt: config.maskAt },
     overridden: {
       budget: override.budget !== null,
       intensity: override.intensity !== null,
+      maskAt: override.maskAt !== null,
     },
     // The ratio is recomputed here rather than taken from the stored report, because the
     // console can change the budget between two tool calls. Reporting the stale one made
@@ -681,6 +697,12 @@ export function apply(ctx, config) {
       if (body.budget === null) override.budget = null;
       else if (typeof body.budget === "number" && Number.isFinite(body.budget) && body.budget >= 0) override.budget = body.budget;
       else return { error: "bad_budget", message: "budget 必须是非负有限数，或 null 表示恢复配置" };
+    }
+    if (body.maskAt !== undefined) {
+      if (body.maskAt === null) override.maskAt = null;
+      else if (typeof body.maskAt === "number" && Number.isFinite(body.maskAt) && body.maskAt >= 0 && body.maskAt <= 50) {
+        override.maskAt = body.maskAt;
+      } else return { error: "bad_mask_at", message: "遮罩阈值必须是 0 到 50 之间的百分比，或 null 表示恢复配置" };
     }
     settings = settingsFor(config, override);
     sync();
@@ -745,14 +767,21 @@ export function apply(ctx, config) {
     // Masking first: it changes what the next step may call, and doing it after a reminder
     // would let one more fan-out start before the mask lands.
     if (!state.masked && settings.maskTools.length > 0 && ratio >= settings.maskRatio) {
-      state.masked = true;
       try {
         // Scoped to this agent, so a sibling working on something else keeps its tools.
         agent.ctx?.tools?.restrict?.({ deny: settings.maskTools });
-      } catch {
+        state.masked = true;
+        state.maskNote = null;
+      } catch (error) {
         // A host without the restriction seam still gets the advice below; refusing to
         // continue over an unavailable optimisation would be the wrong trade.
+        //
+        // But it must not be *silent*. `restrict()` throws for a name that is not a currently
+        // registered global tool, and for an unscoped context, and both produce exactly the
+        // symptom that was reported as "the mask does nothing": nothing happens, no message.
+        // The reason is carried to the snapshot instead, and the panel shows it.
         state.masked = false;
+        state.maskNote = error instanceof Error ? error.message : String(error);
       }
     }
 
@@ -779,6 +808,8 @@ export function apply(ctx, config) {
       spent,
       ratio: Math.round(ratio * 10000) / 10000,
       masked: state.masked,
+      /** Why the last mask attempt failed, if it did. Null once one lands. */
+      maskNote: state.maskNote ?? null,
       reminders: state.reminders,
       // The tier list *this report was measured against*, not whatever is configured now.
       // The console can change the level mid-session, and drawing a report's fired marks
