@@ -918,6 +918,55 @@ await it("the bar's colour turns before the number does", () => {
   assert.equal(client.tone(undefined), "#5aa9e6", "an unknown ratio must not throw");
 });
 
+await it("the ball is a fluid field: no frame, no digit, still a hit target", () => {
+  const css = client.CSS;
+  assert.ok(css.includes(".dsh-thrift-ball-canvas"), "the canvas rule must exist, or nothing paints");
+  assert.ok(!css.includes("dsh-thrift-ball-value"), "the digit is gone, and its rule with it");
+
+  const ball = /\.dsh-thrift-ball\s*\{[^}]*\}/u.exec(css);
+  assert.ok(ball !== null, "the ball needs a rule");
+  assert.ok(!/border\s*:/u.test(ball[0]), "no frame: the field itself is the edge");
+  assert.ok(/pointer-events:\s*auto/u.test(ball[0]), "the ball must still be draggable and clickable");
+
+  // The canvas is decoration over the gesture, not a layer that steals it.
+  const canvas = /\.dsh-thrift-ball-canvas\s*\{[^}]*\}/u.exec(css);
+  assert.ok(canvas !== null, "the canvas needs a rule");
+  assert.ok(/pointer-events:\s*none/u.test(canvas[0]), "a canvas that takes the pointer kills the drag");
+});
+
+await it("the field is a current, not parallel stripes", () => {
+  // Regression, and one that only a rendered screenshot caught. The first version reused the
+  // rail's spatial frequency (~.03), which over a 40px disc covers barely half a sine period:
+  // every particle then shares one direction, their wakes stack, and the ball reads as brushed
+  // metal. The frequency has to fit whole vortices across the disc.
+  const DISC = 40;
+  const periods = (client.BALL_FLUID.flow * DISC) / (Math.PI * 2);
+  assert.ok(periods >= 1,
+    `flow ${String(client.BALL_FLUID.flow)} gives ${periods.toFixed(2)} periods across 40px; `
+    + "below one the whole disc moves as a block");
+
+  // And the vector has to depend on position — that is what makes it a field at all.
+  const left = client.ballFlow(10, 10, 0, 0);
+  const right = client.ballFlow(30, 10, 0, 0);
+  assert.ok(Math.abs(left[0] - right[0]) > 0.2 || Math.abs(left[1] - right[1]) > 0.2,
+    `the vector must differ across the disc, got ${String(left[0])} and ${String(right[0])}`);
+
+  // Circulation plus inward pull: without either, particles random-walk out of a 40px circle
+  // and the field drains from the rim, leaving a bright core in an empty ball.
+  assert.ok(client.BALL_FLUID.swirl > 0, "the field needs circulation");
+  assert.ok(client.BALL_FLUID.pull > 0, "the field needs an inward pull");
+});
+
+await it("a tone colour survives the trip into canvas", () => {
+  // Canvas wants channels; the ramp hands back hex. A broken conversion paints everything
+  // near-white, which a screenshot shows instantly and a computed-style probe never does.
+  assert.equal(client.hexA("#4fd6a8", 1), "rgba(79,214,168,1)");
+  assert.equal(client.hexA("#ff5f6d", 0.5), "rgba(255,95,109,0.5)");
+  // A three-digit hex is not a tone. Fall back to the neutral rather than paint NaN.
+  assert.equal(client.hexA("#fff", 1), "rgba(139,147,167,1)", "a short hex must not reach the canvas");
+  assert.equal(client.hexA(undefined, 1), "rgba(139,147,167,1)");
+});
+
 await it("the panel is a control surface, not a read-out", () => {
   // The controls are the reason to open it. A panel you have to leave in order to act on
   // is a panel you stop opening, so all three things worth doing live in it: lean harder,

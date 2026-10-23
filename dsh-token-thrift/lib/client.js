@@ -43,19 +43,26 @@ window.__ModuleLoader__.load({
   font-size: 11px; line-height: 1.5; color: #e8eef7; font-variant-numeric: tabular-nums; }
 /* The floating ball: fixed, and positioned by the component.
    Dragged in viewport coordinates, so it has to be fixed — an absolutely positioned ball
-   would drift away from the pointer the moment anything scrolled. */
+   would drift away from the pointer the moment anything scrolled.
+
+   No frame and no digit: the ball is a fluid field now, painted onto the canvas below. The
+   circle is cut by the canvas' own border-radius rather than by overflow:hidden on the
+   ball, because the warning flags sit outside the box and would be clipped away. */
 .dsh-thrift-ball { pointer-events: auto; position: relative; width: 40px; height: 40px; border-radius: 50%;
   display: grid; place-items: center; cursor: grab; user-select: none; touch-action: none;
-  background: rgba(10, 13, 19, .55); border: 2px solid var(--dsh-thrift-tone);
-  box-shadow: 0 6px 20px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.12);
-  backdrop-filter: blur(14px) saturate(1.25);
-  transition: transform .16s ease, background .16s ease; }
-.dsh-thrift-ball:hover { transform: scale(1.08); background: rgba(10, 13, 19, .75); }
+  background: radial-gradient(circle at 38% 32%, rgba(22, 27, 36, .96), rgba(8, 11, 16, .98) 72%);
+  box-shadow: 0 6px 20px rgba(0,0,0,.45), 0 0 16px -6px var(--dsh-thrift-tone);
+  transition: transform .16s ease, box-shadow .16s ease; }
+.dsh-thrift-ball:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(0,0,0,.5), 0 0 22px -4px var(--dsh-thrift-tone); }
 .dsh-thrift-ball:active { cursor: grabbing; transform: scale(1.02); }
-.dsh-thrift-ball[data-open="1"] { background: rgba(10, 13, 19, .82); }
+.dsh-thrift-ball[data-open="1"] { box-shadow: 0 6px 24px rgba(0,0,0,.5), 0 0 26px -3px var(--dsh-thrift-tone); }
 .dsh-thrift-ball:focus-visible { outline: 2px solid var(--dsh-thrift-tone); outline-offset: 3px; }
-.dsh-thrift-ball-value { font-size: 13px; font-weight: 700; color: var(--dsh-thrift-tone); font-variant-numeric: tabular-nums; }
-.dsh-thrift-ball-flag { position: absolute; top: -4px; right: -4px; font-size: 11px; font-style: normal; line-height: 1; }
+/* The field itself. aria-hidden: it carries no text, and the ball's own aria-label is where
+   the number went. pointer-events off so a drag still lands on the ball. */
+.dsh-thrift-ball-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+  border-radius: 50%; pointer-events: none; }
+.dsh-thrift-ball-flag { position: absolute; top: -4px; right: -4px; font-size: 11px; font-style: normal;
+  line-height: 1; z-index: 2; text-shadow: 0 0 4px rgba(0,0,0,.95), 0 0 9px rgba(0,0,0,.8); }
 .dsh-thrift-chip { pointer-events: auto; display: inline-flex; align-items: center; gap: 8px;
   padding: 4px 11px 4px 9px; border-radius: 999px; cursor: pointer; user-select: none;
   /* Translucent on purpose: it sits over whatever the user is reading, and an opaque pill
@@ -254,6 +261,279 @@ window.__ModuleLoader__.load({
 		}
 		//#endregion
 
+		//#region ball fluid
+		/**
+		 * The ball's particles.
+		 *
+		 * A flow field, not random drift: each particle is pushed along a vector that is a
+		 * function of where it is, so neighbours travel together and the result reads as a
+		 * current rather than as snow. The rail in dsh-effort-slider runs the same idea
+		 * (FLUID_PRESET: curlScale .026, fade .018, life 9s); this is retuned for a 40px disc —
+		 * smaller, fewer, shorter-lived, and fading faster because there is far less area to
+		 * fill before the whole thing saturates.
+		 *
+		 * What the border and the digit used to carry is now carried by the field:
+		 *   hue               -> tone(ratio), green through yellow and orange to red
+		 *   speed and density -> intensity
+		 * so a hot ball is a visibly different object from a cold one without reading
+		 * anything. The exact percentage survives in `title`, in `aria-label`, and in the
+		 * panel — the ball was never the only place it was written.
+		 */
+		var BALL_FLUID = {
+			/** Fraction erased each frame. Larger than the rail's .018: it is only 40px wide. */
+			fade: .075,
+			/** Particle count at intensity 0 and at intensity 1. */
+			count: [18, 40],
+			radius: [1.0, 2.8],
+			alpha: [.14, .38],
+			life: [500, 1400],
+			/** Displacement per ms, before the intensity multiplier. */
+			speed: [.012, .040],
+			/** Speed multiplier at intensity 0 and at intensity 1. */
+			hot: [.6, 2.1],
+			/**
+			 * Spatial frequency of the field.
+			 *
+			 * This one is not a taste knob. At the rail's scale (.026 over ~600px) several
+			 * vortices fit across the bar, but the same value over 40px covers barely half a
+			 * period: the whole disc then shares one direction, every particle drifts the same
+			 * way, and their wakes stack into parallel stripes that read as brushed metal. It
+			 * has to be raised roughly with the smaller box.
+			 */
+			flow: .22,
+			/** Circulation about the centre. Breaks the "one direction" failure by bending it. */
+			swirl: .55,
+			/** Inward pull, scaled by distance from the centre, so the disc does not drain. */
+			pull: .16,
+		};
+
+		/** `#rrggbb` to `rgba(r,g,b,a)`. The tone ramp hands back hex; canvas wants channels. */
+		function hexA(hex, alpha) {
+			var match = /^#([0-9a-f]{6})$/iu.exec(String(hex));
+			if (match === null) return "rgba(139,147,167," + String(alpha) + ")";
+			var n = Number.parseInt(match[1], 16);
+			return "rgba(" + String((n >> 16) & 255) + "," + String((n >> 8) & 255) + ","
+				+ String(n & 255) + "," + String(alpha) + ")";
+		}
+
+		/**
+		 * The field: two out-of-phase waves.
+		 *
+		 * The point is that the vector depends on position. A uniform field would translate
+		 * the whole cloud and read as drifting dots; a positional one makes them curl.
+		 *
+		 * `seed` offsets each particle's sample point by less than a radian. Enough that
+		 * neighbours are not in perfect lockstep, little enough that they still travel
+		 * together — a fully random direction per particle would be noise, not a current.
+		 */
+		function ballFlow(x, y, t, seed) {
+			var k = BALL_FLUID.flow;
+			var phase = seed ?? 0;
+			return [
+				Math.sin((y + t * .045) * k + phase) + Math.cos((x - t * .035) * k - phase * 1.7),
+				Math.cos((x + t * .030) * k + phase * .6) - Math.sin((y - t * .040) * k + phase),
+			];
+		}
+
+		/**
+		 * Paint the ball until disposed.
+		 *
+		 * `live` is a ref read every frame rather than captured. The tone changes whenever the
+		 * session's ratio crosses a tier, and the intensity whenever the dial moves; tearing
+		 * the animation down on either would reset every particle and read as a flicker.
+		 *
+		 * @param canvas - the canvas to paint into.
+		 * @param live - ref holding `{ tone, intensity }`.
+		 * @param reduced - when true, paint one held frame and never animate.
+		 * @returns a dispose function.
+		 */
+		function paintBall(canvas, live, reduced) {
+			var ctx = canvas.getContext("2d");
+			if (ctx === null) return function () {};
+			var sprite = document.createElement("canvas");
+			var spriteTone;
+			var parts = [];
+			var width = 0;
+			var height = 0;
+			var dpr = 0;
+			var raf = 0;
+			var last = 0;
+			var stopped = false;
+
+			function conf() {
+				var at = live.current ?? {};
+				return {
+					tone: typeof at.tone === "string" ? at.tone : "#8b93a7",
+					hot: typeof at.intensity === "number" && Number.isFinite(at.intensity)
+						? Math.max(0, Math.min(1, at.intensity))
+						: 0,
+				};
+			}
+
+			/** One soft blob, baked in the current tone. Cheaper than a gradient per particle. */
+			function buildSprite(tone) {
+				var size = 48;
+				sprite.width = size;
+				sprite.height = size;
+				var paint = sprite.getContext("2d");
+				if (paint === null) return;
+				var glow = paint.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+				glow.addColorStop(0, hexA(tone, 1));
+				glow.addColorStop(.4, hexA(tone, .62));
+				glow.addColorStop(1, hexA(tone, 0));
+				paint.fillStyle = glow;
+				paint.fillRect(0, 0, size, size);
+				spriteTone = tone;
+			}
+
+			/** Size the backing store to the box. Returns true when it actually changed. */
+			function resize() {
+				var next = Math.min(2, window.devicePixelRatio || 1);
+				var box = canvas.getBoundingClientRect();
+				// Not `w`/`h`: those are `width`/`height` on the painter, and a local named `h`
+				// would also shadow the module-level `h = React.createElement` inside this scope.
+				var boxW = Math.max(1, Math.round(box.width));
+				var boxH = Math.max(1, Math.round(box.height));
+				if (boxW === width && boxH === height && next === dpr) return false;
+				width = boxW;
+				height = boxH;
+				dpr = next;
+				canvas.width = Math.round(boxW * dpr);
+				canvas.height = Math.round(boxH * dpr);
+				ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+				return true;
+			}
+
+			function spawn(part, anywhere) {
+				part.x = Math.random() * width;
+				part.y = Math.random() * height;
+				part.r = BALL_FLUID.radius[0] + Math.random() * (BALL_FLUID.radius[1] - BALL_FLUID.radius[0]);
+				part.a = BALL_FLUID.alpha[0] + Math.random() * (BALL_FLUID.alpha[1] - BALL_FLUID.alpha[0]);
+				part.s = BALL_FLUID.speed[0] + Math.random() * (BALL_FLUID.speed[1] - BALL_FLUID.speed[0]);
+				part.life = BALL_FLUID.life[0] + Math.random() * (BALL_FLUID.life[1] - BALL_FLUID.life[0]);
+				// Under a radian: decorrelates neighbours without turning the field into noise.
+				part.seed = Math.random() * .9;
+				// A fresh cloud is spread through its lifetime, so it does not pulse in unison.
+				part.age = anywhere ? Math.random() * part.life : 0;
+				return part;
+			}
+
+			function wanted(hot) {
+				var lo = BALL_FLUID.count[0];
+				var hi = BALL_FLUID.count[1];
+				return Math.round(lo + (hi - lo) * hot);
+			}
+
+			function draw(dt, now) {
+				var at = conf();
+				if (at.tone !== spriteTone) buildSprite(at.tone);
+
+				var mul = BALL_FLUID.hot[0] + (BALL_FLUID.hot[1] - BALL_FLUID.hot[0]) * at.hot;
+				var want = wanted(at.hot);
+				// Grow and shrink the cloud in place: respawning it on every change would flash.
+				while (parts.length > want) parts.pop();
+				while (parts.length < want) parts.push(spawn({}, true));
+
+				// Erase a fraction rather than clearing: what survives is the wake.
+				ctx.globalCompositeOperation = "destination-out";
+				ctx.globalAlpha = 1;
+				ctx.fillStyle = "rgba(0,0,0," + String(BALL_FLUID.fade) + ")";
+				ctx.fillRect(0, 0, width, height);
+
+				ctx.globalCompositeOperation = "lighter";
+				for (var i = 0; i < parts.length; i += 1) {
+					var part = parts[i];
+					part.age += dt;
+					if (part.age >= part.life) spawn(part, false);
+					// Three forces: the wave field's curl, a circulation about the centre, and an
+					// inward pull that grows with distance. The pull is not decoration — with the
+					// wave alone, particles random-walk out of a 40px disc and the field drains
+					// from the rim inwards, leaving a bright core and empty edges.
+					var push = ballFlow(part.x, part.y, now, part.seed);
+					var offX = part.x - width / 2;
+					var offY = part.y - height / 2;
+					var away = Math.sqrt(offX * offX + offY * offY) || 1;
+					var reach = away / Math.max(1, width / 2);
+					var step = part.s * mul * dt * 2.2;
+					part.x += (push[0] * .34 - (offY / away) * BALL_FLUID.swirl
+						- (offX / away) * BALL_FLUID.pull * reach + .05) * step;
+					part.y += (push[1] * .34 + (offX / away) * BALL_FLUID.swirl
+						- (offY / away) * BALL_FLUID.pull * reach) * step;
+					if (part.x < -10 || part.x > width + 10 || part.y < -10 || part.y > height + 10) {
+						spawn(part, false);
+					}
+					ctx.globalAlpha = Math.max(0, part.a
+						* Math.min(1, part.age / 200)
+						* Math.min(1, (part.life - part.age) / 300));
+					ctx.drawImage(sprite, part.x - part.r, part.y - part.r, part.r * 2, part.r * 2);
+				}
+				ctx.globalAlpha = 1;
+				ctx.globalCompositeOperation = "source-over";
+			}
+
+			function frame(now) {
+				if (stopped) return;
+				raf = window.requestAnimationFrame(frame);
+				// A hidden tab paints nothing; skipping the maths too keeps it off the battery.
+				if (document.hidden === true) return;
+				var dt = last === 0 ? 16 : Math.min(48, now - last);
+				last = now;
+				if (resize()) {
+					parts = [];
+					ctx.clearRect(0, 0, width, height);
+				}
+				draw(dt, now);
+			}
+
+			if (reduced === true) {
+				// One frame, held. "Reduced motion" is not a request for a slower animation.
+				//
+				// The frame is produced by running the real integration for a second of fixed
+				// clock and then stopping, rather than by painting the particles once. A single
+				// pass measures about 5/255 mean opacity against the animated field's 30-59 —
+				// a ball that reads as empty — because the wake is what fills it, and a still
+				// has no wake. Hand-smearing was the first attempt and still only reached 9.
+				// Warming up the actual loop keeps one code path, so the held frame cannot drift
+				// from the animated one when the field is retuned.
+				resize();
+				for (var warm = 0; warm < 70; warm += 1) draw(16, warm * 16);
+				return function () {};
+			}
+
+			raf = window.requestAnimationFrame(frame);
+			return function dispose() {
+				stopped = true;
+				if (raf !== 0) window.cancelAnimationFrame(raf);
+			};
+		}
+
+		/**
+		 * The ball's canvas.
+		 *
+		 * A component rather than a bare node, because it owns the canvas and the painter is
+		 * bound to *its* lifetime. The panel has two very different trees — unreachable, and
+		 * live — and the ball sits at a different child index in each, so React unmounts and
+		 * remounts the canvas when the panel switches between them. Painting from the panel's
+		 * own effect meant painting once into a node that was no longer on the page: the
+		 * canvas on screen stayed 300x150 and blank while a detached one animated happily.
+		 *
+		 * `live` is a ref, read every frame, so it must not be a dependency. There are none:
+		 * a tier crossing or a dial drag would otherwise tear the animation down and reset
+		 * every particle.
+		 */
+		function BallFluid({ live }) {
+			const canvas = React.useRef(null);
+			React.useEffect(() => {
+				if (canvas.current === null) return undefined;
+				const reduced = typeof window.matchMedia === "function"
+					? window.matchMedia("(prefers-reduced-motion: reduce)").matches === true
+					: false;
+				return paintBall(canvas.current, live, reduced);
+			}, []);
+			return h("canvas", { className: "dsh-thrift-ball-canvas", ref: canvas, "aria-hidden": "true" });
+		}
+		//#endregion
+
 		/**
 		 * The panel and its ball.
 		 *
@@ -281,6 +561,13 @@ window.__ModuleLoader__.load({
 			const ballRef = React.useRef(ball);
 			ballRef.current = ball;
 			const drag = React.useRef(undefined);
+			/**
+			 * What the ball's field should show right now.
+			 *
+			 * A ref, not state or a dependency: the painter reads it every frame, so a tier
+			 * crossing or a dial drag repaints in place instead of restarting the field.
+			 */
+			const ballLive = React.useRef({ tone: "#8b93a7", intensity: 0 });
 
 			React.useEffect(() => {
 				let cancelled = false;
@@ -333,6 +620,10 @@ window.__ModuleLoader__.load({
 			 *
 			 * One gesture does both, and the difference is distance — four pixels. A separate
 			 * drag handle on a 40px circle would leave nowhere to click.
+			 *
+			 * The canvas comes first so the flags paint on top of it, and it is aria-hidden:
+			 * it holds a picture, and the ball's own `aria-label` already says what the digit
+			 * used to say.
 			 */
 			const ballNode = (tone_, label, extra) => h("div", {
 				className: "dsh-thrift-ball",
@@ -371,7 +662,9 @@ window.__ModuleLoader__.load({
 				onKeyDown: (event) => {
 					if (event.key === "Enter" || event.key === " ") setOpen((value) => !value);
 				},
-			}, extra);
+			},
+				h(BallFluid, { live: ballLive }),
+				extra);
 
 			/**
 			 * The one line that says what the dial is doing, in words.
@@ -482,6 +775,9 @@ window.__ModuleLoader__.load({
 			// expands for the same reason — this is the state most likely to be seen, and
 			// "unreachable" on its own does not tell anyone what to do about it.
 			if (state.ok !== true) {
+				// Grey and cold, but still flowing: an unreachable host is a state, not a dead
+				// widget, and a frozen ball is indistinguishable from a crashed one.
+				ballLive.current = { tone: "#8b93a7", intensity: 0 };
 				return h("div", { className: "dsh-thrift-root", style: { left: `${String(ball.x)}px`, top: `${String(ball.y)}px`, "--dsh-thrift-tone": "#8b93a7" } },
 					open ? h("div", { className: "dsh-thrift-panel", role: "dialog", "aria-label": "Token 节流不可用" },
 						header("不可用"),
@@ -500,12 +796,16 @@ window.__ModuleLoader__.load({
 									: String(state.error ?? "没有说明")),
 							"可能的原因：主驾半边是旧版本、插件没被加载，或者面板和宿主不在同一个源。")) : null,
 					ballNode("#8b93a7", "Token 节流不可用",
-						h("span", { className: "dsh-thrift-ball-value" }, "!")));
+						h("i", { className: "dsh-thrift-ball-flag", title: "Token 节流不可用" }, "!")));
 			}
 
 			const report = state.enabled === true ? pickReport(state, sessionId) : undefined;
 			const ratio = report?.ratio ?? 0;
 			const colour = state.enabled === true ? tone(ratio) : "#8b93a7";
+			// Hand the field its two inputs. The hue is the tone ramp (unchanged, and still the
+			// one thing readable across the screen); the intensity drives how fast and how
+			// densely it flows, which is what the missing digit used to convey.
+			ballLive.current = { tone: colour, intensity: ratio };
 			const fired = new Set((report?.fired ?? []).filter((tier) => tier.at !== null).map((tier) => tier.ratio));
 			// The report's own tier list, not the currently configured one: the console can
 			// change the level while a session runs, and a fired mark only means anything
@@ -592,8 +892,6 @@ window.__ModuleLoader__.load({
 					h("div", { className: "dsh-thrift-session" }, report?.sessionId ?? "")) : null,
 				ballNode(colour, `Token 节流 ${String(state.level ?? "")} ${String(Math.round(ratio * 100))}%`,
 					h(React.Fragment, null,
-						h("span", { className: "dsh-thrift-ball-value" },
-							state.enabled === true ? `${String(Math.round(ratio * 100))}` : "—"),
 						report?.masked === true ? h("i", { className: "dsh-thrift-ball-flag", title: "会开枝的工具已被遮罩" }, "⛔") : null,
 						overMask ? h("i", { className: "dsh-thrift-ball-flag", title: "已过遮罩阈值，下一次工具调用时遮罩" }, "!") : null)));
 		}
@@ -651,6 +949,12 @@ window.__ModuleLoader__.load({
 		exports.ThriftPanel = ThriftPanel;
 		exports.pickReport = pickReport;
 		exports.tone = tone;
+		// The field's own numbers, exported so a test can pin them. The stripe regression in
+		// test/run.mjs is a case a rendering pass caught and reasoning did not.
+		exports.ballFlow = ballFlow;
+		exports.BALL_FLUID = BALL_FLUID;
+		exports.hexA = hexA;
+		exports.CSS = CSS;
 		exports.compact = compact;
 		exports.installStyles = installStyles;
 		return module.exports;
