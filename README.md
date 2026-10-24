@@ -344,8 +344,6 @@ Three edges. An existing copy is **never overwritten**, because it may be a newe
 
 Whether it landed is a fact you can check rather than a promise: the `skill` field of `GET /dsh-mascot/api/health` reports `installed`, `present`, `disabled`, `missing` or `failed` with a reason.
 
-Clicking the mascot makes her say one piece of that advice. The bubble clears after a few seconds; the card in the panel keeps the line, with a seven-rung ladder under it and the rung she is talking about lit.
-
 ## Copyright
 
 The repository contains no artwork belonging to anyone else. Characters are © their owners — Hypergryph (*Arknights*) and Bushiroad (*BanG Dream!*). `npm run fetch-art` downloads the images onto each machine.

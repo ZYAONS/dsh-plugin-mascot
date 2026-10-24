@@ -342,8 +342,6 @@ npm run verify            # 当前 DSH profile 的预检
 
 装没装上是能查的事实，不是一句承诺：`GET /dsh-mascot/api/health` 的 `skill` 字段会给 `installed`（刚写进去）、`present`（本来就有，没动）、`disabled`、`missing` 或 `failed`（带原因）。
 
-点一下角色，她会说一句这类建议。气泡停十几秒就收，面板里那张卡会留着 —— 底下是一排七格的阶梯，她说到哪一级就点亮哪一格。
-
 ## 版权
 
 仓库里没有别人的素材。角色版权归各自所有者 —— 鹰角网络（明日方舟）、Bushiroad（BanG Dream!）。`npm run fetch-art` 把图下载到各人自己的机器上。
