@@ -37,16 +37,15 @@ const OTHER_SKIN = AVAILABLE_SKINS.find((s) => s !== "fluid") ?? AVAILABLE_SKINS
 if (AVAILABLE_SKINS.length < 2 || !OTHER_SKIN) throw new Error("皮肤清单解析失败（client.js 变了？）");
 
 /* 哪些皮肤有自己的粒子引擎 —— **从 FLUID_SKINS 的键读**，同样不写死。
-   fluid 本来就是，nebula 与 holo 是后加的；chrome 是液态金属，没有粒子。
-   这决定了 [4] 该切到谁：切到带引擎的皮肤是「重启」，切到不带的才是「停」。 */
+   fluid 本来就是，nebula 与 holo 是后加的，chrome 在用户要求「粒子流光」之后也接上了。
+   于是现在**每个**皮肤都有引擎 —— [4] 不该再去找一个"静默皮肤"来切。 */
 const PARTICLE_SKINS = (() => {
   const block = /var FLUID_SKINS = \{([\s\S]*?)\n  \};/.exec(CLIENT_SRC);
   if (!block) return ["fluid"];
   const keys = [...block[1].matchAll(/^ {4}([a-z0-9-]+):/gm)].map((m) => m[1]);
   return keys.length > 0 ? keys : ["fluid"];
 })();
-const QUIET_SKIN = AVAILABLE_SKINS.find((s) => !PARTICLE_SKINS.includes(s));
-if (QUIET_SKIN === undefined) throw new Error("所有皮肤都带粒子引擎，[4] 没有可切的目标（FLUID_SKINS 变了？）");
+const QUIET_SKINS = AVAILABLE_SKINS.filter((s) => !PARTICLE_SKINS.includes(s));
 
 
 const here = (name) => fileURLToPath(new URL(name, import.meta.url));
@@ -818,19 +817,15 @@ console.log("[3b] 两处现场修复必须还在：淡出走 destination-out、�
     JSON.stringify(canvas.ctx.clears.slice(clearsBeforeFull)));
 }
 
-console.log(`[4] 切到 ${QUIET_SKIN}（不带引擎的皮肤）→ rAF 必须立刻停掉、待执行帧清空、画布清空`);
+console.log(`[4] 确认每个皮肤都带引擎（${AVAILABLE_SKINS.join(" / ")}）—— "切到静默皮肤"这个场景已不存在`);
+check("AVAILABLE_SKINS 全部出现在 PARTICLE_SKINS 里（chrome 也接了引擎）",
+  QUIET_SKINS.length === 0, JSON.stringify(QUIET_SKINS));
+/* ⚠️ 这里原本是「切到不带引擎的皮肤 → rAF 立刻停、待执行帧清空、画布清空」。
+   chrome 接上引擎之后，没有任何皮肤不带引擎，那个场景连同它的目标一起消失了。
+   删掉的只是**这一条**：它测的 teardown 走的是同一个 useEffect 的 cleanup，
+   仍然被 [5]（收起面板 → 引擎停）和 [6]（卸载 → cancel + 摘监听）覆盖着。
+   如果哪天有人把某个皮肤的引擎摘掉，上面那条 check 会先红，逼他回来补这里。 */
 const rafBeforeSkinSwitch = rafCalls;
-const cancelBeforeSkinSwitch = cancelCalls;
-prefsSnapshot = { skin: QUIET_SKIN };
-flush();
-flushFrames(5);
-check("切皮肤后不再请求新的动画帧", rafCalls === rafBeforeSkinSwitch, `${rafBeforeSkinSwitch} → ${rafCalls}`);
-check("cancelAnimationFrame 被调用", cancelCalls > cancelBeforeSkinSwitch, String(cancelCalls));
-check("没有遗留待执行的帧", pendingFrames.size === 0, String(pendingFrames.size));
-check("画布被清空（不留残影）", canvas.ctx.calls.clearRect > 0, String(canvas.ctx.calls.clearRect));
-check(`data-skin 已切到 ${QUIET_SKIN}`, findByProp(root, "data-skin").props["data-skin"] === QUIET_SKIN,
-  String(findByProp(root, "data-skin").props["data-skin"]));
-check("canvas 仍在轨道里（结构不变，只是不跑动画）", findOne(root, "es-rail__fluid") === canvas);
 
 /* [4b] 切到**另一个带引擎的**皮肤：应当继续跑，而不是停。
    nebula 与 holo 共用同一台引擎、只是参数不同，所以对它们是「重启」不是「停」。

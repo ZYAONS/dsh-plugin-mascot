@@ -475,6 +475,41 @@
       starCount: 30, bias: 0.28, rise: -0.95, cell: 11, swirl: 0.30,
       density: 0.30, countMin: 12, hueCycle: 12000,
     },
+    /* chrome —— 抛光金属上的火花与流光。
+     *
+     * 之前这里**故意缺席**，注释原话是「液态金属没有粒子，铺上就把金属变成雾」。
+     * 用户后来明确要求「给这一版也做粒子流光等冲击感」——所以要接，但不能铺成雾。
+     * 让它读成"火花"而不是"雾"的三个前提：
+     *
+     *   ① blend 必须换 lighter。默认 source-over，而 chrome 的填充是**亮的不透明金属**
+     *      （顶部 #d8fbf7），青色粒子盖上去只会变暗 —— 那就不是流光，是脏点。加色叠加
+     *      之后粒子只会把金属照亮，才有"溅上去的火星"的意思。
+     *   ② 寿命要短、密度要低。fluid 是 life 9000 + density 1.0，那是"一片河"；
+     *      这里 life 620 + density 0.45，粒子来不及堆叠，就不会糊成一层。
+     *   ③ 湍流要小（swirl .12 / curlScale .010），主方向要强（bias 1.9）。流体那套大湍流
+     *      在小半径、高速度下会变成四处乱窜的噪点；金属上的火花应该是**顺着面滑**的。
+     *
+     * 色带同样只走青色系，最亮端接近白 —— 在 lighter 下叠加成高光，而不是染上一层色。
+     */
+    chrome: {
+      stops: [
+        [0.00, [255, 255, 255]],   // 白热
+        [0.30, [226, 252, 250]],   // 银白
+        [0.58, [150, 245, 238]],   // 浅青
+        [0.82, [ 55, 224, 216]],   // 主题青
+        [1.00, [ 26, 122, 122]],   // 深青（拖尾末端沉下去）
+      ],
+      blend: "lighter",
+      fade: 0.15, vel: 1.6, speed: [2.0, 5.2], curlScale: 0.010, life: 700,
+      r: [0.4, 1.0], alpha: 0.38, jitter: 0.12, topSpeedMul: 2.4,
+      /* starRampStart 从 0.2 提到 0.45：星层的实际速度 = v * (rampStart + (1-rampStart)*ramp²)，
+         而 ramp 只有在**进入顶档**之后才从 0 往上涨。非顶档时 ramp=0，速度就等于 v*rampStart
+         —— 用户截图里是 Max（4/5）不是 Ultra，按 0.2 算流光只有基准的 20%，又慢又短，
+         看上去就"没有流光"。抬到 0.45 之后非顶档也有明显的拖尾，顶档再叠加速。 */
+      starCount: 22, starSpeed: [7, 18], starRampMs: 2200, starRampStart: 0.45,
+      bias: 2.2, rise: 0, cell: 0, swirl: 0.10,
+      density: 0.12, countMin: 8, countMax: 200, hueCycle: 5200,
+    },
   };
 
   /**
@@ -1740,9 +1775,10 @@
      * 也不该把 canvas 节点本身放进依赖 —— 那会让每次重渲染都重启引擎）。
      */
     var activeSkin = skinOf(prefs);
-    // 有粒子引擎的皮肤。chrome 不在这里 —— 液态金属没有粒子，铺上就把"金属"变成"雾"。
-    // nebula 也不在：它试过，退回了 CSS 渐变（原因见 FLUID_SKINS 那段注释）。
-    var particleSkin = activeSkin === "fluid" || activeSkin === "holo";
+    // 有粒子引擎的皮肤。chrome 原先不在（「液态金属铺粒子会变成雾」），现在接上了 ——
+    // 它靠 lighter 加色 + 短寿命 + 低密度 + 小湍流来保住金属感，理由写在 FLUID_SKINS.chrome。
+    // nebula 仍然不在：它试过，退回了 CSS 渐变（原因见 FLUID_SKINS 那段注释）。
+    var particleSkin = activeSkin === "fluid" || activeSkin === "holo" || activeSkin === "chrome";
     useEffect(function () {
       if (!particleSkin || !open) return undefined;
       var canvas = fluidCanvasRef.current;

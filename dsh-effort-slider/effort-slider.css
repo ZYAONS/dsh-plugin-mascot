@@ -1304,8 +1304,72 @@
   50%{opacity:1;transform:scale(1.06)}
 }
 
+/* ── 粒子层：chrome 也接引擎了 ──
+   ⚠️ z-index 必须显式抬起来。chrome 的填充是**不透明的亮金属**，而 canvas 在 DOM 里
+   排在 fill 之前、默认 display:none；不打开、也不给更高的 z-index，粒子会被金属块
+   整个盖住 —— 画了等于没画（holo 那次踩过同样的坑）。
+   grid 与 knob 也必须一起抬到 4：绝对定位的兄弟里，带 z-index 的永远盖在 z-index:auto
+   之上，只抬 canvas 会让刻度和球头掉到填充底下去。 */
+[data-effort-slider][data-skin="chrome"] .es-rail__fluid{display:block;z-index:2}
+[data-effort-slider][data-skin="chrome"] .es-rail__stars{display:block;z-index:3}
+[data-effort-slider][data-skin="chrome"] .es-rail__fill{z-index:1}
+[data-effort-slider][data-skin="chrome"] .es-rail__grid,
+[data-effort-slider][data-skin="chrome"] .es-knob{z-index:4}
+
+/* ── 冲击感：每个循环开头金属整体先"亮一下"再回落 ──
+   光有一条匀速滑过的反光是"安静的抛光"，不像被推了一把。这里给填充加一个
+   brightness 脉冲：起手 1.30、16% 时已落回 1.04，剩下 84% 的时间几乎不动 ——
+   读成"每 2.6s 有一记冲击把能量送进金属里"，接着高光才滑过去。
+   ⚠️ 用 brightness 而不是再加一层白色渐变：白色渐变会把顶部本来就接近 #d8fbf7 的
+   金属直接糊死；brightness 是乘性的，暗部抬得多、亮部本来就压到白，反而干净。 */
+[data-effort-slider][data-skin="chrome"] .es-rail__fill{
+  animation:es-chrome-impact 2.6s cubic-bezier(.2,.85,.3,1) infinite;
+}
+@keyframes es-chrome-impact{
+  0%{filter:brightness(1.30)}
+  16%{filter:brightness(1.04)}
+  100%{filter:brightness(1)}
+}
+/* 满档再加一档：高光与脉冲都提到 1.9s，跟引擎那边 topSpeedMul 2.4 一起读成"过载"。 */
+[data-effort-slider][data-skin="chrome"][data-ultra="1"] .es-rail::before,
+[data-effort-slider][data-skin="chrome"][data-ultra="1"] .es-rail__fill,
+[data-effort-slider][data-skin="chrome"][data-ultra="1"] .es-sparks::after{
+  animation-duration:1.9s;
+}
+
+/* ── 冲击：一道窄而快的扫描，每个循环只占前 26% ──
+   上面那条柔光是"安静的抛光"，它负责质感；真正给"冲击感"的是这一道：
+   0.68s 内从右到左一闪而过，剩下 1.9s 完全消失。宽 26%、峰值 .90、mix-blend-mode:screen ——
+   节奏上是「安静 → 猛地亮一下 → 再安静」，而不是所有东西一起匀速动。
+   ⚠️ 挂在 .es-sparks::after：它的 ::before 是吸附脉冲环，::after 空着；
+      而 .es-sparks 默认 z-index:auto，会被带 z-index 的填充/粒子压住，所以一起抬到 5。
+   ⚠️ 用 opacity 收尾而不是只靠 background-position 移出画面：只靠位移的话，
+      Safari 上背景图在 no-repeat + 负位置时偶尔会露出一角。 */
+[data-effort-slider][data-skin="chrome"] .es-sparks{z-index:5}
+[data-effort-slider][data-skin="chrome"] .es-sparks::after{
+  content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background:linear-gradient(95deg,
+    transparent 0%,
+    rgba(255,255,255,.30) 42%,
+    rgba(255,255,255,.90) 50%,
+    rgba(255,255,255,.30) 58%,
+    transparent 100%);
+  background-size:26% 100%;background-repeat:no-repeat;
+  mix-blend-mode:screen;
+  opacity:0;
+  animation:es-chrome-impact-sweep 2.6s cubic-bezier(.5,0,.2,1) infinite;
+}
+@keyframes es-chrome-impact-sweep{
+  0%{opacity:0;background-position:-30% 0}
+  4%{opacity:1}
+  26%{opacity:1;background-position:130% 0}
+  30%,100%{opacity:0;background-position:130% 0}
+}
+
 @media (prefers-reduced-motion:reduce){
   [data-effort-slider][data-skin="chrome"] .es-rail::before{animation:none;opacity:0}
+  [data-effort-slider][data-skin="chrome"] .es-rail__fill{animation:none;filter:none}
   [data-effort-slider][data-skin="chrome"] .es-rail__fill::before{animation:none;opacity:.4}
+  [data-effort-slider][data-skin="chrome"] .es-sparks::after{animation:none;opacity:0}
   [data-effort-slider][data-skin="chrome"] .es-knob::after{animation:none}
 }
