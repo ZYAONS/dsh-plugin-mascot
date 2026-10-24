@@ -453,10 +453,27 @@
       // 所以主方向从"往右"改成"往上"（rise 负），横坐标吸附到 11px 的格子（和 CSS 里
       // 那排分隔线同宽），寿命短、擦得快 —— 火花才"脆"，不拖成一片雾。
       // 第一版（水平扫描线）在真实界面里读数还行，但看着像"更密的流体"；竖着冒才像仪表。
+      //
+      // ★ 第五轮（用户第三次说"没有明显动效"）实测出的两个真原因，都不是参数不够大：
+      //   ① 颜色跑出了青色系。粒子颜色取自 FLUID_STOPS，而那条色带的两端是蓝和粉
+      //      （[168,92,255] / [255,158,214]）。fluid 用它好看，holo 却继承了同一条 ——
+      //      于是每 12s 就把整条轨道刷成洋红竖条。逐层关图层拍图确认过：关掉
+      //      .es-rail__fluid 洋红就全没了，所以不是 CSS。这里给它一条**只走青色**的
+      //      色带，色相全程锁在 180 附近。
+      //   ② 密度太高，格子被填满成"条码"。density 2.0 × 378px ≈ 756 颗，横坐标又吸附到
+      //      11px 的格子，等于每格堆 20 多颗 1px 竖线 —— 每格都填实了，读成静纹理。
+      //      降到 0.30 之后每格约 3~4 颗，才读得出"格子里有电"。
+      stops: [
+        [0.00, [ 34, 196, 190]],   // 深青
+        [0.32, [ 55, 224, 216]],   // 主题青（--es accent #37e0d8）
+        [0.62, [110, 240, 230]],   // 亮青
+        [0.86, [170, 250, 244]],   // 浅青
+        [1.00, [216, 251, 247]],   // 近白青（与 CSS 的 #d8fbf7 对齐）
+      ],
       fade: 0.24, vel: 0.9, speed: [0.5, 2.2], curlScale: 0.02, life: 1100,
-      r: [1.0, 2.4], alpha: 0.26, jitter: 0.30, topSpeedMul: 2.0,
+      r: [1.0, 2.4], alpha: 0.34, jitter: 0.30, topSpeedMul: 2.0,
       starCount: 30, bias: 0.28, rise: -0.95, cell: 11, swirl: 0.30,
-      density: 2.0, countMin: 34, hueCycle: 12000,
+      density: 0.30, countMin: 12, hueCycle: 12000,
     },
   };
 
@@ -520,7 +537,11 @@
     // 皮肤只覆盖它要改的那几个键，其余沿用 FLUID_PRESET。
     var mode = typeof skin === "string" && FLUID_SKINS[skin] !== undefined ? skin : "fluid";
     var PRESET = mode === "fluid" ? FLUID_PRESET : Object.assign({}, FLUID_PRESET, FLUID_SKINS[mode]);
-    var STOPS = FLUID_STOPS;
+    /* 色带：皮肤可以覆盖。holo 必须覆盖 —— 基础色带的两端是蓝和粉，那是 fluid 的语言；
+       holo 是青色全息仪表，粒子一旦流到粉端，整条轨道就变成洋红竖条（实测）。 */
+    var STOPS = mode !== "fluid" && Array.isArray(PRESET.stops) && PRESET.stops.length >= 2
+      ? PRESET.stops
+      : FLUID_STOPS;
     /**
      * 源头当前的色带位置（0~1），每帧由 step() 按时间更新。
      * spawn() 会把它记进粒子的 `ct`，粒子就带着出生时的颜色流到右端。

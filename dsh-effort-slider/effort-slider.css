@@ -1077,7 +1077,7 @@
   box-shadow:0 0 0 1px rgba(120,200,210,.28) inset,0 4px 14px rgba(4,8,12,.6) inset;
 }
 /* 刻度线加亮一档：它是这台仪表唯一的静态参照。 */
-[data-effort-slider][data-skin="holo"] .es-rail__grid i{background:rgba(120,200,210,.30)}
+[data-effort-slider][data-skin="holo"] .es-rail__grid i{background:rgba(120,200,210,.12)}
 
 /* ── 已点亮：淡底色 + 一格一格的暗分隔 + 右端读数边界 ── */
 [data-effort-slider][data-skin="holo"] .es-rail__fill{
@@ -1128,4 +1128,116 @@
 [data-effort-slider][data-skin="holo"][data-ultra="1"] .es-knob::before{
   animation-duration:1.1s;
   box-shadow:0 0 16px rgba(255,255,255,.95),0 0 34px rgba(55,224,216,.85);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ★ holo 第三版：斜掠高光当主角
+
+   第二版把扫光做成**竖带**、参数也调大了，用户仍然说"没有明显动效"。这轮先把度量
+   换对，再改设计 —— 两个结论都不是"参数不够大"：
+
+   ① 原来的量法看不见 CSS。上一轮量的是 canvas 的 getImageData，只能看见粒子层；
+      而扫光、边沿脉冲、光圈呼吸全画在 .es-rail__fill 上，canvas 里一个像素都没有，
+      所以那个数字既证明不了生效也证明不了失效。换成"整条轨道的合成像素差"（CDP 截图
+      → 回到页面用原生解码逐像素比）之后，同一版本量出 61.6% 的像素在 400ms 内变化。
+      再做正交拆解：藏掉 canvas、只剩 CSS 是 48.6%；停掉 CSS、只剩 canvas 是 32%。
+
+   ② 竖带扫光跟背景是**同一种笔画**。整条 rail 本来就是 30 多根 1px 竖线（轨道刻线
+      + 格子缝 + 粒子 + 星层），差值大、人眼却读成"条码在闪"。所以移动元素改成与纹理
+      正交的 105 度斜掠高光，挂在 .es-rail::before 上（z-index:5 —— fill 只有 z-index:1、
+      canvas 是 2/3，挂在 fill 上的伪元素会被父级 z-index 锁在下面，画了看不见），
+      并用 mask 裁进"已点亮"那一段。
+
+   ③ 顺带查出两个真缺陷，都不是调参能解决的：
+      · 粒子颜色跑出了青色系 —— 它取的是 FLUID_STOPS，而那条色带两端是蓝和粉，
+        holo 每 12s 就把整条轨道刷成洋红竖条。逐层关掉图层拍图确认过：关掉
+        .es-rail__fluid 洋红全消失，所以不是 CSS。已在 client.js 给 holo 一条只走青色的色带。
+      · 密度 2.0×378px ≈ 756 颗、横坐标又吸附到 11px 格子，等于每格堆 20 多颗 1px 竖线，
+        格子被填满成静态条码。降到 0.30（每格 3~4 颗）才读得出"格子里有电"。
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── 主动效：一道斜掠高光横穿整条轨道，1.9s 一遍 ──
+   ⚠️ 为什么不是竖带：整条 rail 本来就是 30 多根 1px 竖线（轨道刻线 + 格子缝 + canvas 的
+   粒子 + 星层）。竖带扫光跟背景是**同一种笔画**，混在一起读不出"在动" —— 实测那一版
+   400ms 内确实改了 62.9% 的像素、是 fluid 的 5 倍，但眼睛看到的是"条码在闪"，不是
+   "光在走"。所以移动元素必须跟纹理正交：这里用 105 度斜掠的高光跨过所有竖线。
+   ⚠️ 必须挂在 .es-rail 的伪元素上并给 z-index:5。.es-rail__fill 只有 z-index:1、
+   canvas 是 2/3；挂在 fill 上的伪元素被父级自己的 z-index 锁在下面，画了也看不见。
+   .es-rail 有 isolation:isolate，子层级 z-index 都在它内部结算，5 足够压住 4（光圈/刻度）。
+   mask 把高光裁进"已点亮"的那段：低档位时右半边没点亮，光不该从空轨道上过。 */
+[data-effort-slider][data-skin="holo"] .es-rail::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:5;
+  background:linear-gradient(105deg,
+    transparent 0%,
+    rgba(216,251,247,.08) 32%,
+    rgba(255,255,255,.36) 45%,
+    rgba(255,255,255,.70) 50%,
+    rgba(255,255,255,.36) 55%,
+    rgba(216,251,247,.08) 68%,
+    transparent 100%);
+  background-size:46% 100%;background-repeat:no-repeat;
+  mix-blend-mode:screen;
+  -webkit-mask-image:linear-gradient(90deg,#000 0 calc(17px + (100% - 34px) * var(--pct) / 100%),transparent 0);
+  mask-image:linear-gradient(90deg,#000 0 calc(17px + (100% - 34px) * var(--pct) / 100%),transparent 0);
+  animation:es-holo-sheen 1.9s cubic-bezier(.42,0,.58,1) infinite;
+}
+@keyframes es-holo-sheen{
+  from{background-position:-46% 0}
+  to{background-position:146% 0}
+}
+
+/* ── 次动效：读数边界后面拖一条水平能量尾 ──
+   高光是"路过的光"，这条尾巴是"正在聚过来的能量"，两者方向正交、语义也不同：
+   光负责"明显在动"，尾巴负责"往右端灌"，节奏同 1.9s。 */
+[data-effort-slider][data-skin="holo"] .es-rail__fill::before{
+  content:"";position:absolute;top:0;bottom:0;right:0;width:34%;pointer-events:none;
+  border-radius:inherit;
+  background:linear-gradient(270deg,rgba(255,255,255,.38) 0%,rgba(120,240,235,.20) 34%,transparent 100%);
+  mix-blend-mode:screen;
+  animation:es-holo-comet 1.9s ease-in-out infinite;
+  transform-origin:100% 50%;
+}
+@keyframes es-holo-comet{
+  0%,100%{opacity:.55;transform:scaleX(.72)}
+  50%{opacity:1;transform:scaleX(1)}
+}
+
+/* ── 格子分隔：压淡。它是这台仪表的身份，但满档时整条都在发光，
+   0.42 的暗缝会把轨道切成一排黑缝 —— 那正是"条码感"的来源。 ── */
+[data-effort-slider][data-skin="holo"] .es-rail__fill::after{
+  background:repeating-linear-gradient(90deg,rgba(2,20,26,.05) 0 1px,transparent 1px 11px);
+  animation:none;opacity:1;
+}
+
+/* ── 已点亮：左暗右亮的能量坡 ──
+   满档时整条都亮，若亮度处处相等，进度就没有方向、右端那道读数边界也不成立。
+   再叠一层 180 度的纵向渐变，保留原来"中间略暗"的玻璃质感。
+   同时把读数边界加粗到 3px，与高光同周期呼吸。 ── */
+[data-effort-slider][data-skin="holo"] .es-rail__fill{
+  background:
+    linear-gradient(90deg,rgba(55,224,216,.08) 0%,rgba(55,224,216,.16) 52%,rgba(120,240,235,.26) 86%,rgba(216,251,247,.34) 100%),
+    linear-gradient(180deg,rgba(55,224,216,.26),rgba(55,224,216,.12) 52%,rgba(55,224,216,.22));
+  border-right-width:3px;
+  animation:es-holo-edge 1.9s ease-in-out infinite;
+}
+@keyframes es-holo-edge{
+  0%,100%{box-shadow:3px 0 10px rgba(55,224,216,.5)}
+  50%{box-shadow:3px 0 26px rgba(55,224,216,1),0 0 40px rgba(55,224,216,.6)}
+}
+
+/* ── 光圈：幅度从 1.14 提到 1.45，并停顿一拍，与高光同周期 ── */
+@keyframes es-holo-aperture{
+  0%,100%{opacity:.8;transform:scaleY(1)}
+  45%{opacity:1;transform:scaleY(1.45)}
+  55%{opacity:1;transform:scaleY(1.45)}
+}
+[data-effort-slider][data-skin="holo"] .es-knob::before{animation-duration:1.9s}
+
+/* ── 减少动态效果：四条一起停，只留静态的读数边界 ── */
+@media (prefers-reduced-motion:reduce){
+  [data-effort-slider][data-skin="holo"] .es-rail::before{animation:none;opacity:0}
+  [data-effort-slider][data-skin="holo"] .es-rail__fill::before{animation:none;opacity:.35}
+  [data-effort-slider][data-skin="holo"] .es-rail__fill{animation:none;
+    box-shadow:3px 0 16px rgba(55,224,216,.75)}
+  [data-effort-slider][data-skin="holo"] .es-knob::before{animation:none}
 }
