@@ -1241,3 +1241,71 @@
     box-shadow:3px 0 16px rgba(55,224,216,.75)}
   [data-effort-slider][data-skin="holo"] .es-knob::before{animation:none}
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ★ chrome：液态金属自己的动效
+
+   chrome 是三个皮肤里唯一**没有粒子引擎**的（.es-rail__fluid 在它身上 display:none），
+   静息动效只能来自 CSS。改之前的实测：全开 400ms 只有 8.2% 的轨道像素在变，把 CSS
+   动画停掉是 0.0% —— 那 8.2% 全在**球头**上（那里有一个 6s 的 conic 旋转高光 es-spin），
+   轨道本体一动不动。8.2% 刚好约等于球面积占轨道的比例，正是「只有旋钮在转、金属条是死的」。
+
+   这一版给金属条加动效，刻意和 holo 的激光高光区分开 —— 两个皮肤的物理不是一回事：
+     · holo  窄、亮、快：1.9s、峰值 .70、105 度、锐利切边 —— 激光扫过仪表
+     · chrome 宽、柔、慢：2.6s、峰值 .42、100 度、三段缓坡 —— 有人把金属条微微倾斜，
+       光沿着抛光面滑过去。金属的高光是漫射的，不该有激光那种硬边。
+
+   三件事，全部同周期 2.6s，读成一台机器而不是三段各转各的动画：
+     ① .es-rail::before —— 62% 宽的柔光沿金属面滑过。mask 截止到「已点亮 + 球头」，
+        +16px 是因为球的半径 15px、圆心正好落在填充条右边缘上；少这 16px，光会停在
+        球的正中间，看起来像金属条被切断。
+     ② .es-rail__fill::before —— 前沿的水银弯月：贴着读数边缘的一道亮弧，缓慢起伏。
+        金属是被推着走的，不是一块贴纸，这条弯月负责表达「液态」。
+     ③ .es-knob::after —— 球头的镜面高光跟着呼吸（它本来只有旋转，没有呼吸）。
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+[data-effort-slider][data-skin="chrome"] .es-rail::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:5;
+  background:linear-gradient(100deg,
+    transparent 0%,
+    rgba(255,255,255,.10) 26%,
+    rgba(255,255,255,.42) 50%,
+    rgba(255,255,255,.10) 74%,
+    transparent 100%);
+  background-size:62% 100%;background-repeat:no-repeat;
+  mix-blend-mode:screen;
+  -webkit-mask-image:linear-gradient(90deg,#000 0 calc(17px + (100% - 34px) * var(--pct) / 100 + 16px),transparent 0);
+  mask-image:linear-gradient(90deg,#000 0 calc(17px + (100% - 34px) * var(--pct) / 100 + 16px),transparent 0);
+  animation:es-chrome-sheen 2.6s cubic-bezier(.37,0,.63,1) infinite;
+}
+@keyframes es-chrome-sheen{
+  from{background-position:-62% 0}
+  to{background-position:162% 0}
+}
+
+[data-effort-slider][data-skin="chrome"] .es-rail__fill::before{
+  content:"";position:absolute;top:0;bottom:0;right:0;width:16%;pointer-events:none;
+  border-radius:inherit;
+  background:linear-gradient(270deg,rgba(255,255,255,.62) 0%,rgba(216,251,247,.30) 34%,transparent 100%);
+  mix-blend-mode:screen;
+  transform-origin:100% 50%;
+  animation:es-chrome-meniscus 2.6s ease-in-out infinite;
+}
+@keyframes es-chrome-meniscus{
+  0%,100%{opacity:.55;transform:scaleX(.70)}
+  50%{opacity:1;transform:scaleX(1.10)}
+}
+
+[data-effort-slider][data-skin="chrome"] .es-knob::after{
+  animation:es-chrome-glint 2.6s ease-in-out infinite;
+}
+@keyframes es-chrome-glint{
+  0%,100%{opacity:.72;transform:scale(.94)}
+  50%{opacity:1;transform:scale(1.06)}
+}
+
+@media (prefers-reduced-motion:reduce){
+  [data-effort-slider][data-skin="chrome"] .es-rail::before{animation:none;opacity:0}
+  [data-effort-slider][data-skin="chrome"] .es-rail__fill::before{animation:none;opacity:.4}
+  [data-effort-slider][data-skin="chrome"] .es-knob::after{animation:none}
+}
