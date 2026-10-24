@@ -1022,3 +1022,21 @@
 }
 [data-effort-slider][data-skin="chrome"] .es-panel{border-color:rgba(120,200,210,.28)}
 [data-effort-slider][data-skin="chrome"] .es-pill{border-color:rgba(120,200,210,.24)}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ★ 粒子引擎接上 holo
+
+   引擎只有一台（旋度流场 + destination-out 擦拖尾 + 最高档星痕层），皮肤在 FLUID_SKINS
+   里改参数（client.js）。这里只做两件事：让 canvas 显示出来，并把填充条让给 canvas ——
+   否则 CSS 渐变会盖在粒子上，等于白画。
+
+   只接 holo。nebula 试过，退了回来（理由见 client.js 里 FLUID_SKINS 那段注释）；
+   chrome 是液态金属，铺粒子会把金属变成雾。
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+[data-effort-slider][data-skin="holo"] .es-rail__fluid{display:block}
+[data-effort-slider][data-skin="holo"] .es-rail__stars{display:block}
+
+/* 填充让位。::after 那层故意留着：它是 holo 的识别特征 —— 那排 11px 的暗色分隔线，
+   "仪表刻度"就是它给的，粒子在它底下扫。 */
+[data-effort-slider][data-skin="holo"] .es-rail__fill{background:transparent;box-shadow:none}

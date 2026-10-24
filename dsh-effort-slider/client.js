@@ -403,9 +403,44 @@
      * 7000 太急（用户：「变得太快了，要慢变」）→ 30000：满档一列的颜色变化周期约 30s，
      * 观感是缓慢漂移而不是来回刷色。
      */
-    hueCycle: 30000 };
+    hueCycle: 30000,
+    /**
+     * 主方向的强度：dirX = bias + cv·swirl·s。
+     *
+     * 1 是"整条往右流"。调到接近 0 就没有主方向了 —— 粒子只在原地被流场搅。
+     */
+    bias: 1 };
   /** 轨道内缩：珠子直径 30px → 左右各内缩 17px（填充条 / 珠子共用这套几何）。 */
   var FLUID_INSET = 17;
+
+  /**
+   * 每个皮肤在同一台引擎上的**参数覆盖**。
+   *
+   * 引擎只有一台（旋度流场 + destination-out 擦拖尾 + 最高档星痕层），皮肤改的是
+   * 「这台引擎被调成什么样」。fluid 原样不动。
+   *
+   *   holo —— 全息仪表：擦得极快（fade .22）、寿命短（700ms）、粒子细如扫描线
+   *           （r 1.0~2.8），画的是**竖线**不是圆点（见 step 里的 shape 分支）；
+   *           星痕层加量到 34，因为它本来就是"能量仪表"。alpha 要够亮 —— 这个皮肤的
+   *           填充条是透明的，粒子**就是**"已点亮到哪"的唯一读数。
+   *
+   *   nebula 试过并退回了 CSS 渐变，原因写在下面 holo 上面的那段注释里。
+   *
+   * 数字都是照着"这块画布只有 30px 高"调的；轨道高度变了要重新看。
+   */
+  var FLUID_SKINS = {
+    fluid: {},
+    /* nebula 试过，退回来了。五轮参数（大云块 → 小星点 → 提 fade）之后，它在截图里
+       始终只是"更暗更平的 fluid"：轨道只有 30px 高，任何盖满这条轨道的粒子数都会让 α
+       饱和成一条平带（实测整块画布平均 alpha 一直是 203~208，fluid 是 205）。要它真的
+       不一样得改**画法**，不是改数字。所以它退回 CSS 渐变 —— 一个像暗流体的星云比原来的
+       渐变更差。这条记在这儿，免得下次有人以为只是没调好。 */
+    holo: {
+      fade: 0.22, vel: 0.95, speed: [0.6, 3.4], curlScale: 0.02, life: 700,
+      r: [1.0, 2.8], alpha: 0.24, jitter: 0.35, topSpeedMul: 2.3,
+      starCount: 34, bias: 1.6, swirl: 0.45, density: 2.4, countMin: 40, hueCycle: 12000,
+    },
+  };
 
   /**
    * 把流体引擎挂到某个 canvas + rail 上，返回 stop()（幂等，可重复调用）。
@@ -423,7 +458,7 @@
    *  · 返回的 stop() 会 cancelAnimationFrame、摘掉 resize 监听与 ResizeObserver、
    *    清空画布 —— 调用方（React effect 的清理函数）必须调它。
    */
-  function mountFluid(canvas, rail, pctRef, lastTopIndexRef) {
+  function mountFluid(canvas, rail, pctRef, lastTopIndexRef, skin) {
     var win = typeof window !== "undefined" ? window : null;
     if (!win) return noop;
     // 帧边界钩子：**只**给离线测试用（离线测试拿不到闭包里的 parts，必须在帧边界上收集
@@ -464,7 +499,9 @@
     })();
 
     var dpr = Math.min(2, win.devicePixelRatio || 1);
-    var PRESET = FLUID_PRESET;
+    // 皮肤只覆盖它要改的那几个键，其余沿用 FLUID_PRESET。
+    var mode = typeof skin === "string" && FLUID_SKINS[skin] !== undefined ? skin : "fluid";
+    var PRESET = mode === "fluid" ? FLUID_PRESET : Object.assign({}, FLUID_PRESET, FLUID_SKINS[mode]);
     var STOPS = FLUID_STOPS;
     /**
      * 源头当前的色带位置（0~1），每帧由 step() 按时间更新。
@@ -915,7 +952,7 @@
         // 第四轮：0.55 → PRESET.swirl(0.9)。局部流场对方向的支配力更强，不再是
         // "整片朝右平移、只是略有起伏"，而是每颗粒子都跟着当地流场乱走（用户："运动不够随机"）。
         // 仍然保留 `1 +`：主方向还是向右，只是被搅得更厉害。
-        var dirX = 1 + cv[0] * PRESET.swirl * pt.s;      // 主方向：向右（响应强度各不相同）
+        var dirX = PRESET.bias + cv[0] * PRESET.swirl * pt.s;      // 主方向：向右（响应强度各不相同）
         var dirY = cv[1] * PRESET.swirl * pt.s;          // 横向搅动
         var wob = Math.sin(t * 0.0016 + pt.ph) * 0.34 * pt.s;   // 个体摆动：把"一堵墙"打散成丝絮（0.22→0.34）
         dirY += wob;
@@ -954,8 +991,16 @@
         // 烟状拖尾，要的是能看出流动方向的实心流体。层理由涡旋与速度差给出，不靠变淡。
         var alpha = pt.a * (1 - 0.15 * Math.min(1, pt.age / pt.life));
         ctx2d.fillStyle = "rgba(" + cc[0] + "," + cc[1] + "," + cc[2] + "," + alpha.toFixed(3) + ")";
-        ctx2d.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2);
-        ctx2d.fill();
+        if (mode === "holo") {
+          // 全息画**竖线**，不画圆点：这条轨道在这里是一台仪表，读数靠刻线而不是一团雾。
+          // 高度跟着半径走（holo 的 r 是 1.0~2.8 → 线高 5~14px）；x 取整，否则 1px 宽的线
+          // 落在分数像素上会被抗锯齿糊成一条灰带。
+          var lineH = pt.r * 5;
+          ctx2d.fillRect(Math.round(pt.x), pt.y - lineH / 2, 1, lineH);
+        } else {
+          ctx2d.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2);
+          ctx2d.fill();
+        }
       }
       ctx2d.globalCompositeOperation = "source-over";
 
@@ -1653,13 +1698,16 @@
      * 也不该把 canvas 节点本身放进依赖 —— 那会让每次重渲染都重启引擎）。
      */
     var activeSkin = skinOf(prefs);
+    // 有粒子引擎的皮肤。chrome 不在这里 —— 液态金属没有粒子，铺上就把"金属"变成"雾"。
+    // nebula 也不在：它试过，退回了 CSS 渐变（原因见 FLUID_SKINS 那段注释）。
+    var particleSkin = activeSkin === "fluid" || activeSkin === "holo";
     useEffect(function () {
-      if (activeSkin !== "fluid" || !open) return undefined;
+      if (!particleSkin || !open) return undefined;
       var canvas = fluidCanvasRef.current;
       var node = railRef.current;
       if (!canvas || !node) return undefined;
       // mountFluid 自己吞掉所有启动异常：拿不到上下文 / 环境不对就返回 noop
-      return mountFluid(canvas, node, fluidPctRef, lastTopIndexRef);
+      return mountFluid(canvas, node, fluidPctRef, lastTopIndexRef, activeSkin);
     }, [activeSkin, open]);
 
     // 只有子代理会话不显示（这是设计）。其它情况一律渲染出控件 ——
