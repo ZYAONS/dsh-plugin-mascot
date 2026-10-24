@@ -1040,3 +1040,92 @@
 /* 填充让位。::after 那层故意留着：它是 holo 的识别特征 —— 那排 11px 的暗色分隔线，
    "仪表刻度"就是它给的，粒子在它底下扫。 */
 [data-effort-slider][data-skin="holo"] .es-rail__fill{background:transparent;box-shadow:none}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ★ holo 重新设计：全息能量仪表
+
+   上一版只是一条水平扫描带 —— 在真实界面里读起来像"更密的 fluid"。这一版换隐喻：
+
+     格子里冒能量（engine 的 rise + cell 吸附）
+     右端是**读数边界**（一道发光竖边，随呼吸脉动）
+     旋钮是一道**光圈**，不是白球（白球是流体那一路的语言）
+     未点亮的区间有一层暗刻线，像仪表没信号时的底纹
+
+   ⚠️ 层级：DOM 里 canvas 在 .es-rail__fill **之前**，绝对定位的兄弟按顺序叠，
+      所以填充条本来盖在粒子上。fluid 侥幸能看见是因为它的 fill 是纯透明的。
+      这里显式给 canvas 更高 z-index —— 否则粒子全被埋在一条渐变底下。
+
+   填充条**保留一层很淡的底色**（不透明化）：万一引擎没跑起来（无 canvas 上下文 /
+   被禁用），档位读数仍然在。透明填充 = 引擎一挂，滑杆就是一条空轨道。
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+[data-effort-slider][data-skin="holo"] .es-rail__fluid,
+[data-effort-slider][data-skin="holo"] .es-rail__stars{display:block}
+
+[data-effort-slider][data-skin="holo"] .es-rail__fluid{z-index:2}
+[data-effort-slider][data-skin="holo"] .es-rail__stars{z-index:3}
+[data-effort-slider][data-skin="holo"] .es-rail__fill{z-index:1}
+/* 光圈与刻度要在粒子之上，否则读不出位置。 */
+[data-effort-slider][data-skin="holo"] .es-rail__grid,
+[data-effort-slider][data-skin="holo"] .es-knob{z-index:4}
+
+/* ── 轨道：没信号的地方也有刻线（仪表的底纹） ── */
+[data-effort-slider][data-skin="holo"] .es-rail{
+  background-image:
+    repeating-linear-gradient(90deg,rgba(120,200,210,.07) 0 1px,transparent 1px 11px),
+    linear-gradient(180deg,#061016,#0e2830);
+  box-shadow:0 0 0 1px rgba(120,200,210,.28) inset,0 4px 14px rgba(4,8,12,.6) inset;
+}
+/* 刻度线加亮一档：它是这台仪表唯一的静态参照。 */
+[data-effort-slider][data-skin="holo"] .es-rail__grid i{background:rgba(120,200,210,.30)}
+
+/* ── 已点亮：淡底色 + 一格一格的暗分隔 + 右端读数边界 ── */
+[data-effort-slider][data-skin="holo"] .es-rail__fill{
+  background:linear-gradient(180deg,rgba(55,224,216,.34),rgba(55,224,216,.18) 52%,rgba(55,224,216,.30));
+  border-right:2px solid rgba(216,251,247,.95);
+  box-shadow:2px 0 12px rgba(55,224,216,.75);
+  animation:es-holo-edge 1.7s ease-in-out infinite;
+}
+@keyframes es-holo-edge{
+  0%,100%{box-shadow:2px 0 10px rgba(55,224,216,.55)}
+  50%{box-shadow:2px 0 20px rgba(55,224,216,.95),0 0 26px rgba(55,224,216,.45)}
+}
+/* 格子分隔：2px 暗缝，每 11px 一格 —— 和 engine 的 PRESET.cell 必须同宽，
+   否则火花会跨在缝上，"格子里有电"这个读法就散了。 */
+[data-effort-slider][data-skin="holo"] .es-rail__fill::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;
+  background:repeating-linear-gradient(90deg,rgba(2,20,26,.62) 0 2px,transparent 2px 11px);
+  animation:es-holo-flow 3.2s linear infinite;opacity:.85;
+}
+@keyframes es-holo-flow{from{background-position:0 0}to{background-position:11px 0}}
+
+/* ── 旋钮：白球 -> 光圈 ──
+   盒子尺寸**不动**：litW 的算法按 30px 珠子内缩 17px 推的，改宽度会让填充与珠子错位。
+   所以只把外观改成一道竖条 + 外环，几何仍是原来那颗球。 */
+[data-effort-slider][data-skin="holo"] .es-knob{
+  background:transparent;box-shadow:none;border:0;
+}
+[data-effort-slider][data-skin="holo"] .es-knob::before{
+  content:"";position:absolute;left:50%;top:-5px;bottom:-5px;width:3px;margin-left:-1.5px;
+  border-radius:2px;background:rgba(234,253,251,.96);
+  box-shadow:0 0 10px rgba(55,224,216,.95),0 0 22px rgba(55,224,216,.55);
+  animation:es-holo-aperture 2.4s ease-in-out infinite;
+}
+[data-effort-slider][data-skin="holo"] .es-knob::after{
+  content:"";position:absolute;inset:3px;border-radius:999px;background:transparent;
+  border:1px solid rgba(55,224,216,.55);box-shadow:0 0 14px rgba(55,224,216,.35) inset;
+}
+@keyframes es-holo-aperture{
+  0%,100%{opacity:.85;transform:scaleY(1)}
+  50%{opacity:1;transform:scaleY(1.14)}
+}
+
+/* ── ULTRA：读数边界与光圈一起加码（这台仪表的"过载"表达） ── */
+[data-effort-slider][data-skin="holo"][data-ultra="1"] .es-rail__fill{
+  border-right-color:#ffffff;
+  box-shadow:2px 0 22px rgba(55,224,216,1),0 0 34px rgba(55,224,216,.6);
+}
+[data-effort-slider][data-skin="holo"][data-ultra="1"] .es-knob::before{
+  animation-duration:1.1s;
+  box-shadow:0 0 16px rgba(255,255,255,.95),0 0 34px rgba(55,224,216,.85);
+}

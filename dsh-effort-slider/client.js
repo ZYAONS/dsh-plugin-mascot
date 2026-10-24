@@ -409,7 +409,20 @@
      *
      * 1 是"整条往右流"。调到接近 0 就没有主方向了 —— 粒子只在原地被流场搅。
      */
-    bias: 1 };
+    bias: 1,
+    /**
+     * 垂直主方向：dirY = rise + …。0 是现状（水平流），负数往上。
+     *
+     * 加它是为了 holo：这台皮肤画的是"能量在格子里往上冒"，不是"一条河往右流"。
+     */
+    rise: 0,
+    /**
+     * 把横坐标吸附到这么宽的格子中心（px）。0 = 不吸附。
+     *
+     * holo 的填充条上有一排暗分隔线（见 CSS 的 .es-rail__fill::after），粒子若自由横漂
+     * 就会跨过分隔线，"格子里的能量"这个读法就没了。吸附之后每颗火花都待在自己那一格里。
+     */
+    cell: 0 };
   /** 轨道内缩：珠子直径 30px → 左右各内缩 17px（填充条 / 珠子共用这套几何）。 */
   var FLUID_INSET = 17;
 
@@ -436,9 +449,14 @@
        不一样得改**画法**，不是改数字。所以它退回 CSS 渐变 —— 一个像暗流体的星云比原来的
        渐变更差。这条记在这儿，免得下次有人以为只是没调好。 */
     holo: {
-      fade: 0.22, vel: 0.95, speed: [0.6, 3.4], curlScale: 0.02, life: 700,
-      r: [1.0, 2.8], alpha: 0.24, jitter: 0.35, topSpeedMul: 2.3,
-      starCount: 34, bias: 1.6, swirl: 0.45, density: 2.4, countMin: 40, hueCycle: 12000,
+      // 这台皮肤是一台**仪表**：能量在格子里往上冒，右端是读数边界。
+      // 所以主方向从"往右"改成"往上"（rise 负），横坐标吸附到 11px 的格子（和 CSS 里
+      // 那排分隔线同宽），寿命短、擦得快 —— 火花才"脆"，不拖成一片雾。
+      // 第一版（水平扫描线）在真实界面里读数还行，但看着像"更密的流体"；竖着冒才像仪表。
+      fade: 0.24, vel: 0.9, speed: [0.5, 2.2], curlScale: 0.02, life: 1100,
+      r: [1.0, 2.4], alpha: 0.26, jitter: 0.30, topSpeedMul: 2.0,
+      starCount: 30, bias: 0.28, rise: -0.95, cell: 11, swirl: 0.30,
+      density: 2.0, countMin: 34, hueCycle: 12000,
     },
   };
 
@@ -953,7 +971,7 @@
         // "整片朝右平移、只是略有起伏"，而是每颗粒子都跟着当地流场乱走（用户："运动不够随机"）。
         // 仍然保留 `1 +`：主方向还是向右，只是被搅得更厉害。
         var dirX = PRESET.bias + cv[0] * PRESET.swirl * pt.s;      // 主方向：向右（响应强度各不相同）
-        var dirY = cv[1] * PRESET.swirl * pt.s;          // 横向搅动
+        var dirY = PRESET.rise + cv[1] * PRESET.swirl * pt.s;          // 横向搅动
         var wob = Math.sin(t * 0.0016 + pt.ph) * 0.34 * pt.s;   // 个体摆动：把"一堵墙"打散成丝絮（0.22→0.34）
         dirY += wob;
         for (var vi = 0; vi < vortices.length; vi += 1) {
@@ -996,7 +1014,10 @@
           // 高度跟着半径走（holo 的 r 是 1.0~2.8 → 线高 5~14px）；x 取整，否则 1px 宽的线
           // 落在分数像素上会被抗锯齿糊成一条灰带。
           var lineH = pt.r * 5;
-          ctx2d.fillRect(Math.round(pt.x), pt.y - lineH / 2, 1, lineH);
+          // 吸附到格子中心：能量必须待在自己那一格里，跨过分隔线就读不成"哪格有电"。
+          var cellW = PRESET.cell;
+          var drawX = cellW > 0 ? Math.floor(pt.x / cellW) * cellW + cellW / 2 : pt.x;
+          ctx2d.fillRect(Math.round(drawX), pt.y - lineH / 2, 1, lineH);
         } else {
           ctx2d.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2);
           ctx2d.fill();
