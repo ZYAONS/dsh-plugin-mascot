@@ -114,8 +114,12 @@ await it("apply() registers into shell.overlay and declares its own session-scop
     },
   };
   exports_.apply(ctx);
-  const options = registrations[0].options;
-  assert.deepEqual(injectedKeys, ["shell.overlay"], "the floating surface belongs in the frame-wide overlay");
+  assert.deepEqual(injectedKeys, ["conversation.composer.dock", "shell.overlay"],
+    "two mount points: the band above the prompt, and the floating character in the frame overlay");
+  const byName = (name) => registrations.find((entry) => entry.options !== undefined && entry.options.name === name);
+  assert.equal(byName("conversation.composer.dock").component, exports_.MascotBand, "the band registers MascotBand itself");
+  assert.equal(byName("conversation.composer.dock").options.id, "mascot-band", "a fresh id keeps the entry additive");
+  const options = byName("shell.overlay").options;
   assert.equal(options.name, "shell.overlay");
   assert.equal(options.id, "mascot", "a fresh id is what makes the entry additive");
   assert.ok(options.children["mascot.panel"], "the panel seat must be declared as a child");
@@ -135,9 +139,8 @@ await it("apply() registers into shell.overlay and declares its own session-scop
   // The `inject` stub collects yielded disposers alongside the registrations, so count the
   // ones that are registrations rather than everything the generator handed back.
   const entries = registrations.filter((entry) => entry.options !== undefined);
-  assert.equal(entries.length, 2, `the overlay, and the panel that fills the slot it declares (saw ${String(entries.length)})`);
-  assert.equal(entries[1].options.name, "mascot.panel", "the declared child slot must be occupied");
-  assert.equal(entries[1].component, exports_.MascotPanel, "by MascotPanel itself, not a copy");
+  assert.equal(entries.length, 3, `the band, the overlay, and the panel that fills the slot the overlay declares (saw ${String(entries.length)})`);
+  assert.equal(byName("mascot.panel").component, exports_.MascotPanel, "by MascotPanel itself, not a copy");
 });
 //#endregion
 

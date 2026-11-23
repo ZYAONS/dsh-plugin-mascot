@@ -68,6 +68,8 @@ const FIXTURES = {
   usage: { uncachedInputTokens: 18432, outputTokens: 15204, cacheReadTokens: 214784, cacheWriteTokens: 8192 },
   pressure: { pressureTokens: 241408, projectedTokens: 262144, contextWindow: 1000000 },
   sessionId: "9f2c41ab-7d33-4e8a-9c10-2b6f5ae0d711",
+  /** 今日累计词元：报账条第四格读的就是它（宿主账本 /api/usage 的 today）。 */
+  today: 1284000,
   frames: [
     {
       caption: "可露希尔 · 罗德岛工程终端",
@@ -135,8 +137,11 @@ const STYLE = [
   ".bubble { height: 46px; border-radius: 10px; background: rgba(255,255,255,.045); }",
   ".bubble.me { height: 34px; width: 62%; margin-left: auto; background: rgba(93,150,255,.13); }",
   ".bubble.short { height: 62px; }",
-  ".composer { position: absolute; left: 76px; right: 20px; bottom: 18px; height: 46px; border-radius: 12px;",
+  ".composer { position: absolute; left: 76px; right: 20px; bottom: 56px; height: 46px; border-radius: 12px;",
   "  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.07); }",
+  "/* conversation.composer.dock 的真实语义是「composer 卡片下方的一行环境条目」",
+  "   （slot-catalog: kind list / scope session），所以这里就照那个位置摆，别摆到上面去。 */",
+  ".dock { position: absolute; left: 76px; right: 20px; bottom: 18px; display: flex; justify-content: flex-end; }",
   "/* Freeze the plugin's own motion so the screenshot is byte-stable across runs;",
   "   a static image cannot show the idle bob anyway. */",
   ".dsh-mascot-btn, .dsh-mascot-panel { animation: none !important; }",
@@ -183,8 +188,12 @@ plugin.apply({
   },
 });
 const declared = registered.map((entry) => entry.options.name).sort();
-if (registered[0]?.options?.id !== "mascot" || declared.join(",") !== "mascot.panel,shell.overlay") {
+// 三个挂载点：提示词上方的报账条、帧级覆盖层、以及覆盖层自己声明并填上的面板座。
+if (declared.join(",") !== "conversation.composer.dock,mascot.panel,shell.overlay") {
   throw new Error("preview: unexpected registration " + JSON.stringify(registered.map((r) => r.options)));
+}
+if (registered.find((entry) => entry.options.id === "mascot") === undefined) {
+  throw new Error("preview: the overlay entry is missing " + JSON.stringify(registered.map((r) => r.options)));
 }
 if (components["mascot.panel"] === undefined) {
   throw new Error("preview: the overlay declares mascot.panel but nothing fills it — the panel would open empty");
@@ -236,6 +245,7 @@ function Frame({ spec }) {
         h("div", { className: "bubble short" }),
         h("div", { className: "bubble" })),
       h("div", { className: "composer" }),
+      h("div", { className: "dock" }, renderSlot("conversation.composer.dock", {})),
       h("div", { ref: host })),
     h("div", { className: "caption" }, spec.caption));
 }
@@ -247,6 +257,14 @@ window.fetch = (input) => {
   const url = String(input);
   if (url.includes("/api/looks")) {
     return Promise.resolve({ ok: true, json: () => Promise.resolve(LOOK_INDEX) });
+  }
+  // 报账条每天读一次账本（GET 读、POST 顺带上报）。这两条不应答的话它会拿到
+  // 一个 ok:false，于是第四格永远显示「—」并在旁边挂个「!」—— 截图就成了"坏掉的样子"。
+  if (url.includes("/api/usage")) {
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ ok: true, day: "2026-11-23", today: FIXTURES.today }),
+    });
   }
   return Promise.resolve({
     ok: true,
@@ -321,6 +339,27 @@ window.PREVIEW_READY = (async () => {
     caption.textContent = caption.textContent.replace(/rig: (ON|off)/u, "rig: " + (rigged ? "ON" : "off") + " (" + (canvas === null ? "no canvas" : "canvas " + canvas.width + "x" + canvas.height) + ")");
   }
   await new Promise((resolve) => setTimeout(resolve, 400));
+
+  /**
+   * 报账条：插进 conversation.composer.dock 之后必须真的画出四个数。
+   *
+   * 这条断言只能放在这里。npm test 不渲染组件，所以"组件画不出来"它看不见 ——
+   * useTodaySpend 曾经把「{today,error}」写成「return today」，正是靠 preview 才抓到的。
+   * 这里断言的是「四格都有值」，不是具体数字：数字由 compact/percent 决定，把 257k
+   * 这类格式写死在测试里，改一次格式就要改两处，而改错的地方还是这一处。
+   */
+  const bands = [...document.querySelectorAll(".dsh-mascot-band")];
+  if (bands.length !== FIXTURES.frames.length) {
+    throw new Error("preview: 报账条应每帧一条，实际 " + String(bands.length));
+  }
+  for (const band of bands) {
+    const text = band.textContent;
+    for (const label of ["可露希尔", "本会话", "缓存", "上下文", "今日"]) {
+      if (!text.includes(label)) throw new Error("preview: 报账条缺少「" + label + "」，实际 " + JSON.stringify(text));
+    }
+    if (text.includes("—")) throw new Error("preview: 报账条有一格没取到数 " + JSON.stringify(text));
+    if (band.getBoundingClientRect().width <= 0) throw new Error("preview: 报账条宽度为 0（没画出来）");
+  }
 })();`;
 
 const page = `<!doctype html>
