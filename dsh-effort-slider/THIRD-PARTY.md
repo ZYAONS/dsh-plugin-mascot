@@ -11,7 +11,7 @@
 | --- | --- | --- | --- |
 | [Feather Icons](https://github.com/feathericons/feather) 的 `zap` 轮廓<br>`M13 2 L3 14 h9 l-1 8 10-12 h-9 l1-8 z` | MIT | 闪电开关按钮的 SVG 路径（`client.js` 的 `BOLT_PATH`）；描边/渐变/电流包都是在这条路径上做的 | 只有那一行路径字符串，**不含** Feather 的源码或字体 |
 | [React](https://github.com/facebook/react) | MIT | 客户端半边的 UI 由 React 渲染 | **不打包**。通过宿主的模块加载器 `require('react')` 取，是 peer dependency |
-| [obra/superpowers](https://github.com/obra/superpowers) 的四个 skill：`dispatching-parallel-agents` / `subagent-driven-development` / `verification-before-completion` / `systematic-debugging` | MIT | Ultra 与闪电两个模式的策略正文里点名要加载的 playbook | **原样打包**在 `skills/`（21 个文件，含配套 prompt 模板与脚本，逐字节未改）。pin 在 commit [`8ca22dba…`](https://github.com/obra/superpowers/tree/8ca22dba9a94f28898bbce59f2537ff4d87c747d)；许可证全文见 `skills/LICENSE-superpowers`；装法见 `skills/README.md` |
+| [obra/superpowers](https://github.com/obra/superpowers) 的四个 skill：`dispatching-parallel-agents` / `subagent-driven-development` / `verification-before-completion` / `systematic-debugging` | MIT | Ultra 与闪电两个模式的策略正文里点名要加载的 playbook | **原样打包**在 `skills/`（20 个文件，含配套 prompt 模板与脚本，逐字节未改，字节数与上游 tree 逐一核对）。pin 在 commit [`8ca22dba…`](https://github.com/obra/superpowers/tree/8ca22dba9a94f28898bbce59f2537ff4d87c747d)；许可证全文见 `skills/LICENSE-superpowers`；来源记录见 `skills/VENDOR.json`；装法见 `skills/README.md`<br>⚠️ 这一行曾经是**空头支票**：上面写着"原样打包"，而 `skills/` 目录当时并不存在（`git ls-files` 为 0）。策略正文于是要求模型加载四个不存在的技能，用户看到的是"找不到调用的东西"。现在文件到位，并由 `test/host.test.mjs` 第 [6] 组挡回归：**正文点名的技能必须真的在包里**。 |
 
 > Feather Icons：Copyright (c) 2013-2023 Cole Bemis。
 > React：Copyright (c) Meta Platforms, Inc. and affiliates。

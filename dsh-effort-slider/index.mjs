@@ -15,9 +15,10 @@
  *  D. **不在启动关键路径里执行客户端产物**：产物审计改为**静态检查**（读文件、查标志位），
  *     执行式深检只在显式设置 `EFFORT_SLIDER_DEEP_AUDIT=1` 时做，且失败也不阻断。
  */
-import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { createTurbo, TURBO_ENDPOINT } from "./turbo.mjs";
 
@@ -72,6 +73,69 @@ function say(level, message) {
 const warn = (m) => say("warn", m);
 const fail = (m) => say("error", m);
 const info = (m) => say("info", m);
+
+/* ───────────────────────── 随包技能：装进 DSH 的用户技能目录 ───────────────────────── */
+
+/**
+ * ULTRA 与闪电两个模式的策略正文点名要加载的四个 skill，随包带在 `skills/`。
+ *
+ * 它们不是可选的装饰：`policy.mjs` 的 Ultra 规则 8 写着"load the
+ * `verification-before-completion` and `systematic-debugging` skills"，闪电规则 11 写着
+ * "load the `dispatching-parallel-agents` and `subagent-driven-development` skills"。
+ * 正文这么写、技能却不在，模型就会去加载不存在的东西 —— 用户看到的是"找不到调用的东西"。
+ * （THIRD-PARTY.md / package.json 的 files / 两份 README 早就按"已随包"写了，只有目录没做。）
+ *
+ * 来源与许可见 `skills/VENDOR.json`、`skills/LICENSE-superpowers`（MIT，obra/superpowers）。
+ */
+const BUNDLED_SKILLS = [
+  "dispatching-parallel-agents",
+  "subagent-driven-development",
+  "systematic-debugging",
+  "verification-before-completion",
+];
+
+/** DSH 的用户技能根目录：宿主会 watch 它，所以装进去当场就能被目录发现。 */
+function skillsHome() {
+  const home = process.env.DSH_HOME;
+  if (typeof home === "string" && home.trim() !== "") return join(home.trim(), "skills");
+  return join(homedir(), ".dsh", "skills");
+}
+
+/**
+ * 把四个技能复制进用户技能目录。
+ *
+ * 三条与 mascot 装 ponytail 时相同的纪律：
+ *  · **绝不覆盖**已有目录 —— 那儿可能已经是更新的上游版本，也可能是用户自己改过的；
+ *  · 每个技能独立成败，一个失败不影响其它三个；
+ *  · 全程不抛：这一步是锦上添花，坏了也不能让滑条跟着坏。
+ *
+ * @returns `{ [name]: "installed" | "present" | "missing" | "failed: ..." }`
+ */
+function installBundledSkills() {
+  const states = {};
+  let sourceRoot;
+  try {
+    sourceRoot = fileURLToPath(new URL("./skills/", import.meta.url));
+  } catch (error) {
+    return { _: `failed: ${String(error)}` };
+  }
+  const targetRoot = skillsHome();
+  for (const name of BUNDLED_SKILLS) {
+    try {
+      const from = join(sourceRoot, name, "SKILL.md");
+      if (!existsSync(from)) { states[name] = "missing"; continue; }
+      const to = join(targetRoot, name, "SKILL.md");
+      if (existsSync(to)) { states[name] = "present"; continue; }
+      mkdirSync(targetRoot, { recursive: true });
+      // recursive：subagent-driven-development 带 scripts/ 与几个 prompt 模板。
+      cpSync(join(sourceRoot, name), join(targetRoot, name), { recursive: true });
+      states[name] = existsSync(to) ? "installed" : "failed: 复制后 SKILL.md 仍不存在";
+    } catch (error) {
+      states[name] = `failed: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+  return states;
+}
 
 /* ───────────────────────── 皮肤偏好：纯 JSON 文件 ───────────────────────── */
 
@@ -353,6 +417,18 @@ function setup(ctx) {
   void deepAuditIfRequested();
 
   const file = preferenceFilePath();
+  // 随包技能：Ultra / 闪电的策略正文点名要它们。装在 setup 最前面，独立 try/catch ——
+  // 装技能失败只该少几个 playbook，不该让下面的滑条一起不初始化。
+  let bundledSkillStates = {};
+  try {
+    bundledSkillStates = installBundledSkills();
+    const installed = Object.entries(bundledSkillStates).filter(([, s]) => s === "installed").map(([n]) => n);
+    const broken = Object.entries(bundledSkillStates).filter(([, s]) => String(s).startsWith("failed") || s === "missing");
+    if (installed.length > 0) info(`随包技能已装进 ${skillsHome()}：${installed.join(", ")}`);
+    if (broken.length > 0) warn(`随包技能没能就位：${broken.map(([n, s]) => `${n}=${String(s)}`).join(", ")}`);
+  } catch (error) {
+    fail(`随包技能安装失败（不影响滑条）：${String(error)}`);
+  }
   const runNonce = randomBytes(12).toString("hex");
   /** phase -> { status, at, source, error }；同一 phase 只接受首次上报 */
   const heartbeats = new Map();
@@ -375,6 +451,10 @@ function setup(ctx) {
             response.end(JSON.stringify({
               skin: current.skin,
               persisted: current.persisted,
+              // Ultra / 闪电正文点名要的四个 playbook 现在在不在。用户排查
+              // 「找不到调用的东西」时，第一个该看的就是这四个值。
+              skills: bundledSkillStates,
+              skillsHome: skillsHome(),
               reportNonce: runNonce,
               heartbeat: Object.fromEntries([...heartbeats].map(([phase, r]) => [phase, { status: r.status, at: r.at }])),
             }));

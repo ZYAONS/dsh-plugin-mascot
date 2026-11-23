@@ -1,0 +1,13 @@
+{
+  "upstream": "https://github.com/obra/superpowers",
+  "commit": "8ca22dba9a94f28898bbce59f2537ff4d87c747d",
+  "license": "MIT",
+  "skills": [
+    "dispatching-parallel-agents",
+    "subagent-driven-development",
+    "systematic-debugging",
+    "verification-before-completion"
+  ],
+  "files": 21,
+  "note": "逐字节取自上游，未修改。安装逻辑见 lib/index.mjs 的 installBundledSkills。"
+}

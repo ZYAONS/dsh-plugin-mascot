@@ -438,6 +438,63 @@ console.log("[5] 客户端 bundle 自检（形状不对必须在宿主日志里�
   rmSync(home, { recursive: true, force: true });
 }
 
+console.log("[6] 随包技能：策略正文点名的 playbook 必须真的在包里、并且真的装得进去");
+{
+  // 这一组的来历：Ultra 规则 8 与闪电规则 11 都写着「load the ... skills」，而
+  // THIRD-PARTY.md / package.json files / 两份 README 也早就按「已随包」写好了 ——
+  // 只有 skills/ 目录本身从来没建过。结果是模型被要求加载四个不存在的技能，
+  // 用户看到的是「找不到调用的东西」。所以先钉住"点名的必须存在"。
+  const policySource = readFileSync(new URL("../policy.mjs", import.meta.url), "utf8")
+    // policy.mjs 的正文是模板字符串，里面的反引号写成 \` —— 不还原就一个也匹配不到。
+    .replace(/\\`/gu, "`");
+  const referenced = new Set();
+  for (const line of policySource.split(/\r?\n/u)) {
+    if (!/skill/iu.test(line)) continue;
+    for (const match of line.matchAll(/`([a-z][a-z0-9-]{5,})`/gu)) referenced.add(match[1]);
+  }
+  check("策略正文里点名了技能（否则这组测试在测空气）", referenced.size >= 2, [...referenced].join(", "));
+
+  const skillsRoot = new URL("../skills/", import.meta.url);
+  for (const name of referenced) {
+    const dir = new URL(`${name}/`, skillsRoot);
+    const file = new URL(`${name}/SKILL.md`, skillsRoot);
+    if (!existsSync(file)) {
+      check(`正文点名的「${name}」随包存在`, false, "skills/ 下没有这个目录 —— 模型会去加载不存在的东西");
+      continue;
+    }
+    const body = readFileSync(file, "utf8");
+    // DSH 的技能目录靠 frontmatter 发现技能；缺了 name/description 就等于没装。
+    const frontName = /^---\r?\n(?:[\s\S]*?\n)?name:\s*(\S+)/u.exec(body)?.[1];
+    const hasDescription = /^---[\s\S]*?\ndescription:\s*\S/u.test(body);
+    check(`「${name}」的 SKILL.md 有 frontmatter 且 name 与目录一致`, frontName === name, `name=${String(frontName)}`);
+    check(`「${name}」的 SKILL.md 有 description（技能目录靠它做发现）`, hasDescription);
+    check(`「${name}」目录非空`, existsSync(dir));
+  }
+
+  const vendor = JSON.parse(readFileSync(new URL("../skills/VENDOR.json", import.meta.url), "utf8"));
+  check("VENDOR.json 记了上游仓库与 commit", vendor.upstream === "https://github.com/obra/superpowers"
+    && /^[0-9a-f]{40}$/u.test(String(vendor.commit)), JSON.stringify(vendor).slice(0, 120));
+  check("许可证全文随包（THIRD-PARTY.md 指的就是它）",
+    /MIT License/u.test(readFileSync(new URL("../skills/LICENSE-superpowers", import.meta.url), "utf8")));
+
+  // 真的装得进去：bootstrap 之后用户技能目录里应当有这四个。
+  const home = mkdtempSync(join(tmpdir(), "es-skills-"));
+  await bootstrap({ dshHome: home });
+  const installed = [...referenced].filter((name) => existsSync(join(home, "skills", name, "SKILL.md")));
+  check("启动时把四个技能装进 DSH_HOME/skills", installed.length === referenced.size,
+    `已装 ${installed.length}/${referenced.size}：${installed.join(", ")}`);
+
+  // 绝不覆盖：用户改过的文件必须原样留着（和 mascot 装 ponytail 同一条纪律）。
+  const sample = [...referenced][0];
+  const sampleFile = join(home, "skills", sample, "SKILL.md");
+  writeFileSync(sampleFile, "operator edited this", "utf8");
+  await bootstrap({ dshHome: home });
+  check("已有技能不被覆盖（用户可能已经改过或更新过）",
+    readFileSync(sampleFile, "utf8") === "operator edited this", `「${sample}」被覆盖了`);
+
+  rmSync(home, { recursive: true, force: true });
+}
+
 console.log("");
 if (failures === 0) {
   console.log(`全部通过 ✅  （${passes} 项）`);
