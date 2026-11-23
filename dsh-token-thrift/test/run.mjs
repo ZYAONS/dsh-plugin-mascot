@@ -46,6 +46,8 @@ async function it(label, body) {
 function fakeContext({ projections = true, webServer = true } = {}) {
   const listeners = new Map();
   const restrictions = [];
+  /** 被解除的遮罩，按顺序。和 restrictions 配对，才能证明"还回去了"。 */
+  const releases = [];
   let total = 0;
   let broken = false;
   let route;
@@ -59,6 +61,7 @@ function fakeContext({ projections = true, webServer = true } = {}) {
   const target = {
     listeners,
     restrictions,
+    releases,
     setTotal(value) { total = value; },
     /** Make the next service read fail, to prove the hook degrades instead of throwing. */
     break() { broken = true; },
@@ -101,7 +104,9 @@ function fakeContext({ projections = true, webServer = true } = {}) {
       const record = { restricted: [] };
       return {
         record,
-        ctx: { tools: { restrict: (filter) => restrictions.push(filter) } },
+        // `restrict()` 返回 disposer —— 遮罩能不能还回去全靠它，所以假实现必须也有。
+        // 原来只 push 不返回，于是"解除"这条路在测试里根本走不通（会被当成没有 disposer）。
+        ctx: { tools: { restrict: (filter) => { restrictions.push(filter); return () => { releases.push(filter); }; } } },
       };
     },
   };
@@ -322,8 +327,87 @@ await it("fan-out tools are masked once the mask ratio is crossed", async () => 
   assert.deepEqual(ctx.restrictions[0].deny, ["subagent", "workflow"]);
 });
 
-await it("a host without the restriction seam still gets the advice", async () => {
+/* 遮罩必须能还回去。
+   用户的原话：「我有时需要你全力工作，而不在乎是不是浪费 token」。而遮罩一旦落下，
+   原来没有任何一条路径能把它撤掉 —— disposer 被丢掉，面板上那句"已遮"永远是真的，
+   只有等会话结束。下面四条把"什么时候该还回去"和"什么时候不该"分别钉住。 */
+await it("turning the mask threshold off gives the tools back", async () => {
+  // `ask` 是函数声明（会提升），`jsonOf` 是文件后面才执行的 const —— 在这里用会撞 TDZ，
+  // 所以就地读一次状态。
+  const readState = async (context) => JSON.parse((await ask(context.route, "/dsh-token-thrift/api/state")).body);
   const ctx = fakeContext();
+  apply(ctx, config({ budget: 100, tiers: [{ ratio: 0.5, text: "x" }], maskTools: ["subagent"], maskAt: 25 }));
+  const agent = ctx.agent();
+  ctx.setTotal(60);
+  await ctx.postExecute(agent);
+  assert.equal(ctx.restrictions.length, 1, "60% is past 25%, so the mask is down");
+
+  const after = await ask(ctx.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { maskAt: 0 } });
+  assert.equal(after.status, 200, "switching masking off must not fail");
+  assert.equal(ctx.releases.length, 1, "the restriction has to be released, not just forgotten");
+  assert.deepEqual(ctx.releases[0], ctx.restrictions[0], "and it must release the filter it applied");
+  const state = await readState(ctx);
+  assert.equal(state.reports[0].masked, false, "the report must stop claiming a mask that is gone");
+});
+
+await it("turning the coach off, or raising the budget, also releases the mask", async () => {
+  // 关掉整个教练
+  const off = fakeContext();
+  apply(off, config({ budget: 100, tiers: [{ ratio: 0.5, text: "x" }], maskTools: ["subagent"], maskAt: 25 }));
+  off.setTotal(60);
+  await off.postExecute(off.agent());
+  assert.equal(off.restrictions.length, 1);
+  await ask(off.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { budget: 0 } });
+  assert.equal(off.releases.length, 1, "an off coach must not keep anyone's tools taken away");
+
+  // 预算调大，比例掉回阈值以下
+  const raised = fakeContext();
+  apply(raised, config({ budget: 100, tiers: [{ ratio: 0.5, text: "x" }], maskTools: ["subagent"], maskAt: 25 }));
+  raised.setTotal(60);
+  await raised.postExecute(raised.agent());
+  assert.equal(raised.restrictions.length, 1);
+  await ask(raised.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { budget: 1000 } });
+  assert.equal(raised.releases.length, 1, "6% of a bigger budget is below the threshold again");
+});
+
+await it("an unchanged setting does not churn the mask", async () => {
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 100, tiers: [{ ratio: 0.5, text: "x" }], maskTools: ["subagent"], maskAt: 25 }));
+  const agent = ctx.agent();
+  ctx.setTotal(60);
+  await ctx.postExecute(agent);
+  // 改一件与遮罩无关的事：阈值还是 25，比例还在它上面 —— 不该还回去。
+  await ask(ctx.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { intensity: 10 } });
+  assert.equal(ctx.releases.length, 0, "a mask still called for must stay down");
+  assert.equal(ctx.restrictions.length, 1, "and must not be re-applied either");
+});
+
+await it("re-arming the threshold masks the same session again", async () => {
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 100, tiers: [{ ratio: 0.5, text: "x" }], maskTools: ["subagent"], maskAt: 25 }));
+  const agent = ctx.agent();
+  ctx.setTotal(60);
+  await ctx.postExecute(agent);
+  await ask(ctx.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { maskAt: 0 } });
+  assert.equal(ctx.releases.length, 1);
+  await ask(ctx.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { maskAt: 25 } });
+  // 解除之后仍要能重新落下：否则"关一下再开"就成了永久免疫。
+  await ctx.postExecute(agent);
+  assert.equal(ctx.restrictions.length, 2, "the mask must be able to land again");
+});
+
+await it("a host whose restrict() returns no disposer cannot be released, and says so quietly", async () => {
+  const ctx = fakeContext();
+  apply(ctx, config({ budget: 100, tiers: [{ ratio: 0.5, text: "x" }], maskTools: ["subagent"], maskAt: 25 }));
+  ctx.setTotal(60);
+  // 旧宿主 / 别的实现：restrict 不给 disposer。
+  const sealed = { ctx: { tools: { restrict: () => undefined } } };
+  await ctx.postExecute(sealed);
+  const after = await ask(ctx.route, "/dsh-token-thrift/api/settings", { method: "POST", body: { maskAt: 0 } });
+  assert.equal(after.status, 200, "not being able to release is a limitation, not a failed request");
+});
+
+await it("a host without the restriction seam still gets the advice", async () => {  const ctx = fakeContext();
   apply(ctx, config({ budget: 100, tiers: [{ ratio: 0.5, text: "x" }], maskTools: ["subagent"], maskRatio: 0.5 }));
   ctx.setTotal(90);
   const broken = { ctx: { tools: { restrict: () => { throw new Error("no seam"); } } } };
@@ -1148,6 +1232,95 @@ await it("the panel is a control surface, not a read-out", () => {
   assert.equal(maskRange.step, "1");
   assert.equal(maskRange.value, "25", "the threshold comes from maskAt, not from the dial");
   assert.match(maskRange["aria-label"], /遮罩/u, "and it has to say which control it is");
+});
+
+await it("全力工作 turns the advice AND the mask off — and restores both from the config", async () => {
+  // 用户要的东西只有一句话：「我有时需要你全力工作，而不在乎是不是浪费 token」。
+  // 这条测试盯的是它最容易假的地方：只关力度，遮罩照旧摘工具（原来的按钮就是这样）。
+  const posts = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (url, init) => {
+    posts.push({ url: String(url), body: JSON.parse(init.body) });
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) });
+  };
+  const base = {
+    ok: true, enabled: true, budget: 1000, intensity: 55, level: "standard", maskAt: 25, maskRatio: 0.25,
+    tiers: [0.54, 0.9], maskTools: ["workflow"], countCache: true, maxReminders: 6,
+    presets: { off: 0, light: 25, standard: 55, strict: 100 },
+    // 配置里和现在不一样，正好检验"恢复"恢复的是哪一份。
+    configured: { budget: 1000, intensity: 33, maskAt: 10 },
+    overridden: { budget: false, intensity: false, maskAt: false },
+    reports: [{ sessionId: "s1", at: 1, spent: 400, ratio: 0.4, masked: false, reminders: 1,
+      tiers: [0.54, 0.9], fired: [{ ratio: 0.54, at: 1 }, { ratio: 0.9, at: null }] }],
+  };
+  /** 渲染一次面板，返回 { button, now }：button 是总开关元素，now 是那一行说明。 */
+  const render = (payload) => {
+    const queue = [payload, true];
+    const Hooks = {
+      createElement: (type, props, ...children) => ({
+        type, props: props ?? {},
+        children: children.flat(Infinity).filter((child) => child !== null && child !== undefined && child !== false),
+      }),
+      useState: (initial) => [queue.length > 0 ? queue.shift() : initial, () => {}],
+      useEffect: () => {},
+      useRef: (initial) => ({ current: queue.length > 0 && initial !== undefined ? queue.shift() : initial }),
+      Fragment: Symbol.for("react.fragment"),
+    };
+    const tree = registrations[0]
+      .factory((spec) => {
+        if (spec === "react") return Hooks;
+        throw new Error(`unexpected require(${spec})`);
+      })
+      .ThriftPanel({ sessionId: "s1" });
+    let button;
+    let now;
+    const walk = (node) => {
+      if (node === null || typeof node !== "object") return;
+      if (Array.isArray(node)) { node.forEach(walk); return; }
+      const cls = typeof node.props?.className === "string" ? node.props.className : undefined;
+      if (cls === "dsh-thrift-power") button = node;
+      if (cls === "dsh-thrift-now") now = node.children?.[0];
+      (node.children ?? []).forEach(walk);
+    };
+    walk(tree);
+    return { button, now };
+  };
+  try {
+    // ---- on: one click must zero both keys, not just the dial ----
+    const on = render(base);
+    assert.ok(on.button !== undefined, "the panel needs the switch; sliding two things to 0 is not a click");
+    assert.equal(on.button.props["data-off"], "0");
+    assert.match(String(on.button.children?.[0]), /全力工作/u);
+    assert.match(String(on.now), /劝告 2 档/u, "the debug line says how many rungs are armed");
+    assert.match(String(on.now), /花到 25%/u, "and where the mask sits");
+    on.button.props.onClick();
+    await new Promise((done) => setTimeout(done, 0));
+    assert.deepEqual(posts.at(-1).body, { intensity: 0, maskAt: 0 },
+      "masking is driven by maskAt, so an 'all off' click that omits it leaves the tools masked");
+
+    // ---- already off: the same click puts both back, from the config ----
+    const off = render({ ...base, intensity: 0, maskAt: 0, maskRatio: null });
+    assert.equal(off.button.props["data-off"], "1");
+    assert.match(String(off.button.children?.[0]), /恢复/u);
+    assert.match(String(off.now), /不劝、不遮/u, "and it says out loud that it is standing down");
+    off.button.props.onClick();
+    await new Promise((done) => setTimeout(done, 0));
+    assert.deepEqual(posts.at(-1).body, { intensity: 33, maskAt: 10 },
+      "restoring has to bring back the file's values, not the last thing the panel invented");
+
+    // ---- old host: no maskAt, so the click must not claim to unmask what it cannot see ----
+    const legacy = { ...base };
+    delete legacy.maskAt;
+    delete legacy.maskRatio;
+    const old = render(legacy);
+    old.button.props.onClick();
+    await new Promise((done) => setTimeout(done, 0));
+    assert.deepEqual(posts.at(-1).body, { intensity: 0 }, "sending maskAt to a host that never heard of it is noise");
+    assert.match(String(old.now), /旧版本/u, "and the debug line must name the reason masking follows the dial");
+    assert.doesNotMatch(String(old.now), /永不遮/u, "it must not promise 'never masks' on a host where that is not true");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
 
 await it("a new panel against an old host says so instead of lying about masking", () => {

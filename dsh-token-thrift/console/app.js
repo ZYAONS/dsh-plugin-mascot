@@ -188,14 +188,22 @@
     post(SETTINGS_URL, { maskAt: null });
   });
 
-  /* 全力工作：一句话把力度归零。
+  /* 全力工作：一句话把劝告和遮罩一起关掉。
      这个按钮存在的理由是它对面那句话 ——「我现在要你全力干活，不在乎烧多少」。
-     那件事应该是一次点击，而不是先想清楚 0 是不是等于关闭。 */
+     那件事应该是一次点击，而不是先想清楚 0 是不是等于关闭。
+
+     ⚠️ 必须**两件一起关**。原来这里只发 intensity: 0，而遮罩是由 maskAt 单独驱动的，
+     于是按钮标题写着"不劝、不遮"，实际遮罩照旧 —— 花到 25% 预算 subagent/workflow 还是
+     被摘掉。一个说着"全力"却仍在砍工具表的按钮，比没有这个按钮更糟。 */
   el("fullpower").addEventListener("click", function () {
-    var off = last !== null && (last.intensity || 0) <= 0;
-    // 从关闭恢复到哪一档：优先用配置里的值，配置也没说过就用 standard。
-    var back = last !== null && last.configured.intensity >= 0 ? last.configured.intensity : 55;
-    post(SETTINGS_URL, { intensity: off ? back : 0 });
+    if (last === null) return;
+    var off = (last.intensity || 0) <= 0 && (last.maskAt || 0) <= 0;
+    // 恢复到哪儿：优先配置里的值，配置也没说过就用 standard / 25%。
+    var backIntensity = last.configured.intensity >= 0 ? last.configured.intensity : 55;
+    var backMask = Number.isFinite(last.configured.maskAt) ? last.configured.maskAt : 25;
+    post(SETTINGS_URL, off
+      ? { intensity: backIntensity, maskAt: backMask }
+      : { intensity: 0, maskAt: 0 });
   });
 
   /* 模拟：不改变任何状态，只回答「烧到 X% 的时候，它会对我说什么」。 */
@@ -404,8 +412,12 @@
 
     paintDial(state);
     renderLadder(state);
-    el("fullpower").dataset.off = on ? "0" : "1";
-    el("fullpower").title = on ? "把力度归零：不劝、不遮、不占一个 token" : "恢复力度";
+    // 「全力工作」是两件事一起关（劝告 + 遮罩），所以按钮的亮灭也按两件一起判。
+    var quiet = (state.intensity || 0) <= 0 && (state.maskAt || 0) <= 0;
+    el("fullpower").dataset.off = quiet ? "1" : "0";
+    el("fullpower").title = quiet
+      ? "恢复力度与遮罩阈值"
+      : "把力度和遮罩阈值一起归零：不劝、不遮、不占一个 token";
 
     var over = [];
     if (state.overridden.intensity) over.push("力度");

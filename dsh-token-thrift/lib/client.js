@@ -125,6 +125,17 @@ window.__ModuleLoader__.load({
 .dsh-thrift-apply:hover, .dsh-thrift-restore:hover, .dsh-thrift-reset:hover { background: rgba(255,255,255,.11); }
 .dsh-thrift-restore:disabled, .dsh-thrift-reset:disabled { opacity: .35; cursor: default; }
 .dsh-thrift-configured { margin-top: 5px; font-size: 10px; opacity: .45; }
+/* 全力工作：面板里的一记总开关。它必须比滑杆显眼 —— 需要它的那一刻，
+   人是想"别管了，干活"，不是想先想清楚 0 是不是等于关闭。 */
+.dsh-thrift-power { display: flex; align-items: center; justify-content: center; gap: 6px;
+  pointer-events: auto; cursor: pointer; font: inherit; font-size: 11px; padding: 7px 10px;
+  margin-top: 9px; border-radius: 7px; color: inherit;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); }
+.dsh-thrift-power:hover { background: rgba(255,255,255,.12); }
+.dsh-thrift-power[data-off="1"] { border-color: var(--dsh-thrift-tone); color: var(--dsh-thrift-tone); }
+/* 现在生效的是什么：一句话，放在开关下面。调试时"为什么它没劝/为什么工具被摘了"
+   都从这一行读起，不必再去控制台。 */
+.dsh-thrift-now { margin-top: 5px; font-size: 10px; opacity: .6; line-height: 1.5; }
 .dsh-thrift-error { margin-top: 6px; padding: 5px 8px; border-radius: 6px; font-size: 10.5px;
   background: rgba(255,95,109,.12); border: 1px solid rgba(255,95,109,.35); color: #ffb3b3; }
 .dsh-thrift-rule { height: 1px; margin: 12px 0 2px; background: rgba(255,255,255,.1); }
@@ -862,11 +873,56 @@ window.__ModuleLoader__.load({
 			const overMask = report !== undefined && !report.masked && state.maskRatio !== null
 				&& (state.maskTools ?? []).length > 0 && ratio >= state.maskRatio;
 
+			/*
+			 * 总开关的三种情况都要说清楚，因为它们背后的机制不同：
+			 *   · 宿主有 maskAt  → 关掉必须同时发两个键；
+			 *   · 宿主没有 maskAt（旧半边）→ 遮罩跟着力度走，只能关力度，且**不能**谎称"不遮"；
+			 *   · 已经在全力工作 → 恢复用的是配置里的值，配置没说过就给默认档。
+			 */
+			const maskKnown = state.maskAt !== undefined;
+			const quiet = (state.intensity ?? 0) <= 0 && (!maskKnown || (state.maskAt ?? 0) <= 0);
+			const backIntensity = Number.isFinite(state.configured?.intensity) && state.configured.intensity >= 0
+				? state.configured.intensity
+				: 55;
+			const backMask = Number.isFinite(state.configured?.maskAt) ? state.configured.maskAt : 25;
+			const powerRow = () => h("button", {
+				type: "button",
+				className: "dsh-thrift-power",
+				"data-off": quiet ? "1" : "0",
+				title: quiet
+					? "恢复力度与遮罩阈值"
+					: "把力度和遮罩阈值一起归零：不劝、不遮、不占一个 token",
+				onClick: () => send(SETTINGS_ENDPOINT, quiet
+					? (maskKnown ? { intensity: backIntensity, maskAt: backMask } : { intensity: backIntensity })
+					: (maskKnown ? { intensity: 0, maskAt: 0 } : { intensity: 0 })),
+			}, quiet ? "恢复省钱模式" : "全力工作 · 不劝不遮");
+			// 调试就从这一行读起：为什么它没劝、为什么工具被摘了，都在这里。
+			const nowText = () => {
+				if (quiet) return "现在：不劝、不遮 —— 按你要求全力干活。";
+				const ladder = Array.isArray(state.tiers) ? state.tiers : [];
+				const ask = ladder.length === 0
+					? "不劝"
+					: `劝告 ${String(ladder.length)} 档（最早 ${String(Math.round((ladder[0] ?? 0) * 100))}%）`;
+				const mask = !maskKnown
+					? "遮罩跟着力度走（宿主半边是旧版本）"
+					: (state.maskAt ?? 0) > 0
+						? `花到 ${String(state.maskAt)}% 摘 ${String((state.maskTools ?? []).length)} 个会开枝的工具`
+						: "永不遮罩";
+				return `现在：${ask} · ${mask}`;
+			};
+
 			return h("div", { className: "dsh-thrift-root", style: { left: `${String(ball.x)}px`, top: `${String(ball.y)}px`, "--dsh-thrift-tone": colour } },
 				open ? h("div", { className: "dsh-thrift-panel", role: "dialog", "aria-label": "Token 节流" },
 					header(state.enabled === true ? "运行中" : "未启用"),
 
-					// ---- the controls, which are the point of opening it ----
+					/* 一记总开关，摆在所有滑杆之前。
+					   它关的必须是**两件事**：劝告（intensity）和遮罩（maskAt）。只关力度的话，
+					   遮罩照旧在 maskAt 那个点上摘掉 subagent/workflow —— 一个说着"全力工作"却仍在
+					   砍工具表的按钮，比没有这个按钮更糟。宿主那边也已经能在阈值关掉后把工具还回来
+					   （见 lib/index.js 的 liftMask），否则按了也白按。 */
+					powerRow(),
+					h("div", { className: "dsh-thrift-now" }, nowText()),
+
 					h("div", { className: "dsh-thrift-label" }, "力度（1–100，0 是关闭）"),
 					dialRow(
 						state.intensity ?? 0,

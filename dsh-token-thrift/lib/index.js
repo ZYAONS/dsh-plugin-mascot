@@ -593,6 +593,15 @@ export function apply(ctx, config) {
    */
   const spokenKeys = new Map();
 
+  /**
+   * 遮罩还挂着的那些记录，用来在设置变化时解除。
+   *
+   * `tools.restrict()` 返回 disposer，只有留着它才能把工具表还回去。原来这个返回值被丢掉了，
+   * 于是遮罩是**单向**的：阈值调到 0、预算调大，工具也不会回来 —— 而"我现在要全力工作"
+   * 正是会撞上这个的操作。这里记的是 state 而不是 agent，且解除后立刻删掉。
+   */
+  const maskedStates = new Set();
+
   const stateOf = (agent) => {
     let state = spoken.get(agent);
     if (state === undefined) {
@@ -605,7 +614,7 @@ export function apply(ctx, config) {
       // 是往上下文里灌了重复内容，而上下文正是这个插件要省的东西。
       //
       // 这条纪律来自 dsh-effort-slider 的策略注入：**文本没变就不注入**。
-      state = { delivered: new Set(), said: new Set(), firedAt: new Map(), masked: false, reminders: 0 };
+      state = { delivered: new Set(), said: new Set(), firedAt: new Map(), masked: false, reminders: 0, unmask: null };
       spoken.set(agent, state);
     }
     return state;
@@ -679,6 +688,55 @@ export function apply(ctx, config) {
     }
   };
 
+  /**
+   * 把这条记录的遮罩还回去。
+   *
+   * @param state - 一个 agent 的进度记录。
+   * @returns 真的解除了就 true（`restrict()` 没给 disposer 时只能是 false）。
+   */
+  const liftMask = (state) => {
+    const release = state.unmask;
+    state.masked = false;
+    state.unmask = null;
+    maskedStates.delete(state);
+    // 报告要跟着改，否则面板会一直说"已遮"，直到下一次工具调用才更新 —— 而用户按完
+    // 「全力工作」立刻看面板，看到的正是那一刻。
+    const report = state.sessionId === undefined ? undefined : reports.get(state.sessionId);
+    if (report !== undefined) reports.set(state.sessionId, { ...report, masked: false, maskNote: null });
+    if (typeof release !== "function") return false;
+    try {
+      release();
+      return true;
+    } catch {
+      // 释放失败不该让设置接口报错：遮罩留着是遗憾，接口 500 是故障。
+      return false;
+    }
+  };
+
+  /**
+   * 设置变了之后，把不再成立的遮罩解除掉。
+   *
+   * 三种情况算"不再成立"：整个教练被关掉、阈值被调到永不（0）、或者这个会话的比例
+   * 已经掉回阈值以下（预算被调大）。第二条就是「全力工作」按下去之后走的那条路。
+   *
+   * 只在设置变化时跑：遮罩本身仍是一旦越过阈值就落下，不随比例抖动而反复摘/还。
+   */
+  const reconcileMasks = () => {
+    if (maskedStates.size === 0) return;
+    const neverMasks = settings.enabled !== true || settings.maskTools.length === 0 || !Number.isFinite(settings.maskRatio);
+    for (const state of [...maskedStates]) {
+      if (neverMasks) {
+        liftMask(state);
+        continue;
+      }
+      const report = state.sessionId === undefined ? undefined : reports.get(state.sessionId);
+      // 没有报告就没有可信的比例；这时宁可留着遮罩，也不要凭猜测把工具还回去。
+      if (report === undefined || report.spent === undefined) continue;
+      const ratio = settings.budget > 0 ? report.spent / settings.budget : Number.POSITIVE_INFINITY;
+      if (ratio < settings.maskRatio) liftMask(state);
+    }
+  };
+
   /** Apply a console change and make the running coach match it. */
   const applySettings = (body) => {
     if (body.intensity !== undefined) {
@@ -706,6 +764,8 @@ export function apply(ctx, config) {
     }
     settings = settingsFor(config, override);
     sync();
+    // 设置一改，就不再成立的那些遮罩必须当场还回去 —— 「全力工作」的意义就在这里。
+    reconcileMasks();
     return {};
   };
 
@@ -769,8 +829,11 @@ export function apply(ctx, config) {
     if (!state.masked && settings.maskTools.length > 0 && ratio >= settings.maskRatio) {
       try {
         // Scoped to this agent, so a sibling working on something else keeps its tools.
-        agent.ctx?.tools?.restrict?.({ deny: settings.maskTools });
+        const release = agent.ctx?.tools?.restrict?.({ deny: settings.maskTools });
         state.masked = true;
+        // 留住 disposer：没有它，遮罩就只能等会话结束才消失（见 maskedStates 的注释）。
+        state.unmask = typeof release === "function" ? release : null;
+        maskedStates.add(state);
         state.maskNote = null;
       } catch (error) {
         // A host without the restriction seam still gets the advice below; refusing to
@@ -781,6 +844,7 @@ export function apply(ctx, config) {
         // symptom that was reported as "the mask does nothing": nothing happens, no message.
         // The reason is carried to the snapshot instead, and the panel shows it.
         state.masked = false;
+        state.unmask = null;
         state.maskNote = error instanceof Error ? error.message : String(error);
       }
     }
