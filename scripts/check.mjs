@@ -393,7 +393,7 @@ await it("the host half normalizes every documented knob instead of trusting the
 const host = await import(new URL("../lib/index.js", import.meta.url).href);
 
 /** Build a ctx stub that records the route the plugin claims. `apiKey: null` means the reference is unset. */
-function hostHarness({ apiKey = "sk-test-secret", authenticated = true, config } = {}) {
+function hostHarness({ apiKey = "sk-test-secret", authenticated = true, config, sessionProjections } = {}) {
   const calls = [];
   const route = { current: undefined };
   const ctx = {
@@ -402,6 +402,8 @@ function hostHarness({ apiKey = "sk-test-secret", authenticated = true, config }
       if (service === "credentials") {
         return { resolve: async (ref) => (apiKey === null ? undefined : { value: apiKey, source: `env:${ref}` }) };
       }
+      // 账本投影：传进来就有，不传就当这个 profile 没有这个服务。
+      if (service === "sessionProjections") return sessionProjections;
       return undefined;
     },
     effect: (callback) => callback(),
@@ -1033,6 +1035,87 @@ await it("a backdrop is picked up by character id, and nothing else in the direc
   const bare = mkdtempSync(join(tmpdir(), "mascot-rooms-bare-"));
   copyFileSync(join(root, "art", "index.json"), join(bare, "index.json"));
   assert.deepEqual((await request(hostHarness({ config: { artDir: bare } }), "/dsh-mascot/api/looks")).json.rooms, {}, "no backdrops is an empty map, not a missing one");
+});
+//#endregion
+
+//#region 4b — 报账条多出来的那三格（宿主投影 mascotLedger）
+/**
+ * 这一组测试的是**纯函数**：投影单元的 init / apply / view / schema。
+ * 真机上"注册之后客户端能不能读到"没法在这里验 —— 那是 DSH 的管线，不是本插件的代码。
+ * 但折叠算得对不对、坏 checkpoint 会不会被拒、服务不在时插件还活不活，都能在这里钉死。
+ */
+const ledgerUnit = () => {
+  const registry = {
+    definition: undefined,
+    register(definition) {
+      this.definition = definition;
+      return Promise.resolve({ dispose: () => Promise.resolve() });
+    },
+  };
+  hostHarness({ sessionProjections: registry });
+  return registry.definition;
+};
+
+await it("the ledger folds turns, agent time and tool calls out of the session log", () => {
+  const unit = ledgerUnit();
+  assert.ok(unit !== undefined, "apply() must register it when sessionProjections is available");
+  assert.equal(unit.key, "mascotLedger", "the client hook reads this exact key");
+  assert.equal(unit.stateVersion, 0 + 1, "a plain non-negative integer, as the registry requires");
+  assert.equal(typeof unit.stateSchema.parse, "function", "the registry calls stateSchema.parse on checkpoint rows");
+  assert.equal(typeof unit.wire.viewSchema.parse, "function", "and viewSchema.parse on the live value");
+
+  let state = unit.init({}, 0);
+  const feed = (type, data, time) => { state = unit.apply(state, { type, data, time }); };
+  // 一轮真实的形状：开始于 1000ms，三个工具调用，结束于 3500ms。
+  feed("turn/start", { turn: 1 }, 1000);
+  feed("tool/call", { name: "read" }, 1200);
+  feed("tool/call", { name: "edit" }, 1800);
+  feed("tool/call", { name: "pwsh" }, 2000);
+  feed("turn/end", { turn: 1 }, 3500);
+
+  const view = unit.wire.view(state);
+  assert.equal(view.turns, 1, "one completed turn");
+  assert.equal(view.agentMs, 2500, "耗时 = turn/end.time - turn/start.time");
+  assert.equal(view.calls, 3, "every tool/call counts");
+  assert.equal(view.reads, 1, "read 算读");
+  assert.equal(view.writes, 1, "edit 算写");
+  assert.equal("openAt" in view, false, "the turn anchor is host state and must not leak into the wire value");
+});
+
+await it("the ledger ignores what it does not own, and never allocates for it", () => {
+  const unit = ledgerUnit();
+  const state = unit.apply(unit.init({}, 0), { type: "turn/start", data: { turn: 1 }, time: 100 });
+  const unrelated = unit.apply(state, { type: "assistant/message", data: {}, time: 200 });
+  assert.equal(unrelated, state, "an unrelated event must return the same reference or the fold costs the whole pipeline");
+  const first = unit.wire.view(unrelated);
+  assert.equal(unit.wire.view(unrelated), first, "an unchanged state must reuse its view reference (Object.is gate)");
+});
+
+await it("the hand-written state schema rejects a corrupt checkpoint row", () => {
+  const unit = ledgerUnit();
+  assert.throws(() => unit.stateSchema.parse(null), "a missing row is not a state");
+  assert.throws(() => unit.stateSchema.parse({ turns: -1, agentMs: 0, calls: 0, reads: 0, writes: 0, openAt: null }), /turns/u,
+    "a negative count must be refused, or a stale row seeds the fold with nonsense");
+  assert.throws(() => unit.stateSchema.parse({ turns: 0, agentMs: 0, calls: 0, reads: 0, writes: 0 }), /openAt/u,
+    "openAt is part of the state, absent is not the same as null");
+  const good = { turns: 2, agentMs: 1200, calls: 5, reads: 3, writes: 2, openAt: null };
+  assert.deepEqual(unit.stateSchema.parse(good), good, "a good row passes through unchanged");
+  assert.doesNotThrow(() => unit.wire.viewSchema.parse(unit.wire.view(unit.stateSchema.parse(good))),
+    "the view must satisfy its own schema, or the live path throws outside any try");
+});
+
+await it("a missing or hostile projection service costs the band its extra cells, not the mascot", async () => {
+  // 没有这个服务：照常注册路由，health 报 absent。
+  const absent = await request(hostHarness(), "/dsh-mascot/api/health");
+  assert.equal(absent.json.ok, true, "the plugin still mounts without sessionProjections");
+  assert.equal(absent.json.ledger, "absent");
+  // 注册被拒（版本冲突之类的异步失败也算）：同理，不能把插件带下去。
+  const refused = await request(hostHarness({ sessionProjections: { register() { throw new Error("conflict"); } } }), "/dsh-mascot/api/health");
+  assert.equal(refused.status, 200, "a refused registration must not take the plugin down");
+  assert.equal(refused.json.ledger, "refused");
+  // 装上了就说装上了 —— 这是用户唯一能自己核对的证据。
+  const installed = await request(hostHarness({ sessionProjections: { register: () => Promise.resolve({ dispose: () => Promise.resolve() }) } }), "/dsh-mascot/api/health");
+  assert.equal(installed.json.ledger, "installed");
 });
 //#endregion
 

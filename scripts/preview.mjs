@@ -70,6 +70,8 @@ const FIXTURES = {
   sessionId: "9f2c41ab-7d33-4e8a-9c10-2b6f5ae0d711",
   /** 今日累计词元：报账条第四格读的就是它（宿主账本 /api/usage 的 today）。 */
   today: 1284000,
+  /** 宿主投影 mascotLedger 的值：轮次 / agent 耗时(ms) / 工具调用总数与读写明细。 */
+  ledger: { turns: 12, agentMs: 752000, calls: 34, reads: 19, writes: 9 },
   frames: [
     {
       caption: "可露希尔 · 罗德岛工程终端",
@@ -119,13 +121,15 @@ const STYLE = [
   "#stage { display: flex; gap: 18px; align-items: flex-start; }",
   ".col { display: grid; gap: 10px; }",
   ".caption { font-size: 11px; line-height: 1.6; letter-spacing: .3px; color: rgba(255,255,255,.44);",
-  "  width: 400px; word-break: break-word; }",
+  // 560 而不是 400：报账条比原来那四格长得多，400 宽的仿外壳会把它的后三格裁掉。
+  // 真机对话栏本来也远宽于 400，加宽之后这个替身反而更接近真实比例。
+  "  width: 560px; word-break: break-word; }",
   "/* Stand-in for the DSH shell, so the overlay has somewhere to float.",
   "   Its height has to be the window's, not an arbitrary 900: the plugin sizes the panel ceiling",
   "   in vh, so a frame that disagrees with vh measures the panel against a space it will never",
   "   actually be drawn in — which is how a full panel came to be reported as clipped while its",
   "   own max-height was 833px and its content only 692. */",
-  ".frame { position: relative; width: 400px; height: 100vh; border-radius: 14px; overflow: hidden;",
+  ".frame { position: relative; width: 560px; height: 100vh; border-radius: 14px; overflow: hidden;",
   "  background: linear-gradient(180deg, #14171f, #0e1015); border: 1px solid rgba(255,255,255,.07);",
   "  box-shadow: 0 18px 40px rgba(0,0,0,.45); }",
   ".rail { position: absolute; inset: 0 auto 0 0; width: 54px; background: rgba(255,255,255,.03);",
@@ -223,6 +227,10 @@ function renderSlot(key, owner) {
     useProjection: (name) => {
       if (name === "tokenUsage") return FIXTURES.usage;
       if (name === "contextPressure") return FIXTURES.pressure;
+      // 报账条后三格读的是本插件自己在宿主注册的键。这里**必须**给值：认不出的名字要抛，
+      // 而"抛"正好就是"宿主压根没提供这个投影时线上会怎样"的那条路 —— 这里给值，
+      // 才是"装着账本时"的样子。
+      if (name === "mascotLedger") return FIXTURES.ledger;
       throw new Error('preview: unknown projection "' + String(name) + '"');
     },
     sessionId: FIXTURES.sessionId,
@@ -354,10 +362,13 @@ window.PREVIEW_READY = (async () => {
   }
   for (const band of bands) {
     const text = band.textContent;
-    for (const label of ["可露希尔", "本会话", "缓存", "上下文", "今日"]) {
+    for (const label of ["可露希尔", "本会话", "缓存", "上下文", "今日", "轮次", "耗时", "工具"]) {
       if (!text.includes(label)) throw new Error("preview: 报账条缺少「" + label + "」，实际 " + JSON.stringify(text));
     }
     if (text.includes("—")) throw new Error("preview: 报账条有一格没取到数 " + JSON.stringify(text));
+    // 耗时这格是格式化出来的，写死一个具体读数才证明 duration() 真的算了：
+    // fixture 的 752000ms 必须印成 12m32s。
+    if (!text.includes("12m32s")) throw new Error("preview: 耗时没有格式化成 12m32s，实际 " + JSON.stringify(text));
     if (band.getBoundingClientRect().width <= 0) throw new Error("preview: 报账条宽度为 0（没画出来）");
   }
 })();`;
